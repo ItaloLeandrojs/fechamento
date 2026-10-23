@@ -1,5 +1,5 @@
 import { unshareFormulas } from './ads'
-import { SheetEditor, indexToCol, parseRange, splitRef } from './sheet'
+import { SheetEditor, indexToCol, parseRange, shiftFormula, splitRef } from './sheet'
 import { resolvePath, type Workbook } from './workbook'
 import { NS, child, children, descendants } from './xml'
 
@@ -206,20 +206,58 @@ function ajustarQuebrasDePagina(root: Element, r1: number, r2: number) {
   } else root.removeChild(rb)
 }
 
+/**
+ * A fórmula de formatação condicional e de validação de dados fica escrita para a
+ * célula do canto superior esquerdo do sqref. Ao apagar linhas, essa célula sobe
+ * junto com o sqref, então as referências da fórmula passam pela mesma conta.
+ * Se a primeira área do sqref perdeu o começo (ou sumiu), o canto novo é outro e
+ * as referências relativas acompanham a diferença.
+ */
+function ajustarFormulasDoGrupo(sqrefAntigo: string, sqrefNovo: string, formulas: Element[], r1: number, r2: number) {
+  const n = r2 - r1 + 1
+  const antes = parseRange(sqrefAntigo.trim().split(/\s+/)[0]).r1
+  const depois = parseRange(sqrefNovo.trim().split(/\s+/)[0]).r1
+  const esperado = antes > r2 ? antes - n : antes >= r1 ? r1 : antes
+  for (const f of formulas) {
+    const t = f.textContent ?? ''
+    if (!t) continue
+    f.textContent = shiftFormula(ajustarFormulaApagando(t, r1, r2), depois - esperado)
+  }
+}
+
 function ajustarReferenciasDaAba(root: Element, r1: number, r2: number) {
   const dim = child(root, 'dimension')
   if (dim) ajustarAtributo(dim, 'ref', r1, r2, false)
-  for (const tag of ['conditionalFormatting', 'dataValidation', 'protectedRange', 'ignoredError']) {
+  for (const tag of ['protectedRange', 'ignoredError']) {
     for (const el of descendants(root, tag)) ajustarAtributo(el, 'sqref', r1, r2, true)
+  }
+  // formatação condicional e validação de dados: sqref e fórmulas juntos
+  const nomes: Record<string, string[]> = { conditionalFormatting: ['formula'], dataValidation: ['formula1', 'formula2'] }
+  for (const [tag, nomesFormula] of Object.entries(nomes)) {
+    for (const el of descendants(root, tag)) {
+      const antigo = el.getAttribute('sqref')
+      if (!antigo) continue
+      const novo = ajustarSqref(antigo, r1, r2)
+      if (!novo) el.parentNode?.removeChild(el)
+      else {
+        if (novo !== antigo) el.setAttribute('sqref', novo)
+        ajustarFormulasDoGrupo(antigo, novo, nomesFormula.flatMap((nm) => descendants(el, nm)), r1, r2)
+      }
+    }
   }
   for (const tag of ['hyperlink', 'autoFilter', 'sortState', 'sortCondition']) {
     for (const el of descendants(root, tag)) ajustarAtributo(el, 'ref', r1, r2, false)
   }
-  // versões novas (extLst): <xm:sqref>B2:B12</xm:sqref>
+  // versões novas (extLst): <xm:sqref>B2:B12</xm:sqref> com as fórmulas (<xm:f>) no elemento ao lado
   for (const el of descendants(root, 'sqref')) {
-    const novo = ajustarSqref(el.textContent ?? '', r1, r2)
-    if (novo) el.textContent = novo
-    else el.parentNode?.parentNode?.removeChild(el.parentNode)
+    const antigo = el.textContent ?? ''
+    const novo = ajustarSqref(antigo, r1, r2)
+    const grupo = el.parentNode as Element
+    if (!novo) grupo.parentNode?.removeChild(grupo)
+    else {
+      if (novo !== antigo) el.textContent = novo
+      ajustarFormulasDoGrupo(antigo, novo, descendants(grupo, 'f'), r1, r2)
+    }
   }
 }
 

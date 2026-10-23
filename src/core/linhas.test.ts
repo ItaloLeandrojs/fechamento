@@ -121,6 +121,47 @@ describe('apagarLinhas', () => {
     expect(book.getElementsByTagName('definedName')[0].textContent).toBe("'Ficha Medição Aterramento'!$B$1:$L$9")
   })
 
+  it('a fórmula relativa da formatação condicional sobe junto com o sqref', async () => {
+    const wb = await montar()
+    const d = await wb.doc('xl/worksheets/sheet1.xml')
+    const cf = d.getElementsByTagName('conditionalFormatting')[0]
+    cf.setAttribute('sqref', 'B8')
+    cf.getElementsByTagName('formula')[0].textContent = 'ISERROR(B8)'
+    // validação de dados na linha 9 que olha a linha 2 (acima do trecho apagado) e a 10 (abaixo)
+    const dvs = d.createElementNS(NS_MAIN, 'dataValidations')
+    const dv = d.createElementNS(NS_MAIN, 'dataValidation')
+    dv.setAttribute('sqref', 'C9')
+    const f1 = d.createElementNS(NS_MAIN, 'formula1')
+    f1.textContent = 'AND(B2>0,B10>0)'
+    dv.appendChild(f1)
+    dvs.appendChild(dv)
+    d.documentElement.insertBefore(dvs, cf)
+    wb.touch('xl/worksheets/sheet1.xml')
+    await apagarLinhas(wb, 'Aba', 4, 6)
+    const { sheet } = await reabrir(wb)
+    const c = sheet.getElementsByTagName('conditionalFormatting')[0]
+    expect(c.getAttribute('sqref')).toBe('B5')
+    expect(c.getElementsByTagName('formula')[0].textContent).toBe('ISERROR(B5)')
+    const v = sheet.getElementsByTagName('dataValidation')[0]
+    expect(v.getAttribute('sqref')).toBe('C6')
+    expect(v.getElementsByTagName('formula1')[0].textContent).toBe('AND(B2>0,B7>0)')
+  })
+
+  it('a fórmula de formatação condicional da extLst (xm:f) também acompanha', async () => {
+    const wb = await montar()
+    const d = await wb.doc('xl/worksheets/sheet1.xml')
+    const ext = new DOMParser().parseFromString(
+      `<x14:conditionalFormatting xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"><x14:cfRule type="expression"><xm:f>ISERROR(B8)</xm:f></x14:cfRule><xm:sqref>B8</xm:sqref></x14:conditionalFormatting>`,
+      'application/xml',
+    ).documentElement
+    d.documentElement.appendChild(d.importNode(ext, true))
+    wb.touch('xl/worksheets/sheet1.xml')
+    await apagarLinhas(wb, 'Aba', 4, 6)
+    const { sheet } = await reabrir(wb)
+    expect(sheet.getElementsByTagName('xm:sqref')[0].textContent).toBe('B5')
+    expect(sheet.getElementsByTagName('xm:f')[0].textContent).toBe('ISERROR(B5)')
+  })
+
   it('apagar o fim da aba não deixa referência quebrada', async () => {
     const wb = await montar()
     await apagarLinhas(wb, 'Aba', 10, 12)
