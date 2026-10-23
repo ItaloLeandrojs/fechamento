@@ -1,0 +1,131 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+/* Tokens: claro por padrão, escuro quando o sistema pede */
+:root {
+  --bg: #f4f5f6;
+  --surface: #ffffff;
+  --surface-2: #eceef0;
+  --line: #dadee2;
+  --line-strong: #c3c9cf;
+  --text: #191d21;
+  --muted: #59636d;
+  --accent: #f2b705;
+  --accent-hover: #e0a800;
+  --accent-ink: #191d21;
+  --accent-text: #7a5600;
+  --accent-soft: #fff4cc;
+  --danger: #b93a26;
+  --danger-soft: #fde9e5;
+  --ok: #2b7249;
+  --ok-soft: #e3f3e9;
+  --shadow: 0 1px 2px rgb(25 29 33 / 0.06), 0 4px 16px rgb(25 29 33 / 0.06);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1113;
+    --surface: #171a1d;
+    --surface-2: #1f2327;
+    --line: #2b3137;
+    --line-strong: #3a424a;
+    --text: #e8ebee;
+    --muted: #9aa4ae;
+    --accent: #f2b705;
+    --accent-hover: #ffc824;
+    --accent-ink: #15181b;
+    --accent-text: #f5c53a;
+    --accent-soft: #2f2706;
+    --danger: #f2846f;
+    --danger-soft: #3a1a14;
+    --ok: #66c792;
+    --ok-soft: #12291c;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.3);
+    color-scheme: dark;
+  }
+}
+
+@theme {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --radius-ctl: 10px;
+  --radius-panel: 14px;
+  --shadow-panel: var(--shadow);
+}
+
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* resposta tátil curta, sem exagero */
+.press {
+  transition: transform 120ms ease, background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.press:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+@keyframes entra {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.entra {
+  animation: entra 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entra {
+    animation: none;
+  }
+  .press:active {
+    transform: none;
+  }
+}
