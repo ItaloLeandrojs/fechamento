@@ -1,5 +1,6 @@
 import { SheetEditor, indexToCol, type Range } from './sheet'
 import { caixaDoIntervalo, encaixar, inserirImagem, removerFotosVinculadas, removerImagensNaFaixa, type Caixa, type Imagem } from './images'
+import { apagarLinhas } from './linhas'
 import type { Workbook } from './workbook'
 
 const EMU_PX = 9525
@@ -220,6 +221,11 @@ export async function aplicarAterramento(wb: Workbook, pontos: PontoAterramento[
       await inserirImagem(wb, aba.name, p.fotoMedicao, encaixar(caixaDoIntervalo(ed, b.caixaDir), p.fotoMedicao), `Medição ${p.ponto}`)
     }
   }
+
+  // tira o que sobrou da ficha, de baixo para cima (os números das linhas de cima continuam valendo):
+  // primeiro os quadros de foto sem ponto, depois as linhas da tabela sem ponto
+  if (pontos.length < blocos.length) await apagarLinhas(wb, aba.name, blocos[pontos.length].row, blocos[blocos.length - 1].caixaEsq.r2)
+  if (pontos.length < linhasTabela.length) await apagarLinhas(wb, aba.name, linhasTabela[pontos.length], linhasTabela[linhasTabela.length - 1])
   wb.unhideSheet(aba.name)
 }
 
