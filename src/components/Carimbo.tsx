@@ -179,7 +179,7 @@ function NovoTecnico({ tecnicos, onSalvo, onCancelar }: { tecnicos: TecnicoSalvo
       <h2 className="text-lg font-semibold mb-4">Cadastrar técnico</h2>
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_12rem] xl:grid-cols-[minmax(0,1fr)_12rem_minmax(0,24rem)] gap-x-4 gap-y-4 items-start">
         <Campo rotulo="Nome completo" value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} placeholder="NOME COMO NO CARIMBO" />
-        <Campo rotulo="Matrícula" inputMode="numeric" value={registro} onChange={(e) => setRegistro(e.target.value.replace(/\D/g, ''))} placeholder="4876" />
+        <Campo rotulo="Matrícula" inputMode="numeric" value={registro} onChange={(e) => setRegistro(e.target.value.replace(/\D/g, ''))} placeholder="1234" />
         <div className="grid gap-1.5 md:col-span-2 xl:col-span-1">
           <label htmlFor={idImg} className="text-xs font-medium text-muted">
             Imagem do carimbo
