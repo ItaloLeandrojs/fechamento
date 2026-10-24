@@ -42,7 +42,7 @@ export function Aterramento({ pontos, onChange }: { pontos: PontoUI[]; onChange:
       <p className="flex items-start gap-3 mb-5 max-w-[84ch] rounded-ctl bg-surface-2 px-4 py-3 text-sm">
         <Info size={20} className="shrink-0 mt-0.5 text-muted" aria-hidden="true" />
         <span>
-          Com pelo menos um ponto, as linhas da tabela e os blocos de fotos que sobrarem, sem ponto seu, saem da ficha ao baixar, para não ficarem vazios. Sem nenhum ponto, a ficha fica como veio.
+          As linhas da tabela e os blocos de fotos que não tiverem ponto saem da ficha ao baixar. Sem nenhum ponto, a ficha fica como veio.
         </span>
       </p>
       {passou && (

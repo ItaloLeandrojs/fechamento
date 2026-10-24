@@ -104,7 +104,21 @@ function acharRodape(ed: SheetEditor): Rodape | undefined {
   if (!regs.length) return undefined
   const baixo = regs[regs.length - 1]
   const regRow = baixo.row + 1
-  const regRange = rangeOuCelula(ed, baixo.col, regRow)
+  // o rótulo "Registro" pode ser mesclado em várias colunas (Ficha Equipamento: C:E) e a matrícula
+  // ocupar só uma delas (E): vale a primeira coluna do rótulo, na linha de baixo, que tenha
+  // conteúdo, fórmula ou que abra uma mesclagem
+  const rotulo = rangeOuCelula(ed, baixo.col, baixo.row)
+  let regCol = rotulo.c1
+  for (let c = rotulo.c1; c <= rotulo.c2; c++) {
+    const ref = indexToCol(c) + regRow
+    const cel = ed.cell(ref)
+    const m = ed.mergeAt(ref)
+    if ((cel && (ed.formula(cel) || ed.cellValue(cel) !== null)) || (m && m.c1 === c && (m.c2 > m.c1 || m.r2 > m.r1))) {
+      regCol = c
+      break
+    }
+  }
+  const regRange = rangeOuCelula(ed, regCol, regRow)
   // nome: primeira célula à direita do registro que tenha conteúdo ou abra uma mesclagem
   let nomeCol = regRange.c2 + 1
   for (let c = regRange.c2 + 1; c <= regRange.c2 + 8; c++) {
@@ -124,7 +138,7 @@ function acharRodape(ed: SheetEditor): Rodape | undefined {
     const cx = caixaDoIntervalo(ed, fim)
     topoLivre = cx.y + cx.h
   }
-  return { linhaInicio: (cima ?? baixo).row, linhaNome: regRow, registro: indexToCol(baixo.col) + regRow, nome: indexToCol(nomeCol) + regRow, nomeRange, topoLivre }
+  return { linhaInicio: (cima ?? baixo).row, linhaNome: regRow, registro: indexToCol(regCol) + regRow, nome: indexToCol(nomeCol) + regRow, nomeRange, topoLivre }
 }
 
 /** Grava o valor só se a célula não puxar da Check-list (aí a fórmula já resolve). */

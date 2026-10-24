@@ -17,7 +17,7 @@ Especificação completa: `..\ESPECIFICACAO do site Fechamento.md` (fora do repo
 - Regras da ADS, carimbo e formato do arquivo: sem mudança.
 
 ## Conferências feitas (24/10/2026, v2)
-- 31 testes unitários e `tsc` sem erro.
+- 35 testes unitários, `tsc` e `eslint` sem erro.
 - `npm run e2e` ("Tudo passou."): a obra inteira em 5 rodadas (1366 claro e escuro, 1920 claro, 390 claro e escuro), sem internet, com o axe em 11 análises por rodada (55 no total, zero violações, incluindo a revisão rolada com a barra de baixo sobre o conteúdo) e 35 prints. Em cada tela confere rolagem lateral (nenhuma). Também confere:
   - a coluna "Devolvido" da revisão dentro da tela e do painel em 1366 e 1920 (e "Dev." do cartão em 390);
   - kit de nome comprido (`KP-SMDT-P9/300-(CCM_BTZero)`) com quantidade "2,5": o campo mantém "2,5" e a revisão mostra aplicado 2,5 x a quantidade do material no kit;
@@ -38,10 +38,15 @@ Feito com a instalação do projeto cosampa-site (nada entra neste): `createRequ
 - O arquivo gerado (pelo Node e pelo navegador) abre no Excel sem erro. Fichas exportadas em PDF e conferidas: tabela, fotos, carimbo, matrícula e data.
 - O site montado não contém CPF nem nomes de técnicos.
 
+## Correções da revisão final (24/10/2026)
+- Ficha de equipamento (era a pendência 5, resolvida): o rótulo "Registro" é mesclado em C:E e a matrícula fica só na coluna E. O site gravava na primeira coluna do rótulo (estreita, aparecia "##") e media o carimbo pela coluna errada (pequeno e sobre o rótulo). Agora `acharRodape` procura a matrícula dentro das colunas do rótulo, na linha de baixo (primeira célula com conteúdo, fórmula ou que abra uma mesclagem) e o nome vem logo depois. Teste em `src/core/fichas.test.ts` (fórmulas da Check-list, modelo em branco e o layout da Check-list). No Excel de verdade: matrícula dentro do quadro, sem "##", e o carimbo centralizado sobre a linha do nome.
+- `apagarLinhas` remove contêineres que ficaram vazios (`protectedRanges`, `hyperlinks`, `dataValidations`, `ignoredErrors`, x14 `conditionalFormattings`, `ext` e `extLst`) e acerta o `count`, para o Excel não oferecer reparo em outros modelos.
+- Técnicos: erro do IndexedDB ao salvar ou apagar aparece na tela; matrícula repetida pede confirmação antes de trocar o nome e o carimbo de outra pessoa.
+- Materiais e mão de obra: quando a lista de previstos ou o cadastro é cortado no limite, o texto diz quantos aparecem de quantos; um previsto que só casa pelo texto do cadastro não some mais. Descrições cortadas em 2 linhas ganharam `title` com o texto inteiro.
+
 ## Pendências
 1. Ficha de aterramento com mais de 8 pontos: hoje o site avisa e bloqueia; falta criar os blocos extras.
 2. Ficha de equipamento: lugar fixo para os equipamentos da ficha; acima disso o site dá erro claro.
 3. O modelo da EDP traz o bloco 1 da ficha de aterramento cortado entre as páginas 1 e 2 na impressão (vem do inventário original, não do site).
 4. Na aba DP, o nome do colaborador da EDP vem de `VLOOKUP` na aba Colaborador e aparece `#N/D` quando a matrícula não está lá (é do modelo da EDP).
-5. Ficha de equipamento no Excel: na segunda página o carimbo (imagem) fica pequeno e encosta no rótulo "Registro", e há um "##" numa coluna estreita ao lado da matrícula; confirmar se já vem assim no modelo da EDP.
-6. Ainda não foi medido: celular de verdade, computador sem o antivírus Kaspersky, leitor de tela de verdade.
+5. Ainda não foi medido: celular de verdade, computador sem o antivírus Kaspersky, leitor de tela de verdade.
