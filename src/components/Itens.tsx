@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { MagnifyingGlass, Package, Plus, Trash, Wrench, X } from '@phosphor-icons/react'
 import { casa, formatarQtd, normalizar } from '../lib/busca'
-import { OPERACOES, nomeOper, novoId, type Atualiza, type ItemLanc } from '../state'
+import { OPERACOES, ehQuilo, nomeOper, novoId, type Atualiza, type ItemLanc } from '../state'
 import type { ItemCatalogo } from '../core/inventario'
-import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Vazio } from './ui'
+import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Unidade, Vazio } from './ui'
 
 export interface CatalogoIndexado extends ItemCatalogo {
   norm: string
@@ -109,7 +109,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
         <div className="min-w-0 flex-1 px-2 py-1.5">
           <p className="text-base font-semibold break-words line-clamp-2" title={c.desc || undefined}>{c.desc || 'Sem descrição'}</p>
           <p className="text-sm text-muted">
-            <span className="num">{c.code}</span> · {c.un}
+            <span className="num">{c.code}</span> · <Unidade un={c.un} />
           </p>
           {(selosExtra || jaLancado > 0) && (
             <p className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -218,11 +218,11 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
                         <div className="flex-1 basis-56 min-w-0">
                           <p className="text-base font-semibold break-words line-clamp-2" title={i.desc}>{i.desc}</p>
                           <p className="text-sm text-muted">
-                            <span className="num">{i.code}</span> · {i.un}
+                            <span className="num">{i.code}</span> · <Unidade un={i.un} />
                           </p>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
-                          <Quantidade grande valor={i.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === i.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${i.desc}`} />
+                          <Quantidade grande valor={i.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === i.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${i.desc}`} emQuilo={ehQuilo(i.un)} />
                           <Botao
                             variante="perigo"
                             icone

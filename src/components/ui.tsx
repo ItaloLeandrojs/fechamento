@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Minus, Plus } from '@phosphor-icons/react'
 import { formatarQtd } from '../lib/busca'
-import { OPERACOES } from '../state'
+import { OPERACOES, ehQuilo } from '../state'
 
 type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo'
 
@@ -96,7 +96,27 @@ export function EscolhaOper({ valor, onChange, compacto = false }: { valor: stri
   )
 }
 
-export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1, grande = false }: { valor: number; onChange: (n: number) => void; rotulo?: string; passo?: number; grande?: boolean }) {
+/** Unidade de um item; em quilo fica destacada, porque o lançamento é o peso (não o metro). */
+export function Unidade({ un }: { un: string }) {
+  return ehQuilo(un) ? <span className="font-semibold text-accent-text">KG, lance em quilo</span> : <>{un}</>
+}
+
+export function Quantidade({
+  valor,
+  onChange,
+  rotulo = 'Quantidade',
+  passo = 1,
+  grande = false,
+  emQuilo = false,
+}: {
+  valor: number
+  onChange: (n: number) => void
+  rotulo?: string
+  passo?: number
+  grande?: boolean
+  /** Mostra "kg" colado ao número: cabo e cordoalha são lançados já em quilo. */
+  emQuilo?: boolean
+}) {
   const fmt = (n: number) => String(n).replace('.', ',')
   const [texto, setTexto] = useState(fmt(valor))
   // acompanha mudanças vindas dos botões + e -
@@ -109,9 +129,9 @@ export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1, 
         <Minus size={18} weight="bold" />
       </button>
       <input
-        aria-label={rotulo}
+        aria-label={emQuilo ? `${rotulo}, em quilos` : rotulo}
         inputMode="decimal"
-        className={`num h-full bg-transparent text-center focus:outline-none ${grande ? 'w-24 text-xl font-semibold' : 'w-20 text-base font-medium'}`}
+        className={`num h-full bg-transparent text-center focus:outline-none ${grande ? 'w-24 text-xl font-semibold' : 'w-20 text-base font-medium'} ${emQuilo ? 'text-right pr-1' : ''}`}
         value={texto}
         onChange={(e) => {
           const t = e.target.value.replace(/[^\d,.]/g, '')
@@ -122,6 +142,11 @@ export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1, 
         onBlur={() => setTexto(fmt(valor))}
         onFocus={(e) => e.target.select()}
       />
+      {emQuilo && (
+        <span aria-hidden="true" className="rounded-md bg-accent-soft px-1.5 py-0.5 text-sm font-bold text-accent-text">
+          kg
+        </span>
+      )}
       <button type="button" aria-label="Aumentar" className="press grid place-items-center w-11 h-full text-muted hover:text-text" onClick={() => onChange(+(valor + passo).toFixed(3))}>
         <Plus size={18} weight="bold" />
       </button>

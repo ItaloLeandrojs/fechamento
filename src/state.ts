@@ -26,6 +26,16 @@ export const OPERACOES: { oper: string; nome: string; grupo: 'instalacao' | 'ret
   { oper: '2040', nome: 'Retirada de condutor', grupo: 'retirada' },
 ]
 
+/** Item medido em quilo (cabo nu, cordoalha): a quantidade é lançada já em kg, sem conversão. */
+export function ehQuilo(un: string): boolean {
+  return un.trim().toUpperCase() === 'KG'
+}
+
+/** Kit de cabo: todos os materiais em kg, então a quantidade do kit é o peso em kg. */
+export function kitEmQuilo(k: Kit): boolean {
+  return k.itens.length > 0 && k.itens.every((i) => ehQuilo(i.un))
+}
+
 export function nomeOper(oper: string): string {
   return OPERACOES.find((o) => o.oper === oper)?.nome ?? oper
 }

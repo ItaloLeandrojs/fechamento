@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { CaretDown, MagnifyingGlass, Plus, Stack, Trash, X } from '@phosphor-icons/react'
 import { casa, formatarQtd } from '../lib/busca'
-import { OPERACOES, nomeOper, novoId, type Atualiza, type EstruturaLanc, type Kit } from '../state'
+import { OPERACOES, kitEmQuilo, nomeOper, novoId, type Atualiza, type EstruturaLanc, type Kit } from '../state'
 import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Vazio } from './ui'
 
 export interface KitIndexado extends Kit {
@@ -39,6 +39,10 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
     })
 
   const porKit = useMemo(() => new Map(kits.map((k) => [k.kit, k])), [kits])
+  const kitEmQuiloPorNome = (nome: string) => {
+    const k = porKit.get(nome)
+    return !!k && kitEmQuilo(k)
+  }
   const total = estruturas.reduce((s, e) => s + e.qtd, 0)
   // quanto de cada kit já foi lançado (em qualquer operação), para dar retorno na lista de busca
   const lancadoPorKit = useMemo(() => {
@@ -115,6 +119,7 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                             </Selo>
                           )}
                           {!k.itens.length && <Selo tom="perigo">sem material</Selo>}
+                          {kitEmQuilo(k) && <Selo tom="destaque">quantidade em kg</Selo>}
                           {jaLancado > 0 && <SeloLancado qtd={jaLancado} singular="lançada" plural="lançadas" />}
                         </span>
                         <span className="text-sm text-muted line-clamp-2" title={k.descricao || undefined}>{k.descricao || 'Sem descrição'}</span>
@@ -178,7 +183,7 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                           <p className="text-sm text-muted line-clamp-2" title={porKit.get(e.kit)?.descricao}>{porKit.get(e.kit)?.descricao}</p>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
-                          <Quantidade grande valor={e.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === e.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${e.kit}`} />
+                          <Quantidade grande valor={e.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === e.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${e.kit}`} emQuilo={kitEmQuiloPorNome(e.kit)} />
                           <Botao
                             variante="perigo"
                             icone

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { DownloadSimple, FileText, IdentificationCard, Package, Shovel, Stack, Wrench } from '@phosphor-icons/react'
 import type { Etapa, Secao } from '../etapas'
+import { formatarQtd } from '../lib/busca'
 import { IconeTransformador } from './IconeTransformador'
 
 const TAM = 20
@@ -19,7 +20,7 @@ const icones: Record<Secao, ReactNode> = {
 function Marcador({ etapa }: { etapa: Etapa }) {
   return (
     <span className="ml-auto flex items-center gap-1.5 pl-2">
-      {etapa.n ? <span className="num text-xs font-medium bg-surface-2 text-text rounded-md px-2 py-0.5 min-w-7 text-center">{etapa.n}</span> : null}
+      {etapa.n ? <span className="num text-xs font-medium bg-surface-2 text-text rounded-md px-2 py-0.5 min-w-7 text-center">{formatarQtd(etapa.n)}</span> : null}
       {etapa.restam ? (
         <span className="text-xs font-medium text-muted whitespace-nowrap">
           <span aria-hidden>{etapa.restam} pend.</span>
