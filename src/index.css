@@ -127,7 +127,8 @@ body {
   }
 }
 .entra {
-  animation: entra 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* só "backwards": com "forwards" o navegador mantém um contêiner de transformação e quebra elementos fixed lá dentro (barra de baixo da Revisão) */
+  animation: entra 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
