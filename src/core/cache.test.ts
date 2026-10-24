@@ -31,12 +31,12 @@ const celula = async (wb: Workbook, aba: string, ref: string) => {
 describe('atualizarValoresGuardados', () => {
   it('grava nas fórmulas que puxam de outra aba o valor atual daquela célula (o Excel mostra isso no Modo Protegido)', async () => {
     const wb = await montar({
-      'Check-list': `<row r="4"><c r="Q4"><v>46319</v></c></row><row r="56"><c r="K56"><v>4876</v></c><c r="M56" t="inlineStr"><is><t>FULANO DE TAL</t></is></c></row>`,
+      'Check-list': `<row r="4"><c r="Q4"><v>46319</v></c></row><row r="56"><c r="K56"><v>1234</v></c><c r="M56" t="inlineStr"><is><t>FULANO DE TAL</t></is></c></row>`,
       'Ficha Medição Aterramento': `<row r="31"><c r="J31"><f>'Check-list'!Q4</f><v>46318</v></c></row><row r="38"><c r="D38"><f>'Check-list'!K56</f><v>0</v></c><c r="E38"><f>'Check-list'!M56</f><v>0</v></c></row>`,
     })
     await atualizarValoresGuardados(wb)
     const wb2 = await Workbook.open(await wb.save())
-    expect(await celula(wb2, 'Ficha Medição Aterramento', 'D38')).toEqual({ t: null, v: '4876', f: "'Check-list'!K56" })
+    expect(await celula(wb2, 'Ficha Medição Aterramento', 'D38')).toEqual({ t: null, v: '1234', f: "'Check-list'!K56" })
     expect(await celula(wb2, 'Ficha Medição Aterramento', 'E38')).toEqual({ t: 'str', v: 'FULANO DE TAL', f: "'Check-list'!M56" })
     expect(await celula(wb2, 'Ficha Medição Aterramento', 'J31')).toEqual({ t: null, v: '46319', f: "'Check-list'!Q4" })
   })
@@ -83,7 +83,7 @@ describe('atualizarValoresGuardados', () => {
 
   it('o <v> fica logo depois do <f> (ordem do esquema)', async () => {
     const wb = await montar({
-      'Check-list': `<row r="56"><c r="K56"><v>4876</v></c></row>`,
+      'Check-list': `<row r="56"><c r="K56"><v>1234</v></c></row>`,
       Ficha: `<row r="1"><c r="A1"><f>'Check-list'!K56</f><v>0</v><extLst/></c></row>`,
     })
     await atualizarValoresGuardados(wb)
@@ -94,7 +94,7 @@ describe('atualizarValoresGuardados', () => {
 
   it('não mexe em fórmula que não é uma referência simples a outra aba', async () => {
     const wb = await montar({
-      'Check-list': `<row r="56"><c r="K56"><v>4876</v></c></row>`,
+      'Check-list': `<row r="56"><c r="K56"><v>1234</v></c></row>`,
       Ficha: `<row r="1"><c r="A1"><f>'Check-list'!K56*2</f><v>1</v></c><c r="B1"><f>SUM('Check-list'!K56:K57)</f><v>2</v></c><c r="C1"><f>Ficha!D1</f><v>3</v></c><c r="D1"><f>[1]Check-list!K56</f><v>4</v></c></row>`,
     })
     await atualizarValoresGuardados(wb)

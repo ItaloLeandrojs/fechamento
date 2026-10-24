@@ -39,7 +39,7 @@ async function montar(l: Layout): Promise<Workbook> {
   return Workbook.open(await z.generateAsync({ type: 'uint8array' }))
 }
 
-const tec = { nome: 'Fulano', registro: 4876, carimbo: { data: new Uint8Array([137, 80, 78, 71]), width: 400, height: 200, ext: 'png' as const } }
+const tec = { nome: 'Fulano', registro: 1234, carimbo: { data: new Uint8Array([137, 80, 78, 71]), width: 400, height: 200, ext: 'png' as const } }
 const hoje = new Date(2026, 9, 24)
 
 /** Ficha Equipamento: rótulo "Registro" mesclado em C:E, matrícula só em E, nome em F:K. */
@@ -93,7 +93,7 @@ describe('aplicarCarimbo com o rótulo "Registro" mesclado', () => {
   it('modelo em branco: matrícula na coluna E, nome em F e C continua vazia', async () => {
     const wb = await montar(equipamento(false))
     const { ed } = await aplicarEAbrir(wb)
-    expect(ed.value('E140')).toBe(4876)
+    expect(ed.value('E140')).toBe(1234)
     expect(ed.value('F140')).toBe('FULANO')
     expect(ed.value('C140')).toBeNull()
     expect(ed.value('D140')).toBeNull()
@@ -112,7 +112,7 @@ describe('aplicarCarimbo com o rótulo "Registro" mesclado', () => {
       mesclagens: ['K47:L47', 'K55:L55', 'K56:L57', 'M56:S56'],
     })
     const { ed } = await aplicarEAbrir(wb)
-    expect(ed.value('K56')).toBe(4876)
+    expect(ed.value('K56')).toBe(1234)
     expect(ed.value('M56')).toBe('FULANO')
     expect(ed.value('L56')).toBeNull()
   })
