@@ -2,6 +2,7 @@ import { Workbook } from './workbook'
 import { aplicarAds, type AdsResultado, type Lancamento } from './ads'
 import { aplicarAterramento, aplicarCarimbo, aplicarDP, aplicarEquipamentos, type Equipamento, type PontoAterramento, type Tecnico } from './fichas'
 import type { Imagem } from './images'
+import { atualizarValoresGuardados } from './cache'
 
 export interface DadosFechamento {
   lancamentos: Lancamento[]
@@ -26,6 +27,8 @@ export async function gerarFechamento(original: ArrayBuffer | Uint8Array, dados:
   await aplicarEquipamentos(wb, dados.equipamentos)
   await aplicarDP(wb, dados.fotoDP)
   const abasComCarimbo = dados.tecnico ? await aplicarCarimbo(wb, dados.tecnico, dados.hoje ?? new Date()) : []
+  // depois de tudo gravado: o Modo Protegido do Excel mostra o valor guardado, sem recalcular
+  await atualizarValoresGuardados(wb)
   await wb.dropCalcChainAndRecalc()
   return { arquivo: await wb.save(), ads, abasComCarimbo }
 }
