@@ -84,6 +84,8 @@ html {
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
+  /* o cabeçalho preso tem 72 px: ao focar um campo (Tab) ou saltar para uma âncora, o navegador deixa folga e nada fica escondido embaixo dele */
+  scroll-padding-top: 96px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

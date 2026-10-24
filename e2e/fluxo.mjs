@@ -42,9 +42,9 @@ const falhas = []
 const placar = { axe: 0, telas: 0 }
 const browser = await chromium.launch({ channel: 'msedge' })
 
-async function axe(page, rotulo) {
-  // volta ao topo: com a página rolada, o cabeçalho preso cobre parte dos campos e o axe acusa alvo coberto (não é erro da tela)
-  await page.evaluate(() => window.scrollTo(0, 0))
+async function axe(page, rotulo, { topo = true } = {}) {
+  // por padrão volta ao topo (análise estável); topo:false analisa a página como está, rolada (cabeçalho e barra de baixo sobre o conteúdo)
+  if (topo) await page.evaluate(() => window.scrollTo(0, 0))
   await page.waitForTimeout(350) // espera a entrada suave das telas (opacidade) terminar
   const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice']).analyze()
   placar.axe++
@@ -52,6 +52,32 @@ async function axe(page, rotulo) {
   const sw = await page.evaluate(() => document.documentElement.scrollWidth)
   if (sw > larg + 1) falhas.push(`[${rotulo}] página mais larga que a tela (${sw}px de ${larg}px): rolagem lateral`)
   for (const v of r.violations) falhas.push(`axe [${rotulo}] ${v.id} (${v.impact}): ${v.nodes.length}x, ex.: ${v.nodes[0]?.target?.join(' ')}`)
+}
+
+// Topo da barra fixa de baixo (celular e tela pequena na revisão), ou null.
+const topoDaBarra = (page) =>
+  page.evaluate(() => {
+    const b = [...document.querySelectorAll('div')].find((d) => getComputedStyle(d).position === 'fixed')
+    return b ? b.getBoundingClientRect().top : null
+  })
+
+// Foco não pode ficar escondido (WCAG 2.4.11): rola a página até o elemento ficar sob o cabeçalho preso (24 px do topo),
+// foca e confere que o navegador o trouxe para baixo do cabeçalho e para cima da barra fixa de baixo.
+async function focoLivre(page, loc, nome, tag) {
+  const topoAntes = await loc.evaluate((e) => {
+    window.scrollBy(0, e.getBoundingClientRect().top - 24)
+    return e.getBoundingClientRect().top
+  })
+  if (topoAntes > 40) return falhas.push(`[${tag}] foco "${nome}": página curta demais para testar o cabeçalho (topo em ${Math.round(topoAntes)}px)`)
+  await loc.evaluate((e) => e.blur()) // focar um campo que já tem o foco não rola nada
+  await loc.focus()
+  await page.waitForTimeout(250)
+  const cab = await page.evaluate(() => document.querySelector('header').getBoundingClientRect().bottom)
+  const box = await loc.boundingBox()
+  if (!box) return falhas.push(`[${tag}] foco "${nome}": elemento sumiu`)
+  if (box.y < cab - 0.5) falhas.push(`[${tag}] foco "${nome}" fica sob o cabeçalho (topo ${Math.round(box.y)}px, cabeçalho até ${Math.round(cab)}px)`)
+  const barra = await topoDaBarra(page)
+  if (barra !== null && box.y + box.height > barra + 0.5) falhas.push(`[${tag}] foco "${nome}" fica sob a barra de baixo (base ${Math.round(box.y + box.height)}px, barra em ${Math.round(barra)}px)`)
 }
 
 // Soma o "Aplicado" de um código na revisão: linha da ADS (tabela ou cartão do celular) e linhas novas.
@@ -102,6 +128,18 @@ async function conferirRevisao(page, largura, altura, tag) {
     await dev.scrollIntoViewIfNeeded()
     const box = await dev.boundingBox()
     if (!box || box.x < 0 || box.x + box.width > largura + 1) falhas.push(`[${tag}] "Dev." do cartão da revisão fora da tela`)
+    else {
+      // o rótulo e o valor logo abaixo precisam ficar acima da barra fixa de baixo e abaixo do cabeçalho
+      const valor = await dev.evaluate((e) => {
+        const r = e.nextElementSibling.getBoundingClientRect()
+        return { y: r.y, bottom: r.bottom }
+      })
+      const barra = await topoDaBarra(page)
+      const cab = await page.evaluate(() => document.querySelector('header').getBoundingClientRect().bottom)
+      if (box.y < cab - 0.5) falhas.push(`[${tag}] "Dev." do cartão fica sob o cabeçalho`)
+      if (barra === null) falhas.push(`[${tag}] barra fixa de baixo da revisão não encontrada no celular`)
+      else if (Math.max(box.y + box.height, valor.bottom) > barra + 0.5) falhas.push(`[${tag}] "Dev." e o valor ficam sob a barra de baixo (base ${Math.round(Math.max(box.y + box.height, valor.bottom))}px, barra em ${Math.round(barra)}px)`)
+    }
   }
   // com o filtro desmarcado nenhuma linha fica escondida
   const filtro = page.getByLabel('Só as que ficam diferentes do planejado')
@@ -151,6 +189,11 @@ async function rodada({ largura, altura, tema, movel }) {
   await page.getByRole('button', { name: 'Adicionar KP-TRAFO 75KVA M na operação 2010' }).click()
   const qtdCE1 = await page.getByRole('textbox', { name: 'Quantidade de KP-CE1-P23' }).inputValue()
   if (qtdCE1 !== '2') falhas.push(`[${tag}] quantidade do KP-CE1-P23 deveria ser 2, veio ${qtdCE1}`)
+  // foco com a página rolada: busca e "Limpar busca" ficam sob o cabeçalho preso e o foco tem que trazê-los para baixo dele
+  await page.getByPlaceholder(/Ex.: CE3/).fill('kp') // lista longa (60 kits)
+  await focoLivre(page, page.getByPlaceholder(/Ex.: CE3/), 'Buscar estrutura', tag)
+  await focoLivre(page, page.getByRole('button', { name: 'Limpar busca' }), 'Limpar busca', tag)
+  await page.evaluate(() => window.scrollTo(0, 0))
   // kit de nome comprido com quantidade decimal "2,5": a tela não pode quebrar nem perder o valor
   await page.getByPlaceholder(/Ex.: CE3/).fill(kitLongo.kit)
   await page.getByRole('button', { name: new RegExp('^Adicionar ' + escapaRe(kitLongo.kit) + ' na operação') }).click()
@@ -197,11 +240,20 @@ async function rodada({ largura, altura, tema, movel }) {
   for (const [rotulo, v] of [['Potência (kVA)', '75'], ['Patrimônio', '123456'], ['Fase instalação', 'ABC'], ['Série', 'SER-T1'], ['Marca', 'MARCA TESTE'], ['Fabricação (mês/ano)', '03/2025'], ['Nº da instalação', 'ET 111111'], ['NA', '127'], ['NB', '127'], ['NC', '127'], ['AB', '220'], ['AC', '220'], ['BC', '220']]) await inst.getByLabel(rotulo, { exact: true }).fill(v)
   for (const [rotulo, v] of [['Potência (kVA)', '45'], ['Patrimônio', '654321'], ['Série', 'SER-T0'], ['Marca', 'MARCA VELHA'], ['Fabricação (mês/ano)', '2019'], ['Nº da instalação', 'ET 222222']]) await ret.getByLabel(rotulo, { exact: true }).fill(v)
   const fotosEquip = page.locator('main input[type=file]')
-  await Promise.all([fotosEquip.nth(0).setInputFiles(path.join(DADOS, 'equip1.jpeg')), fotosEquip.nth(1).setInputFiles(path.join(DADOS, 'equip1.jpeg'))])
+  // dois arquivos diferentes, escolhidos ao mesmo tempo
+  await Promise.all([fotosEquip.nth(0).setInputFiles(path.join(DADOS, 'equip1.jpeg')), fotosEquip.nth(1).setInputFiles(path.join(DADOS, 'vala1.jpeg'))])
   await page.waitForFunction(() => document.querySelectorAll('main img').length === 2, null, { timeout: 10000 }).catch(() => falhas.push(`[${tag}] as duas fotos do equipamento não ficaram`))
   await page.waitForTimeout(300) // se uma sobrescrevesse a outra, apareceria aqui
   const srcsEquip = await page.evaluate(() => [...document.querySelectorAll('main img')].map((i) => i.src))
   if (srcsEquip.length !== 2 || new Set(srcsEquip).size !== 2) falhas.push(`[${tag}] fotos do equipamento: esperadas 2 diferentes, vieram ${srcsEquip.length} (${new Set(srcsEquip).size} diferentes)`)
+  // cada foto no seu quadro: uma imagem em "Foto 1" e outra em "Foto 2", lado a lado (em coluna no celular)
+  const caixas = []
+  for (const q of ['Foto 1', 'Foto 2']) {
+    const img = page.locator('main img[alt="' + q + '"]')
+    if ((await img.count()) !== 1) falhas.push(`[${tag}] equipamento: o quadro "${q}" deveria ter 1 foto, tem ${await img.count()}`)
+    else caixas.push(await img.boundingBox())
+  }
+  if (caixas.length === 2 && Math.abs(caixas[0].x - caixas[1].x) < 10 && Math.abs(caixas[0].y - caixas[1].y) < 10) falhas.push(`[${tag}] equipamento: as duas fotos estão no mesmo lugar`)
   await axe(page, `${tag} equipamento`)
   await foto('04b-equipamento')
 
@@ -221,6 +273,10 @@ async function rodada({ largura, altura, tema, movel }) {
   await irPara('Revisar e baixar')
   await axe(page, `${tag} revisão`)
   await foto('06-revisao')
+  // uma análise do axe com a página rolada (cabeçalho preso e, no celular, a barra fixa de baixo sobre o conteúdo)
+  await page.evaluate(() => window.scrollTo(0, 1500))
+  await axe(page, `${tag} revisão rolada`, { topo: false })
+  await focoLivre(page, page.getByLabel('Só as que ficam diferentes do planejado'), 'filtro da revisão', tag)
   await conferirRevisao(page, largura, altura, tag)
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByRole('button', { name: /Gerar e baixar/ }).click()])
   const destino = path.join(SAIDA, `${tag}-${dl.suggestedFilename()}`)
