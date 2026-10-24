@@ -89,7 +89,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
       <div className={`grid grid-cols-1 min-[1320px]:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start`}>
         {/* resumo, pendências e botão: em cima no celular, ao lado (preso) no computador */}
         <div className={`min-[1320px]:order-2 min-[1320px]:sticky min-[1320px]:top-[88px] min-[1320px]:max-h-[calc(100dvh-104px)] flex flex-col rounded-panel border border-line bg-surface`}>
-          <div className="min-h-0 flex-1 overflow-y-auto grid gap-5 p-4 md:p-5">
+          <div tabIndex={0} role="region" aria-label="Resumo da revisão" className="min-h-0 flex-1 overflow-y-auto grid gap-5 p-4 md:p-5">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
               {totais.map((t) => (
                 <div key={t.rotulo} className="flex flex-col-reverse justify-end">
@@ -213,7 +213,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
                           <td className="pl-4 pr-1 py-2.5 num align-top">{l.oper}</td>
                           <td className="px-2 py-2.5 num text-muted align-top">{l.code}</td>
                           <td className="px-2 py-2.5 align-top">
-                            <span className="block line-clamp-2 break-words leading-snug" title={l.desc}>
+                            <span className="line-clamp-2 break-words leading-snug" title={l.desc}>
                               {l.desc}
                             </span>
                             {l.mudouOper && (

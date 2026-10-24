@@ -117,7 +117,7 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                           {!k.itens.length && <Selo tom="perigo">sem material</Selo>}
                           {jaLancado > 0 && <SeloLancado qtd={jaLancado} singular="lançada" plural="lançadas" />}
                         </span>
-                        <span className="block text-sm text-muted line-clamp-2">{k.descricao || 'Sem descrição'}</span>
+                        <span className="text-sm text-muted line-clamp-2">{k.descricao || 'Sem descrição'}</span>
                       </span>
                       <CaretDown size={18} className={`shrink-0 text-muted transition-transform ${exp ? 'rotate-180' : ''}`} />
                     </button>
