@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { DownloadSimple, IdentificationCard, Trash, UploadSimple, UserPlus } from '@phosphor-icons/react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { CheckCircle, DownloadSimple, IdentificationCard, Info, Trash, UploadSimple, UserPlus, Warning } from '@phosphor-icons/react'
 import { exportarTecnicos, lerArquivoTecnicos, listarTecnicos, removerTecnico, salvarTecnicos, type TecnicoSalvo } from '../lib/tecnicos'
 import { prepararCarimbo } from '../lib/imagem'
 import { Botao, Campo, Painel, Titulo, Vazio } from './ui'
@@ -49,63 +49,88 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
     <div>
       <Titulo
         titulo="Carimbo"
-        sub={`O técnico escolhido entra com nome, matrícula e carimbo em todas as folhas com assinatura. O carimbo antigo que vier no inventário é retirado. Data: ${hoje}.`}
+        sub={`O técnico escolhido entra com nome, matrícula e carimbo em todas as folhas com assinatura, com a data de hoje (${hoje}).`}
         acao={
           <div className="flex flex-wrap gap-2">
-            <Botao onClick={() => setNovo((v) => !v)}>
-              <UserPlus size={16} /> Cadastrar técnico
+            <Botao variante="primario" onClick={() => setNovo((v) => !v)} aria-expanded={novo}>
+              <UserPlus size={18} weight="bold" /> Cadastrar técnico
             </Botao>
             <Botao onClick={() => arquivo.current?.click()}>
-              <UploadSimple size={16} /> Carregar lista
+              <UploadSimple size={18} /> Carregar lista
             </Botao>
             {tecnicos.length > 0 && (
-              <Botao variante="fantasma" onClick={baixarLista} title="Baixar a lista para usar em outro computador">
-                <DownloadSimple size={16} /> Baixar lista
+              <Botao variante="fantasma" className="border border-line-strong" onClick={baixarLista} title="Baixar a lista para usar em outro computador">
+                <DownloadSimple size={18} /> Baixar lista
               </Botao>
             )}
           </div>
         }
       />
       <input ref={arquivo} type="file" accept=".json,application/json" className="hidden" onChange={(e) => importar(e.target.files?.[0]).finally(() => (e.target.value = ''))} />
+
+      <p className="flex items-start gap-3 mb-5 max-w-[84ch] rounded-ctl bg-surface-2 px-4 py-3 text-sm">
+        <Info size={20} className="shrink-0 mt-0.5 text-muted" aria-hidden="true" />
+        <span>O carimbo antigo que vier no inventário é retirado. A lista de técnicos fica guardada só neste navegador e não vai para a internet.</span>
+      </p>
+
       {erro && (
-        <p role="alert" className="mb-4 text-sm bg-danger-soft text-danger rounded-ctl p-3">
-          {erro}
+        <p role="alert" className="flex items-start gap-3 mb-5 rounded-ctl bg-danger-soft text-danger px-4 py-3 text-sm font-medium">
+          <Warning size={20} weight="bold" className="shrink-0 mt-0.5" aria-hidden="true" />
+          <span>{erro}</span>
         </p>
       )}
-      {novo && <NovoTecnico onSalvo={async () => { onTecnicos(await listarTecnicos()); setNovo(false) }} />}
+      {novo && (
+        <NovoTecnico
+          onCancelar={() => setNovo(false)}
+          onSalvo={async () => {
+            onTecnicos(await listarTecnicos())
+            setNovo(false)
+          }}
+        />
+      )}
 
       {!tecnicos.length ? (
         <Painel>
           <Vazio
-            icone={<IdentificationCard size={28} />}
+            icone={<IdentificationCard size={32} />}
             titulo="Nenhum técnico neste computador"
-            texto="Carregue o arquivo tecnicos-fechamento.json (fica na pasta AUTOMACAO KIT MATERIAL). Ele fica guardado só neste navegador e não vai para a internet."
+            texto="Carregue o arquivo tecnicos-fechamento.json (fica na pasta AUTOMACAO KIT MATERIAL) ou cadastre um técnico. A lista fica guardada só neste navegador e não vai para a internet."
           />
         </Painel>
       ) : (
-        <div role="radiogroup" aria-label="Técnico do carimbo" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div role="radiogroup" aria-label="Técnico do carimbo" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {tecnicos.map((t) => {
             const ativo = selecionado === t.registro
             return (
               <div
                 key={t.registro}
-                className={`press relative rounded-panel border p-3 text-left grid gap-3 ${ativo ? 'border-text bg-surface ring-2 ring-accent' : 'border-line bg-surface hover:border-line-strong'}`}
+                className={`entra press relative rounded-panel border p-4 grid gap-4 content-start bg-surface ${ativo ? 'border-text ring-2 ring-accent' : 'border-line hover:border-line-strong'}`}
               >
-                <button type="button" role="radio" aria-checked={ativo} onClick={() => onSelecionar(ativo ? null : t.registro)} className="absolute inset-0 rounded-panel" aria-label={`${t.nome}, matrícula ${t.registro}`} />
-                <div className="h-24 rounded-ctl bg-white grid place-items-center overflow-hidden">
-                  <img src={urls.get(t.registro)} alt="" className="max-h-20 max-w-[90%] object-contain" />
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={ativo}
+                  onClick={() => onSelecionar(ativo ? null : t.registro)}
+                  className="absolute inset-0 rounded-panel"
+                  aria-label={`${t.nome}, matrícula ${t.registro}`}
+                />
+                {/* o carimbo é um PNG transparente: sempre sobre fundo branco, nos dois temas */}
+                <div className="h-[140px] rounded-ctl bg-white border border-line grid place-items-center overflow-hidden">
+                  <img src={urls.get(t.registro)} alt="" className="max-h-[124px] max-w-[92%] object-contain" />
                 </div>
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium leading-snug">{t.nome}</p>
-                    <p className="text-xs text-muted">
+                    <p className="text-base font-semibold leading-snug break-words">{t.nome}</p>
+                    <p className="text-[0.875rem] leading-5 text-muted mt-0.5">
                       Matrícula <span className="num">{t.registro}</span>
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="press relative z-10 grid place-items-center w-8 h-8 rounded-ctl text-muted hover:text-danger hover:bg-danger-soft"
+                  <Botao
+                    variante="perigo"
+                    icone
+                    className="relative z-10 shrink-0 border border-line-strong"
                     aria-label={`Apagar ${t.nome} deste computador`}
+                    title="Apagar deste computador"
                     onClick={async () => {
                       if (!confirm(`Apagar ${t.nome} da lista deste computador?`)) return
                       await removerTecnico(t.registro)
@@ -113,9 +138,18 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
                       onTecnicos(await listarTecnicos())
                     }}
                   >
-                    <Trash size={16} />
-                  </button>
+                    <Trash size={18} />
+                  </Botao>
                 </div>
+                <p className={`flex items-center gap-2 text-sm min-h-6 ${ativo ? 'font-semibold' : 'text-muted'}`}>
+                  {ativo ? (
+                    <>
+                      <CheckCircle size={20} weight="fill" className="shrink-0 text-ok" aria-hidden="true" /> Usado nas folhas
+                    </>
+                  ) : (
+                    'Escolher este técnico'
+                  )}
+                </p>
               </div>
             )
           })}
@@ -125,7 +159,8 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
   )
 }
 
-function NovoTecnico({ onSalvo }: { onSalvo: () => void }) {
+function NovoTecnico({ onSalvo, onCancelar }: { onSalvo: () => void; onCancelar: () => void }) {
+  const idImg = useId()
   const [nome, setNome] = useState('')
   const [registro, setRegistro] = useState('')
   const [img, setImg] = useState<Awaited<ReturnType<typeof prepararCarimbo>> | null>(null)
@@ -133,17 +168,20 @@ function NovoTecnico({ onSalvo }: { onSalvo: () => void }) {
   const ok = nome.trim() && /^\d+$/.test(registro.trim()) && img
 
   return (
-    <Painel className="entra p-4 md:p-5 mb-5">
-      <h2 className="font-semibold mb-3">Cadastrar técnico</h2>
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_1fr] gap-3 items-start">
+    <Painel className="entra p-4 md:p-6 mb-5">
+      <h2 className="text-lg font-semibold mb-4">Cadastrar técnico</h2>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_12rem] xl:grid-cols-[minmax(0,1fr)_12rem_minmax(0,24rem)] gap-x-4 gap-y-4 items-start">
         <Campo rotulo="Nome completo" value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} placeholder="NOME COMO NO CARIMBO" />
         <Campo rotulo="Matrícula" inputMode="numeric" value={registro} onChange={(e) => setRegistro(e.target.value.replace(/\D/g, ''))} placeholder="4876" />
-        <div className="grid gap-1.5">
-          <span className="text-xs font-medium text-muted">Imagem do carimbo</span>
+        <div className="grid gap-1.5 md:col-span-2 xl:col-span-1">
+          <label htmlFor={idImg} className="text-xs font-medium text-muted">
+            Imagem do carimbo
+          </label>
           <input
+            id={idImg}
             type="file"
             accept="image/*"
-            className="text-sm file:mr-3 file:h-10 file:rounded-ctl file:border file:border-line-strong file:bg-surface file:px-3 file:text-text"
+            className="min-w-0 text-sm file:mr-3 file:h-12 file:md:h-11 file:rounded-ctl file:border file:border-line-strong file:bg-surface file:px-4 file:text-base file:text-text hover:file:bg-surface-2"
             onChange={async (e) => {
               const f = e.target.files?.[0]
               if (!f) return
@@ -155,11 +193,21 @@ function NovoTecnico({ onSalvo }: { onSalvo: () => void }) {
               }
             }}
           />
-          {img && <img src={img.url} alt="Prévia do carimbo" className="h-16 object-contain bg-white rounded-ctl p-1" />}
           {erro && <p className="text-xs text-danger">{erro}</p>}
         </div>
       </div>
-      <div className="mt-4 flex justify-end">
+      {img && (
+        <div className="mt-4 grid gap-1.5">
+          <span className="text-xs font-medium text-muted">Prévia do carimbo, com o fundo branco retirado</span>
+          <div className="h-[140px] max-w-sm rounded-ctl bg-white border border-line grid place-items-center overflow-hidden">
+            <img src={img.url} alt="Prévia do carimbo" className="max-h-[124px] max-w-[92%] object-contain" />
+          </div>
+        </div>
+      )}
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <Botao variante="fantasma" onClick={onCancelar}>
+          Cancelar
+        </Botao>
         <Botao
           variante="primario"
           disabled={!ok}
