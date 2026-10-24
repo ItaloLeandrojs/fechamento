@@ -25,7 +25,7 @@ export function FotoSlot({ rotulo, foto, onChange, alto = false }: { rotulo: str
   }
 
   return (
-    <div className="grid gap-1.5">
+    <div className="grid gap-1.5 min-w-0">
       <span className="text-xs font-medium text-muted">{rotulo}</span>
       <div
         className={`relative rounded-ctl border overflow-hidden ${alto ? 'aspect-[3/4]' : 'aspect-[4/3]'} ${
@@ -52,23 +52,30 @@ export function FotoSlot({ rotulo, foto, onChange, alto = false }: { rotulo: str
                 URL.revokeObjectURL(foto.url)
                 onChange(undefined)
               }}
-              className="press absolute top-1.5 right-1.5 grid place-items-center w-8 h-8 rounded-full bg-surface/90 text-text border border-line hover:bg-surface"
+              className="press absolute top-2 right-2 grid place-items-center size-11 rounded-full bg-surface/90 text-text border border-line hover:bg-surface"
             >
-              <X size={16} weight="bold" />
+              <X size={18} weight="bold" />
             </button>
-            <button type="button" onClick={() => input.current?.click()} className="absolute inset-x-0 bottom-0 py-1.5 text-xs bg-surface/85 text-text hover:bg-surface">
-              Trocar foto
+            <button type="button" onClick={() => input.current?.click()} className="press absolute inset-x-0 bottom-0 h-12 md:h-11 text-sm font-medium bg-surface/90 text-text hover:bg-surface">
+              Trocar foto<span className="sr-only">: {rotulo}</span>
             </button>
           </>
         ) : (
-          <button type="button" onClick={() => input.current?.click()} disabled={lendo} className="press absolute inset-0 grid place-items-center content-center gap-1.5 text-muted hover:text-text">
-            <Camera size={26} />
-            <span className="text-xs">{lendo ? 'Preparando…' : 'Soltar ou escolher'}</span>
+          <button type="button" onClick={() => input.current?.click()} disabled={lendo} className="press absolute inset-0 grid place-items-center content-center gap-2 px-3 text-center text-muted hover:text-text">
+            <Camera size={36} />
+            <span className="text-sm">
+              {lendo ? 'Preparando…' : 'Soltar ou escolher'}
+              <span className="sr-only">: {rotulo}</span>
+            </span>
           </button>
         )}
       </div>
       <input ref={input} type="file" accept="image/*" className="hidden" onChange={(e) => receber(e.target.files?.[0]).finally(() => (e.target.value = ''))} />
-      {erro && <p className="text-xs text-danger">{erro}</p>}
+      {erro && (
+        <p role="alert" className="text-xs text-danger">
+          {erro}
+        </p>
+      )}
     </div>
   )
 }
