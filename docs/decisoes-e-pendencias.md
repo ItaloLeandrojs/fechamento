@@ -21,7 +21,7 @@ Especificação completa: `..\ESPECIFICACAO do site Fechamento.md` (fora do repo
 - `npm run e2e` ("Tudo passou."): a obra inteira em 5 rodadas (1366 claro e escuro, 1920 claro, 390 claro e escuro), sem internet, com o axe em 11 análises por rodada (55 no total, zero violações, incluindo a revisão rolada com a barra de baixo sobre o conteúdo) e 35 prints. Em cada tela confere rolagem lateral (nenhuma). Também confere:
   - a coluna "Devolvido" da revisão dentro da tela e do painel em 1366 e 1920 (e "Dev." do cartão em 390);
   - kit de nome comprido (`KP-SMDT-P9/300-(CCM_BTZero)`) com quantidade "2,5": o campo mantém "2,5" e a revisão mostra aplicado 2,5 x a quantidade do material no kit;
-  - duas fotos do ponto de aterramento e duas fotos do equipamento escolhidas ao mesmo tempo: as duas ficam e são diferentes;
+  - duas fotos do ponto de aterramento e duas fotos do equipamento (dois arquivos diferentes) escolhidas ao mesmo tempo: as duas ficam, diferentes, cada uma no seu quadro ("Foto 1" e "Foto 2" no equipamento);
   - foco visível (WCAG 2.4.11): com a página rolada até o campo ficar sob o cabeçalho preso, o foco da busca, do "Limpar busca" e do filtro da revisão traz o elemento para baixo do cabeçalho (e acima da barra de baixo no celular); `scroll-padding-top: 96px` em `src/index.css` corrige (sem ele o teste falhava em todas as rodadas);
   - nome (`16646602 - ADS.xlsx`) e tamanho do arquivo baixado.
 - `html-validate` (configuração recomendada) em `dist/index.html`: válido, 0 erros e 0 avisos.
