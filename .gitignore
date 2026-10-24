@@ -29,3 +29,6 @@ e2e/saida/
 e2e/prints/
 *.xlsx
 tecnicos*.json
+
+# prints da amostra com dados reais da obra (nunca publicar)
+docs/amostra/prints/

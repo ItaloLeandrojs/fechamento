@@ -11,6 +11,8 @@ export interface Etapa {
   estado: EstadoEtapa
   /** quantidade lançada (some quando é zero) */
   n?: number
+  /** só na revisão: quantas pendências ainda existem (marcador neutro, sem alarme) */
+  restam?: number
 }
 
 /**
@@ -39,6 +41,7 @@ export function montarEtapas(e: Estado, pendencias: string[]): Etapa[] {
     { id: 'equipamentos', rotulo: 'Equipamento', grupo: 'Fichas', estado: pendEquip ? 'pendente' : lancado(e.equipamentos.length), n: por(e.equipamentos.length) },
     { id: 'dp', rotulo: 'Desligamento', grupo: 'Fichas', estado: pendDP ? 'pendente' : lancado(e.temDP ? 1 : 0), n: e.temDP ? 1 : undefined },
     { id: 'carimbo', rotulo: 'Carimbo', grupo: 'Fechar', estado: pendTec ? 'pendente' : e.tecnico !== null ? 'feito' : 'vazio' },
-    { id: 'revisao', rotulo: 'Revisar e baixar', grupo: 'Fechar', estado: pendencias.length ? 'pendente' : 'vazio' },
+    // a revisão nunca fica vermelha: o "falta" aparece só na etapa que tem a causa
+    { id: 'revisao', rotulo: 'Revisar e baixar', grupo: 'Fechar', estado: 'vazio', restam: por(pendencias.length) },
   ]
 }

@@ -12,11 +12,12 @@ const estilos: Record<Variante, string> = {
   perigo: 'h-12 md:h-11 text-danger hover:bg-danger-soft',
 }
 
-export function Botao({ variante = 'secundario', className = '', children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variante?: Variante }) {
+/** `icone`: botão quadrado só com ícone (alvo de 44 px, 48 px no celular). */
+export function Botao({ variante = 'secundario', icone = false, className = '', children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variante?: Variante; icone?: boolean }) {
   return (
     <button
       type="button"
-      className={`press inline-flex items-center justify-center gap-2 rounded-ctl px-4 text-base whitespace-nowrap disabled:opacity-45 disabled:pointer-events-none ${estilos[variante]} ${className}`}
+      className={`press inline-flex items-center justify-center gap-2 [&>svg]:shrink-0 rounded-ctl ${icone ? 'px-0 w-12 md:w-11' : 'px-4'} text-base whitespace-nowrap disabled:opacity-45 disabled:pointer-events-none ${estilos[variante]} ${className}`}
       {...rest}
     >
       {children}
@@ -94,7 +95,7 @@ export function EscolhaOper({ valor, onChange, compacto = false }: { valor: stri
   )
 }
 
-export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1 }: { valor: number; onChange: (n: number) => void; rotulo?: string; passo?: number }) {
+export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1, grande = false }: { valor: number; onChange: (n: number) => void; rotulo?: string; passo?: number; grande?: boolean }) {
   const fmt = (n: number) => String(n).replace('.', ',')
   const [texto, setTexto] = useState(fmt(valor))
   // acompanha mudanças vindas dos botões + e -
@@ -102,14 +103,14 @@ export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1 }
     setTexto((t) => (Number(t.replace(',', '.')) === valor ? t : fmt(valor)))
   }, [valor])
   return (
-    <div className="inline-flex items-center rounded-ctl border border-line-strong bg-surface h-12 md:h-11" role="group" aria-label={rotulo}>
+    <div className={`inline-flex items-center rounded-ctl border border-line-strong bg-surface ${grande ? 'h-12' : 'h-12 md:h-11'}`} role="group" aria-label={rotulo}>
       <button type="button" aria-label="Diminuir" className="press grid place-items-center w-11 h-full text-muted hover:text-text" onClick={() => onChange(Math.max(0, +(valor - passo).toFixed(3)))}>
         <Minus size={18} weight="bold" />
       </button>
       <input
         aria-label={rotulo}
         inputMode="decimal"
-        className="num w-16 h-full bg-transparent text-center text-base font-medium focus:outline-none"
+        className={`num h-full bg-transparent text-center focus:outline-none ${grande ? 'w-[4.5rem] text-xl font-semibold' : 'w-16 text-base font-medium'}`}
         value={texto}
         onChange={(e) => {
           const t = e.target.value.replace(/[^\d,.]/g, '')

@@ -20,6 +20,12 @@ function Marcador({ etapa }: { etapa: Etapa }) {
   return (
     <span className="ml-auto flex items-center gap-1.5 pl-2">
       {etapa.n ? <span className="num text-xs font-medium bg-surface-2 text-text rounded-md px-2 py-0.5 min-w-7 text-center">{etapa.n}</span> : null}
+      {etapa.restam ? (
+        <span className="num text-xs font-medium text-muted border border-line-strong rounded-md px-2 py-0.5 min-w-7 text-center">
+          {etapa.restam}
+          <span className="sr-only"> {etapa.restam === 1 ? 'pendência' : 'pendências'}</span>
+        </span>
+      ) : null}
       {etapa.estado === 'pendente' && <span className="text-xs font-medium text-danger">falta</span>}
       {etapa.estado === 'feito' && !etapa.n && <span className="text-xs font-medium text-ok">ok</span>}
     </span>
@@ -32,15 +38,19 @@ function Marcador({ etapa }: { etapa: Etapa }) {
  */
 export function Etapas({ etapas, atual, onIr, rodape }: { etapas: Etapa[]; atual: Secao; onIr: (s: Secao) => void; rodape?: ReactNode }) {
   const lista = useRef<HTMLUListElement>(null)
-  // no celular, a etapa atual sempre aparece na faixa
+  // no celular, a etapa atual sempre aparece na faixa: rola só a própria lista
+  // (scrollIntoView mexeria também na rolagem da página e no computador não há faixa)
   useEffect(() => {
-    const el = lista.current?.querySelector<HTMLElement>('[aria-current=page]')
-    el?.scrollIntoView({ inline: 'center', block: 'nearest' })
+    const ul = lista.current
+    const el = ul?.querySelector<HTMLElement>('[aria-current=page]')
+    if (!ul || !el || !window.matchMedia('(max-width: 767px)').matches) return
+    const alvo = el.offsetLeft - (ul.clientWidth - el.offsetWidth) / 2
+    ul.scrollTo({ left: Math.max(0, alvo), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [atual])
 
   return (
-    <nav aria-label="Etapas" className="md:sticky md:top-[72px] md:self-start md:py-8 -mx-4 sm:-mx-6 md:mx-0 px-4 sm:px-6 md:px-0 border-b md:border-0 border-line bg-bg">
-      <ul ref={lista} className="flex md:grid gap-1.5 md:gap-1 overflow-x-auto md:overflow-visible py-2 md:py-0">
+    <nav aria-label="Etapas" className="md:sticky md:top-[72px] md:self-start md:max-h-[calc(100dvh-72px)] md:overflow-y-auto md:py-8 -mx-4 sm:-mx-6 md:-mx-1 px-4 sm:px-6 md:px-1 border-b md:border-0 border-line bg-bg">
+      <ul ref={lista} className="relative flex md:grid gap-1.5 md:gap-1 overflow-x-auto md:overflow-visible py-2 md:py-0">
         {etapas.map((m, i) => {
           const ativa = atual === m.id
           return (

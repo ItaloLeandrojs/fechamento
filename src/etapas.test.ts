@@ -20,10 +20,19 @@ describe('montarEtapas', () => {
     expect(etapas.find((x) => x.id === 'carimbo')?.estado).toBe('vazio')
   })
 
-  it('carimbo fica feito com técnico escolhido e a revisão pendente se há pendências', () => {
+  it('carimbo fica feito com técnico escolhido; a revisão só conta as pendências, sem alarme', () => {
     const etapas = montarEtapas({ ...estadoInicial, tecnico: 123 }, ['Aterramento: o ponto 1 está sem número.'])
     expect(etapas.find((x) => x.id === 'carimbo')?.estado).toBe('feito')
-    expect(etapas.find((x) => x.id === 'revisao')?.estado).toBe('pendente')
+    const rev = etapas.find((x) => x.id === 'revisao')
+    expect(rev?.estado).not.toBe('pendente')
+    expect(rev?.restam).toBe(1)
+  })
+
+  it('obra recém-aberta: só o carimbo mostra "falta"; a revisão fica neutra', () => {
+    const etapas = montarEtapas(estadoInicial, ['Escolha o técnico do carimbo.'])
+    expect(etapas.filter((x) => x.estado === 'pendente').map((x) => x.id)).toEqual(['carimbo'])
+    expect(etapas.find((x) => x.id === 'revisao')?.restam).toBe(1)
+    expect(montarEtapas({ ...estadoInicial, tecnico: 1 }, []).find((x) => x.id === 'revisao')?.restam).toBeUndefined()
   })
 
   it('aponta pendência de aterramento e de desligamento sem foto', () => {
