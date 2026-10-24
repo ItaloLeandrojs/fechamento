@@ -1,2 +1,16 @@
+# Fora dos buscadores. Só os robôs que montam a prévia do link (imagem e título)
+# podem ler a página, para o cartão aparecer no WhatsApp, LinkedIn e X.
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
 User-agent: *
 Disallow: /
