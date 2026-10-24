@@ -38,26 +38,27 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
 
   const meus = useMemo(() => itens.filter((i) => i.tipo === tipo), [itens, tipo])
   const prevDoTipo = useMemo(() => previstos.filter((p) => (servico ? ehServico(p.un) : !ehServico(p.un))), [previstos, servico])
-  const prevCodes = useMemo(() => new Set(prevDoTipo.map((p) => p.code)), [prevDoTipo])
 
   const q = busca.trim()
 
-  // cadastro completo (sem os previstos, que já aparecem primeiro)
-  const cadastro = useMemo(() => {
-    if (!q) return []
-    const lista: CatalogoIndexado[] = []
-    for (const c of catalogo) {
-      if ((servico ? !ehServico(c.un) : ehServico(c.un)) || prevCodes.has(c.code) || !casa(c.norm, q)) continue
-      lista.push(c)
-      if (lista.length >= LIMITE) break
-    }
-    return lista
-  }, [q, catalogo, prevCodes, servico])
+  // previstos que casam com a busca; a lista mostrada é cortada no limite
+  const prevCasam = useMemo(() => (q ? prevDoTipo.filter((p) => casa(normalizar(`${p.code} ${p.desc}`), q)) : prevDoTipo), [q, prevDoTipo])
+  const prevFiltrados = useMemo(() => prevCasam.slice(0, q ? LIMITE : LIMITE_PREVISTOS), [q, prevCasam])
+  const prevCortados = prevCasam.length > prevFiltrados.length
 
-  const prevFiltrados = useMemo(() => {
-    const lista = q ? prevDoTipo.filter((p) => casa(normalizar(`${p.code} ${p.desc}`), q)) : prevDoTipo
-    return lista.slice(0, q ? LIMITE : LIMITE_PREVISTOS)
-  }, [q, prevDoTipo])
+  // cadastro completo, sem repetir os previstos que já aparecem na lista de cima
+  // (um previsto que só casa pelo texto do cadastro continua aparecendo aqui)
+  const { cadastro, cadastroCortado } = useMemo(() => {
+    const lista: CatalogoIndexado[] = []
+    if (!q) return { cadastro: lista, cadastroCortado: false }
+    const mostrados = new Set(prevFiltrados.map((p) => p.code))
+    for (const c of catalogo) {
+      if ((servico ? !ehServico(c.un) : ehServico(c.un)) || mostrados.has(c.code) || !casa(c.norm, q)) continue
+      if (lista.length >= LIMITE) return { cadastro: lista, cadastroCortado: true } // achou o 61º: há mais
+      lista.push(c)
+    }
+    return { cadastro: lista, cadastroCortado: false }
+  }, [q, catalogo, prevFiltrados, servico])
 
   // quanto de cada código já foi lançado (em qualquer operação), para dar retorno na lista de busca
   const lancadoPorCodigo = useMemo(() => {
@@ -79,13 +80,21 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
   const nomeItem = servico ? 'serviço' : 'material'
   const nomeItens = servico ? 'serviços' : 'materiais'
 
+  const nCasam = prevCasam.length + cadastro.length
   const textoInfo = !q
     ? prevDoTipo.length
-      ? `Sugestões: ${nomeItens} previstos nesta obra`
+      ? prevCortados
+        ? `Sugestões: ${prevFiltrados.length} dos ${prevDoTipo.length} ${nomeItens} previstos nesta obra. Escreva para procurar os outros`
+        : `Sugestões: ${nomeItens} previstos nesta obra`
       : `Escreva o nome ou o código do ${nomeItem} para procurar no cadastro`
-    : cadastro.length === LIMITE
-      ? `Mostrando as ${LIMITE} primeiras: escreva mais para refinar`
-      : `${prevFiltrados.length + cadastro.length} ${prevFiltrados.length + cadastro.length === 1 ? `${nomeItem} encontrado` : `${nomeItens} encontrados`}`
+    : prevCortados || cadastroCortado
+      ? `Mostrando ${[
+          prevCasam.length ? (prevCortados ? `${prevFiltrados.length} dos ${prevCasam.length} previstos` : `os ${prevCasam.length} previstos`) : '',
+          cadastro.length ? (cadastroCortado ? `os ${LIMITE} primeiros do cadastro` : `${cadastro.length} do cadastro`) : '',
+        ]
+          .filter(Boolean)
+          .join(' e ')}: escreva mais para refinar`
+      : `${nCasam} ${nCasam === 1 ? `${nomeItem} encontrado` : `${nomeItens} encontrados`}`
 
   const faixa = (texto: string) => (
     <li className="bg-surface-2 px-4 h-10 flex items-center text-sm font-semibold">
@@ -98,7 +107,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
     return (
       <li key={c.code} className="flex items-center gap-3 px-3 md:px-4 py-2 min-h-16">
         <div className="min-w-0 flex-1 px-2 py-1.5">
-          <p className="text-base font-semibold break-words line-clamp-2">{c.desc || 'Sem descrição'}</p>
+          <p className="text-base font-semibold break-words line-clamp-2" title={c.desc || undefined}>{c.desc || 'Sem descrição'}</p>
           <p className="text-sm text-muted">
             <span className="num">{c.code}</span> · {c.un}
           </p>
@@ -160,7 +169,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
           </div>
 
           <ul className="divide-y divide-line">
-            {prevFiltrados.length > 0 && faixa(`Previstos nesta obra (${prevFiltrados.length})`)}
+            {prevFiltrados.length > 0 && faixa(`Previstos nesta obra (${prevCortados ? `${prevFiltrados.length} de ${prevCasam.length}` : prevFiltrados.length})`)}
             {prevFiltrados.map((p) =>
               linha(
                 p,
@@ -171,7 +180,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
                 )),
               ),
             )}
-            {cadastro.length > 0 && faixa('Cadastro completo')}
+            {cadastro.length > 0 && faixa(cadastroCortado ? `Cadastro completo (os ${LIMITE} primeiros)` : 'Cadastro completo')}
             {cadastro.map((c) => linha(c))}
           </ul>
           {semResultado &&
@@ -207,7 +216,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
                     {doGrupo.map((i) => (
                       <li key={i.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 px-1">
                         <div className="flex-1 basis-56 min-w-0">
-                          <p className="text-base font-semibold break-words line-clamp-2">{i.desc}</p>
+                          <p className="text-base font-semibold break-words line-clamp-2" title={i.desc}>{i.desc}</p>
                           <p className="text-sm text-muted">
                             <span className="num">{i.code}</span> · {i.un}
                           </p>

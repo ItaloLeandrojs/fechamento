@@ -250,7 +250,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
                           <p className="text-sm text-muted">
                             Operação <span className="num font-semibold text-text">{l.oper}</span> <span aria-hidden>·</span> código <span className="num">{l.code}</span>
                           </p>
-                          <p className="mt-0.5 text-base line-clamp-2 break-words">{l.desc}</p>
+                          <p className="mt-0.5 text-base line-clamp-2 break-words" title={l.desc}>{l.desc}</p>
                           {l.mudouOper && (
                             <span className="mt-1.5 inline-block">
                               <Selo tom="destaque">recebeu de outra operação</Selo>

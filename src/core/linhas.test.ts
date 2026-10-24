@@ -162,6 +162,38 @@ describe('apagarLinhas', () => {
     expect(sheet.getElementsByTagName('xm:f')[0].textContent).toBe('ISERROR(B5)')
   })
 
+  it('não deixa contêiner vazio (protectedRanges, hyperlinks, extLst) e acerta o count do que sobrou', async () => {
+    const wb = await montar()
+    const d = await wb.doc('xl/worksheets/sheet1.xml')
+    const raiz = d.documentElement
+    const trecho = (xml: string) =>
+      d.importNode(
+        new DOMParser().parseFromString(
+          `<w xmlns="${NS_MAIN}" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">${xml}</w>`,
+          'application/xml',
+        ).documentElement.firstChild!,
+        true,
+      )
+    const cf = raiz.getElementsByTagName('conditionalFormatting')[0]
+    // tudo dentro das linhas 4 a 6, que vão embora
+    raiz.insertBefore(trecho('<protectedRanges><protectedRange name="p" sqref="B5"/></protectedRanges>'), cf)
+    // dois itens: um some (linha 5), outro fica (linha 10, que sobe para a 7)
+    raiz.insertBefore(trecho('<dataValidations count="2"><dataValidation sqref="C5"><formula1>1</formula1></dataValidation><dataValidation sqref="C10"><formula1>1</formula1></dataValidation></dataValidations>'), cf)
+    raiz.insertBefore(trecho('<hyperlinks><hyperlink ref="B5" location="A1"/></hyperlinks>'), raiz.getElementsByTagName('drawing')[0])
+    raiz.appendChild(
+      trecho(
+        '<extLst><ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}"><x14:conditionalFormattings><x14:conditionalFormatting><x14:cfRule type="expression"><xm:f>ISERROR(B5)</xm:f></x14:cfRule><xm:sqref>B5</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext></extLst>',
+      ),
+    )
+    wb.touch('xl/worksheets/sheet1.xml')
+    await apagarLinhas(wb, 'Aba', 4, 6)
+    const { sheet } = await reabrir(wb)
+    for (const tag of ['protectedRanges', 'hyperlinks', 'extLst', 'ext', 'conditionalFormattings']) expect(sheet.getElementsByTagName(tag).length).toBe(0)
+    const dvs = sheet.getElementsByTagName('dataValidations')[0]
+    expect(dvs.getAttribute('count')).toBe('1')
+    expect(dvs.getElementsByTagName('dataValidation')[0].getAttribute('sqref')).toBe('C7')
+  })
+
   it('apagar o fim da aba não deixa referência quebrada', async () => {
     const wb = await montar()
     await apagarLinhas(wb, 'Aba', 10, 12)

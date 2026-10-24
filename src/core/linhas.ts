@@ -225,6 +225,22 @@ function ajustarFormulasDoGrupo(sqrefAntigo: string, sqrefNovo: string, formulas
   }
 }
 
+/**
+ * Depois de tirar filhos, o contêiner que ficou sem nenhum não pode continuar na aba
+ * (o esquema exige ao menos um filho e o Excel oferece "reparar"); o que ficou tem o
+ * `count` acertado. Vale também para o `ext`/`extLst` que só carregava o contêiner removido.
+ */
+function limparContainersVazios(root: Element) {
+  const total = (el: Element) => Array.from(el.childNodes).filter((n) => n.nodeType === 1).length
+  for (const tag of ['protectedRanges', 'ignoredErrors', 'hyperlinks', 'dataValidations', 'conditionalFormattings', 'ext', 'extLst']) {
+    for (const el of descendants(root, tag)) {
+      const n = total(el)
+      if (!n) el.parentNode?.removeChild(el)
+      else if (el.getAttribute('count') !== null && el.getAttribute('count') !== String(n)) el.setAttribute('count', String(n))
+    }
+  }
+}
+
 function ajustarReferenciasDaAba(root: Element, r1: number, r2: number) {
   const dim = child(root, 'dimension')
   if (dim) ajustarAtributo(dim, 'ref', r1, r2, false)
@@ -259,6 +275,7 @@ function ajustarReferenciasDaAba(root: Element, r1: number, r2: number) {
       ajustarFormulasDoGrupo(antigo, novo, descendants(grupo, 'f'), r1, r2)
     }
   }
+  limparContainersVazios(root)
 }
 
 /** Ajusta os desenhos (imagens e formas) da aba: sobem, encolhem ou somem se estavam só no trecho apagado. */

@@ -39,24 +39,33 @@ export async function listarTecnicos(): Promise<TecnicoSalvo[]> {
   }
 }
 
-export async function salvarTecnicos(lista: TecnicoSalvo[]): Promise<void> {
-  const db = await abrir()
-  await new Promise<void>((ok, erro) => {
-    const tx = db.transaction(STORE, 'readwrite')
-    const st = tx.objectStore(STORE)
+const MSG_GUARDAR = 'Não foi possível guardar a lista de técnicos neste navegador. Isso acontece em janela anônima, com o armazenamento bloqueado ou sem espaço no disco. Tente de novo numa janela normal.'
+
+/** Roda uma escrita no IndexedDB e devolve uma mensagem clara, em português, se qualquer passo falhar. */
+async function escrever(fazer: (st: IDBObjectStore) => void): Promise<void> {
+  try {
+    const db = await abrir()
+    await new Promise<void>((ok, erro) => {
+      const tx = db.transaction(STORE, 'readwrite')
+      fazer(tx.objectStore(STORE))
+      tx.oncomplete = () => ok()
+      tx.onerror = () => erro(tx.error)
+      tx.onabort = () => erro(tx.error)
+    })
+  } catch {
+    throw new Error(MSG_GUARDAR)
+  }
+}
+
+export function salvarTecnicos(lista: TecnicoSalvo[]): Promise<void> {
+  return escrever((st) => {
     for (const t of lista) st.put(t)
-    tx.oncomplete = () => ok()
-    tx.onerror = () => erro(tx.error)
   })
 }
 
-export async function removerTecnico(registro: number): Promise<void> {
-  const db = await abrir()
-  await new Promise<void>((ok, erro) => {
-    const tx = db.transaction(STORE, 'readwrite')
-    tx.objectStore(STORE).delete(registro)
-    tx.oncomplete = () => ok()
-    tx.onerror = () => erro(tx.error)
+export function removerTecnico(registro: number): Promise<void> {
+  return escrever((st) => {
+    st.delete(registro)
   })
 }
 

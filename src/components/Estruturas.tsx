@@ -117,7 +117,7 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                           {!k.itens.length && <Selo tom="perigo">sem material</Selo>}
                           {jaLancado > 0 && <SeloLancado qtd={jaLancado} singular="lançada" plural="lançadas" />}
                         </span>
-                        <span className="text-sm text-muted line-clamp-2">{k.descricao || 'Sem descrição'}</span>
+                        <span className="text-sm text-muted line-clamp-2" title={k.descricao || undefined}>{k.descricao || 'Sem descrição'}</span>
                       </span>
                       <CaretDown size={18} className={`shrink-0 text-muted transition-transform ${exp ? 'rotate-180' : ''}`} />
                     </button>
@@ -175,7 +175,7 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                       <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 px-1">
                         <div className="flex-1 basis-56 min-w-0">
                           <p className="text-base font-semibold break-words">{e.kit}</p>
-                          <p className="text-sm text-muted line-clamp-2">{porKit.get(e.kit)?.descricao}</p>
+                          <p className="text-sm text-muted line-clamp-2" title={porKit.get(e.kit)?.descricao}>{porKit.get(e.kit)?.descricao}</p>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
                           <Quantidade grande valor={e.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === e.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${e.kit}`} />

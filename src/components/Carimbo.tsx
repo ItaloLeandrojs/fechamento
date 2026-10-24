@@ -81,6 +81,7 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
       )}
       {novo && (
         <NovoTecnico
+          tecnicos={tecnicos}
           onCancelar={() => setNovo(false)}
           onSalvo={async () => {
             onTecnicos(await listarTecnicos())
@@ -133,9 +134,14 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
                     title="Apagar deste computador"
                     onClick={async () => {
                       if (!confirm(`Apagar ${t.nome} da lista deste computador?`)) return
-                      await removerTecnico(t.registro)
-                      if (ativo) onSelecionar(null)
-                      onTecnicos(await listarTecnicos())
+                      setErro(null)
+                      try {
+                        await removerTecnico(t.registro)
+                        if (ativo) onSelecionar(null)
+                        onTecnicos(await listarTecnicos())
+                      } catch (e) {
+                        setErro((e as Error).message)
+                      }
                     }}
                   >
                     <Trash size={18} />
@@ -159,12 +165,13 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
   )
 }
 
-function NovoTecnico({ onSalvo, onCancelar }: { onSalvo: () => void; onCancelar: () => void }) {
+function NovoTecnico({ tecnicos, onSalvo, onCancelar }: { tecnicos: TecnicoSalvo[]; onSalvo: () => void; onCancelar: () => void }) {
   const idImg = useId()
   const [nome, setNome] = useState('')
   const [registro, setRegistro] = useState('')
   const [img, setImg] = useState<Awaited<ReturnType<typeof prepararCarimbo>> | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null)
   const ok = nome.trim() && /^\d+$/.test(registro.trim()) && img
 
   return (
@@ -204,6 +211,12 @@ function NovoTecnico({ onSalvo, onCancelar }: { onSalvo: () => void; onCancelar:
           </div>
         </div>
       )}
+      {erroSalvar && (
+        <p role="alert" className="flex items-start gap-3 mt-4 rounded-ctl bg-danger-soft text-danger px-4 py-3 text-sm font-medium">
+          <Warning size={20} weight="bold" className="shrink-0 mt-0.5" aria-hidden="true" />
+          <span>{erroSalvar}</span>
+        </p>
+      )}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Botao variante="fantasma" onClick={onCancelar}>
           Cancelar
@@ -212,8 +225,16 @@ function NovoTecnico({ onSalvo, onCancelar }: { onSalvo: () => void; onCancelar:
           variante="primario"
           disabled={!ok}
           onClick={async () => {
-            await salvarTecnicos([{ nome: nome.trim(), registro: Number(registro), carimbo: { png: img!.png, width: img!.width, height: img!.height } }])
-            onSalvo()
+            setErroSalvar(null)
+            // a matrícula é a chave: repetir uma matrícula troca o nome e o carimbo de quem já estava na lista
+            const existente = tecnicos.find((t) => t.registro === Number(registro))
+            if (existente && !confirm(`A matrícula ${registro} já é de ${existente.nome}. Salvar vai trocar o nome e o carimbo dessa pessoa por estes. Continuar?`)) return
+            try {
+              await salvarTecnicos([{ nome: nome.trim(), registro: Number(registro), carimbo: { png: img!.png, width: img!.width, height: img!.height } }])
+              onSalvo()
+            } catch (e) {
+              setErroSalvar((e as Error).message)
+            }
           }}
         >
           Salvar técnico
