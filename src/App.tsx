@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowsClockwise, DownloadSimple, FileText, IdentificationCard, Lightning, Package, Shovel, Stack, Wrench } from '@phosphor-icons/react'
+import { ArrowsClockwise, DownloadSimple, Lightning } from '@phosphor-icons/react'
 import { lerInventario, type ItemCatalogo, type ResumoInventario } from './core/inventario'
 import { gerarFechamento } from './core/build'
 import { normalizar } from './lib/busca'
@@ -12,10 +12,9 @@ import { Itens, type CatalogoIndexado, type Previsto } from './components/Itens'
 import { Aterramento, DP, Equipamentos, LIMITE_PONTOS } from './components/Fichas'
 import { Carimbo } from './components/Carimbo'
 import { Revisao } from './components/Revisao'
+import { Etapas } from './components/Etapas'
 import { Botao } from './components/ui'
-import { IconeTransformador } from './components/IconeTransformador'
-
-type Secao = 'estruturas' | 'materiais' | 'servicos' | 'aterramento' | 'equipamentos' | 'dp' | 'carimbo' | 'revisao'
+import { montarEtapas, type Secao } from './etapas'
 
 interface Obra {
   nomeArquivo: string
@@ -152,88 +151,66 @@ export default function App() {
     }
   }
 
-  if (!obra) return <Inicio onArquivo={abrir} carregando={carregando} erro={erroInicio} />
+  if (!obra) return <Inicio onArquivo={abrir} carregando={carregando} erro={erroInicio} tecnicos={tecnicos.length} />
 
-  const nEstr = estado.estruturas.reduce((s, e) => s + e.qtd, 0)
-  const nMat = estado.itens.filter((i) => i.tipo === 'material').length
-  const nSrv = estado.itens.filter((i) => i.tipo === 'servico').length
-  const menu: { id: Secao; rotulo: string; icone: React.ReactNode; n?: number; grupo: string }[] = [
-    { id: 'estruturas', rotulo: 'Estruturas', icone: <Stack size={18} />, n: nEstr, grupo: 'Lançamentos' },
-    { id: 'materiais', rotulo: 'Materiais', icone: <Package size={18} />, n: nMat, grupo: 'Lançamentos' },
-    { id: 'servicos', rotulo: 'Mão de obra', icone: <Wrench size={18} />, n: nSrv, grupo: 'Lançamentos' },
-    { id: 'aterramento', rotulo: 'Aterramento', icone: <Shovel size={18} />, n: estado.aterramento.length, grupo: 'Fichas' },
-    { id: 'equipamentos', rotulo: 'Equipamento', icone: <IconeTransformador size={18} />, n: estado.equipamentos.length, grupo: 'Fichas' },
-    { id: 'dp', rotulo: 'Desligamento', icone: <FileText size={18} />, n: estado.temDP ? 1 : 0, grupo: 'Fichas' },
-    { id: 'carimbo', rotulo: 'Carimbo', icone: <IdentificationCard size={18} />, grupo: 'Fechar' },
-    { id: 'revisao', rotulo: 'Revisar e baixar', icone: <DownloadSimple size={18} />, grupo: 'Fechar' },
-  ]
-  const tecnicoAtual = tecnicos.find((t) => t.registro === estado.tecnico)
+  const etapas = montarEtapas(estado, pendencias)
   const set = (patch: Partial<Estado>) => setEstado((e) => ({ ...e, ...patch }))
+
+  const trocar = () => {
+    if (temTrabalho && !confirm('Trocar de inventário apaga o que foi lançado nesta obra. Continuar?')) return
+    setObra(null)
+  }
 
   return (
     <div className="min-h-[100dvh]">
-      <header className="sticky top-0 z-20 h-16 border-b border-line bg-surface/95 backdrop-blur">
-        <div className="h-full max-w-[1500px] mx-auto px-4 md:px-6 flex items-center gap-4">
-          <Marca altura={28} />
-          <div className="hidden md:flex items-center gap-5 text-sm min-w-0 border-l border-line pl-4">
+      <header className="sticky top-0 z-20 h-[72px] border-b border-line bg-surface/95 backdrop-blur">
+        <div className="h-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center gap-5">
+          <div className="shrink-0">
+            <Marca altura={36} />
+          </div>
+          <dl className="hidden md:flex items-center gap-8 min-w-0 border-l border-line pl-6">
             <div className="min-w-0">
-              <p className="text-xs text-muted">Nota</p>
-              <p className="num font-medium">{obra.resumo.nota}</p>
+              <dt className="text-xs text-muted">Nota</dt>
+              <dd className="num text-base font-semibold">{obra.resumo.nota}</dd>
             </div>
             <div className="min-w-0 hidden lg:block">
-              <p className="text-xs text-muted">Tipo de obra</p>
-              <p className="font-medium truncate max-w-[220px]">{obra.resumo.tipoObra || '-'}</p>
+              <dt className="text-xs text-muted">Tipo de obra</dt>
+              <dd className="text-base font-semibold truncate max-w-[320px]">{obra.resumo.tipoObra || '-'}</dd>
             </div>
             <div className="min-w-0 hidden xl:block">
-              <p className="text-xs text-muted">Ordens</p>
-              <p className="num font-medium">{obra.resumo.ordens.join(' / ') || '-'}</p>
+              <dt className="text-xs text-muted">Ordens</dt>
+              <dd className="num text-base font-semibold truncate max-w-[320px]">{obra.resumo.ordens.join(' / ') || '-'}</dd>
             </div>
-          </div>
+          </dl>
           <div className="ml-auto flex items-center gap-2">
-            <Botao
-              variante="fantasma"
-              aria-label="Trocar inventário"
-              onClick={() => {
-                if (temTrabalho && !confirm('Trocar de inventário apaga o que foi lançado nesta obra. Continuar?')) return
-                setObra(null)
-              }}
-            >
-              <ArrowsClockwise size={16} /> <span className="hidden sm:inline">Trocar inventário</span>
+            <Botao variante="fantasma" aria-label="Trocar inventário" onClick={trocar}>
+              <ArrowsClockwise size={20} /> <span className="hidden sm:inline">Trocar inventário</span>
             </Botao>
-            <Botao variante="primario" onClick={() => setSecao('revisao')} className="hidden sm:inline-flex">
-              <DownloadSimple size={16} weight="bold" /> Revisar e baixar
+            <Botao variante="primario" onClick={() => setSecao('revisao')} className="max-sm:hidden">
+              <DownloadSimple size={20} weight="bold" /> Revisar e baixar
             </Botao>
           </div>
         </div>
       </header>
 
-      <div className="max-w-[1500px] mx-auto md:grid md:grid-cols-[220px_minmax(0,1fr)] gap-6 px-4 md:px-6">
-        <nav aria-label="Etapas" className="md:sticky md:top-16 md:self-start md:py-6 -mx-4 md:mx-0 px-4 md:px-0 border-b md:border-0 border-line bg-bg">
-          <ul className="flex md:grid gap-1 overflow-x-auto py-2 md:py-0">
-            {menu.map((m, i) => (
-              <li key={m.id} className="shrink-0">
-                {(i === 0 || menu[i - 1].grupo !== m.grupo) && <p className="hidden md:block text-[11px] font-medium text-muted px-2.5 mt-4 first:mt-0 mb-1">{m.grupo}</p>}
-                <button
-                  type="button"
-                  onClick={() => setSecao(m.id)}
-                  aria-current={secao === m.id ? 'page' : undefined}
-                  className={`press w-full flex items-center gap-2.5 h-10 px-2.5 rounded-ctl text-sm ${secao === m.id ? 'bg-surface text-text font-medium shadow-panel border border-line' : 'text-muted hover:text-text hover:bg-surface-2 border border-transparent'}`}
-                >
-                  <span className={secao === m.id ? 'text-accent-text' : ''}>{m.icone}</span>
-                  {m.rotulo}
-                  {m.n ? <span className="ml-auto num text-xs bg-surface-2 rounded-md px-1.5 py-0.5">{m.n}</span> : null}
-                  {m.id === 'carimbo' && <span className={`ml-auto text-xs ${tecnicoAtual ? 'text-ok' : 'text-danger'}`}>{tecnicoAtual ? 'ok' : 'falta'}</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="hidden md:block mt-6 text-xs text-muted px-2.5 leading-relaxed break-words">
-            <Lightning size={14} className="inline -mt-0.5 mr-1" />
-            {obra.nomeArquivo}
-          </p>
-        </nav>
+      <div className="max-w-[1680px] mx-auto md:grid md:grid-cols-[260px_minmax(0,1fr)] md:gap-10 px-4 sm:px-6 lg:px-10">
+        <Etapas
+          etapas={etapas}
+          atual={secao}
+          onIr={setSecao}
+          rodape={
+            <p className="hidden md:block mt-8 text-xs text-muted px-3 leading-relaxed break-words">
+              <Lightning size={14} className="inline -mt-0.5 mr-1" />
+              {obra.nomeArquivo}
+            </p>
+          }
+        />
 
-        <main className="py-6 min-w-0" key={secao}>
+        <main className="py-6 md:py-8 min-w-0" key={secao}>
+          <p className="md:hidden mb-4 text-sm text-muted">
+            Nota <span className="num font-semibold text-text">{obra.resumo.nota}</span>
+            {obra.resumo.tipoObra ? <> · {obra.resumo.tipoObra}</> : null}
+          </p>
           <div className="entra">
             {secao === 'estruturas' && <Estruturas kits={kits} previstos={obra.codigosPrevistos} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}
             {secao === 'materiais' && <Itens tipo="material" catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}

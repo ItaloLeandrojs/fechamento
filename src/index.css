@@ -1,6 +1,5 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/geist';
-@import '@fontsource-variable/geist-mono';
+@import '@fontsource-variable/sora';
 
 /* Tokens: claro por padrão, escuro quando o sistema pede */
 :root {
@@ -48,8 +47,16 @@
 }
 
 @theme {
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  --font-sans: 'Sora Variable', ui-sans-serif, system-ui, sans-serif;
+  /* Escala de texto: base 16, tabelas e corpo secundário 15, rótulos nunca abaixo de 13 */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.4rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-titulo: 1.875rem;
+  --text-titulo--line-height: 2.25rem;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -75,6 +82,8 @@ html {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -94,8 +103,8 @@ body {
   outline-offset: 2px;
 }
 
+/* números alinhados na própria Sora; nada de fonte monoespaçada */
 .num {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 

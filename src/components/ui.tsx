@@ -5,17 +5,18 @@ import { OPERACOES } from '../state'
 type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo'
 
 const estilos: Record<Variante, string> = {
-  primario: 'bg-accent text-accent-ink hover:bg-accent-hover font-semibold',
-  secundario: 'bg-surface text-text border border-line-strong hover:bg-surface-2',
-  fantasma: 'text-muted hover:text-text hover:bg-surface-2',
-  perigo: 'text-danger hover:bg-danger-soft',
+  // primário 48 px; os demais 44 px no computador e 48 px no celular (alvo de toque)
+  primario: 'h-12 bg-accent text-accent-ink hover:bg-accent-hover font-semibold',
+  secundario: 'h-12 md:h-11 bg-surface text-text border border-line-strong hover:bg-surface-2',
+  fantasma: 'h-12 md:h-11 text-muted hover:text-text hover:bg-surface-2',
+  perigo: 'h-12 md:h-11 text-danger hover:bg-danger-soft',
 }
 
 export function Botao({ variante = 'secundario', className = '', children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variante?: Variante }) {
   return (
     <button
       type="button"
-      className={`press inline-flex items-center justify-center gap-2 rounded-ctl px-3.5 h-10 text-sm whitespace-nowrap disabled:opacity-45 disabled:pointer-events-none ${estilos[variante]} ${className}`}
+      className={`press inline-flex items-center justify-center gap-2 rounded-ctl px-4 text-base whitespace-nowrap disabled:opacity-45 disabled:pointer-events-none ${estilos[variante]} ${className}`}
       {...rest}
     >
       {children}
@@ -32,7 +33,7 @@ export function Campo({ rotulo, ajuda, className = '', ...rest }: InputHTMLAttri
       </label>
       <input
         id={id}
-        className="h-10 w-full min-w-0 rounded-ctl border border-line-strong bg-surface px-3 text-sm text-text placeholder:text-muted/80 focus:border-text focus:outline-none"
+        className="h-12 w-full min-w-0 rounded-ctl border border-line-strong bg-surface px-3.5 text-base text-text placeholder:text-muted/80 focus:border-text focus:outline-none"
         {...rest}
       />
       {ajuda && <p className="text-xs text-muted">{ajuda}</p>}
@@ -46,10 +47,10 @@ export function Painel({ children, className = '' }: { children: ReactNode; clas
 
 export function Titulo({ titulo, sub, acao }: { titulo: string; sub?: string; acao?: ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-3 mb-5">
+    <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{titulo}</h1>
-        {sub && <p className="mt-1 text-sm text-muted max-w-[70ch]">{sub}</p>}
+        <h1 className="text-titulo font-semibold tracking-tight">{titulo}</h1>
+        {sub && <p className="mt-1.5 text-base text-muted max-w-[70ch]">{sub}</p>}
       </div>
       {acao}
     </header>
@@ -61,7 +62,7 @@ export function Vazio({ icone, titulo, texto }: { icone: ReactNode; titulo: stri
     <div className="grid place-items-center text-center gap-2 py-12 px-6">
       <div className="text-muted">{icone}</div>
       <p className="font-medium">{titulo}</p>
-      <p className="text-sm text-muted max-w-[48ch]">{texto}</p>
+      <p className="text-base text-muted max-w-[48ch]">{texto}</p>
     </div>
   )
 }
@@ -80,7 +81,7 @@ export function EscolhaOper({ valor, onChange, compacto = false }: { valor: stri
             aria-checked={ativo}
             aria-label={`${o.oper} ${o.nome}`}
             onClick={() => onChange(o.oper)}
-            className={`press rounded-ctl border px-2.5 ${compacto ? 'h-8 text-xs' : 'h-10 text-sm'} text-left ${
+            className={`press rounded-ctl border px-3 h-12 md:h-11 ${compacto ? 'text-sm' : 'text-base'} text-left ${
               ativo ? 'border-text bg-text text-bg' : 'border-line-strong bg-surface text-text hover:bg-surface-2'
             }`}
           >
@@ -101,14 +102,14 @@ export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1 }
     setTexto((t) => (Number(t.replace(',', '.')) === valor ? t : fmt(valor)))
   }, [valor])
   return (
-    <div className="inline-flex items-center rounded-ctl border border-line-strong bg-surface h-10" role="group" aria-label={rotulo}>
-      <button type="button" aria-label="Diminuir" className="press grid place-items-center w-9 h-full text-muted hover:text-text" onClick={() => onChange(Math.max(0, +(valor - passo).toFixed(3)))}>
-        <Minus size={16} weight="bold" />
+    <div className="inline-flex items-center rounded-ctl border border-line-strong bg-surface h-12 md:h-11" role="group" aria-label={rotulo}>
+      <button type="button" aria-label="Diminuir" className="press grid place-items-center w-11 h-full text-muted hover:text-text" onClick={() => onChange(Math.max(0, +(valor - passo).toFixed(3)))}>
+        <Minus size={18} weight="bold" />
       </button>
       <input
         aria-label={rotulo}
         inputMode="decimal"
-        className="num w-16 h-full bg-transparent text-center text-sm focus:outline-none"
+        className="num w-16 h-full bg-transparent text-center text-base font-medium focus:outline-none"
         value={texto}
         onChange={(e) => {
           const t = e.target.value.replace(/[^\d,.]/g, '')
@@ -119,8 +120,8 @@ export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1 }
         onBlur={() => setTexto(fmt(valor))}
         onFocus={(e) => e.target.select()}
       />
-      <button type="button" aria-label="Aumentar" className="press grid place-items-center w-9 h-full text-muted hover:text-text" onClick={() => onChange(+(valor + passo).toFixed(3))}>
-        <Plus size={16} weight="bold" />
+      <button type="button" aria-label="Aumentar" className="press grid place-items-center w-11 h-full text-muted hover:text-text" onClick={() => onChange(+(valor + passo).toFixed(3))}>
+        <Plus size={18} weight="bold" />
       </button>
     </div>
   )
@@ -133,5 +134,5 @@ export function Selo({ children, tom = 'neutro' }: { children: ReactNode; tom?: 
     ok: 'bg-ok-soft text-ok',
     perigo: 'bg-danger-soft text-danger',
   }[tom]
-  return <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${t}`}>{children}</span>
+  return <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${t}`}>{children}</span>
 }
