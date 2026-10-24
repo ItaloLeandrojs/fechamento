@@ -2,7 +2,8 @@
 // Faz uma obra inteira com dados reais (pasta e2e/dados, fora do git):
 // sobe o inventário, lança estruturas, material, aterramento com fotos, DP,
 // técnico, revisa e baixa. Em cada tela roda o axe (acessibilidade) no tema
-// claro e no escuro, em 1366 e 390 px, e tira prints para olhar.
+// claro e no escuro, em 1366 e 390 px (e 1920 px no claro), confere que não há
+// rolagem lateral e tira prints para olhar.
 // Uso: npm run build && node e2e/fluxo.mjs
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -21,6 +22,17 @@ const { chromium } = reqPw('playwright')
 const { AxeBuilder } = reqAxe('@axe-core/playwright')
 
 for (const d of [SAIDA, PRINTS]) fs.mkdirSync(d, { recursive: true })
+
+// Kit de nome comprido para o teste da quantidade "2,5": o de nome mais longo cujo primeiro material
+// não aparece em nenhum outro lançamento do teste (assim o aplicado esperado é 2,5 x a quantidade do kit).
+const KITS = JSON.parse(fs.readFileSync(path.join(PROJ, 'src', 'data', 'kits.json'), 'utf8'))
+const kitDe = (nome) => KITS.find((k) => k.kit === nome)
+const codigosUsados = new Set([...kitDe('KP-CE1-P23').itens, ...kitDe('KP-TRAFO 75KVA M').itens].map((i) => i.code))
+const itemLivre = (k) => k.itens.find((i) => !codigosUsados.has(i.code) && !/^CINTA POSTE/.test(i.desc))
+const kitLongo = [...KITS].sort((a, b) => b.kit.length - a.kit.length).find((k) => itemLivre(k))
+const itemLongo = itemLivre(kitLongo)
+const esperadoLongo = +(2.5 * itemLongo.qtd).toFixed(3)
+const escapaRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const { criarServidor } = await import(pathToFileURL(path.join(PROJ, 'servir.mjs')).href)
 const srv = criarServidor({ raiz: path.join(PROJ, 'dist'), porta: PORTA })
 await new Promise((ok) => srv.listen(PORTA, '127.0.0.1', ok))
@@ -31,10 +43,74 @@ const placar = { axe: 0, telas: 0 }
 const browser = await chromium.launch({ channel: 'msedge' })
 
 async function axe(page, rotulo) {
+  // volta ao topo: com a página rolada, o cabeçalho preso cobre parte dos campos e o axe acusa alvo coberto (não é erro da tela)
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.waitForTimeout(350) // espera a entrada suave das telas (opacidade) terminar
   const r = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice']).analyze()
   placar.axe++
+  const larg = page.viewportSize().width
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth)
+  if (sw > larg + 1) falhas.push(`[${rotulo}] página mais larga que a tela (${sw}px de ${larg}px): rolagem lateral`)
   for (const v of r.violations) falhas.push(`axe [${rotulo}] ${v.id} (${v.impact}): ${v.nodes.length}x, ex.: ${v.nodes[0]?.target?.join(' ')}`)
+}
+
+// Soma o "Aplicado" de um código na revisão: linha da ADS (tabela ou cartão do celular) e linhas novas.
+function aplicadoNaRevisao(page, code) {
+  return page.evaluate((code) => {
+    const visivel = (el) => el.getClientRects().length > 0
+    const num = (t) => Number(t.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '') || 0)
+    let achou = 0
+    let soma = 0
+    for (const tr of document.querySelectorAll('main tbody tr')) {
+      const td = tr.querySelectorAll('td')
+      if (visivel(tr) && td[1]?.textContent.trim() === String(code)) {
+        achou++
+        soma += num(td[4].textContent)
+      }
+    }
+    for (const li of document.querySelectorAll('main ul li')) {
+      if (!visivel(li)) continue
+      const dd = li.querySelectorAll('dd')
+      if (dd.length === 4) {
+        if (new RegExp('código\\s*' + code + '(?!\\d)').test(li.textContent)) {
+          achou++
+          soma += num(dd[1].textContent)
+        }
+      } else if (li.children.length === 3 && li.children[0].textContent.trim() === String(code)) {
+        achou++
+        soma += num(li.children[2].textContent)
+      }
+    }
+    return { achou, soma: +soma.toFixed(3) }
+  }, code)
+}
+
+// Revisão: coluna Devolvido (Dev. no celular) dentro da tela e do painel, e as quantidades do kit comprido com "2,5".
+async function conferirRevisao(page, largura, altura, tag) {
+  if (largura >= 1024) {
+    const th = page.getByRole('columnheader', { name: 'Devolvido' })
+    await th.scrollIntoViewIfNeeded()
+    const box = await th.boundingBox()
+    const painel = await th.evaluate((el) => el.closest('table').parentElement.getBoundingClientRect().right)
+    if (!box) falhas.push(`[${tag}] coluna Devolvido da revisão não está visível`)
+    else {
+      if (box.x < 0 || box.x + box.width > largura + 1 || box.y < 0 || box.y + box.height > altura + 1) falhas.push(`[${tag}] coluna Devolvido fora da tela (x ${Math.round(box.x)} a ${Math.round(box.x + box.width)} de ${largura})`)
+      if (box.x + box.width > painel + 1) falhas.push(`[${tag}] coluna Devolvido cortada pelo painel da revisão`)
+    }
+  } else {
+    const dev = page.getByText('Dev.', { exact: true }).first()
+    await dev.scrollIntoViewIfNeeded()
+    const box = await dev.boundingBox()
+    if (!box || box.x < 0 || box.x + box.width > largura + 1) falhas.push(`[${tag}] "Dev." do cartão da revisão fora da tela`)
+  }
+  // com o filtro desmarcado nenhuma linha fica escondida
+  const filtro = page.getByLabel('Só as que ficam diferentes do planejado')
+  await filtro.uncheck()
+  const r = await aplicadoNaRevisao(page, itemLongo.code)
+  if (!r.achou) falhas.push(`[${tag}] revisão: o material ${itemLongo.code} do kit comprido não apareceu`)
+  else if (r.soma !== esperadoLongo) falhas.push(`[${tag}] revisão: aplicado do ${itemLongo.code} deveria ser ${esperadoLongo} (2,5 x ${itemLongo.qtd}), veio ${r.soma}`)
+  else console.log(`[${tag}] kit ${kitLongo.kit}: material ${itemLongo.code} aplicado ${r.soma} (2,5 x ${itemLongo.qtd}), ${r.achou} linha(s)`)
+  await filtro.check()
 }
 
 async function rodada({ largura, altura, tema, movel }) {
@@ -75,6 +151,14 @@ async function rodada({ largura, altura, tema, movel }) {
   await page.getByRole('button', { name: 'Adicionar KP-TRAFO 75KVA M na operação 2010' }).click()
   const qtdCE1 = await page.getByRole('textbox', { name: 'Quantidade de KP-CE1-P23' }).inputValue()
   if (qtdCE1 !== '2') falhas.push(`[${tag}] quantidade do KP-CE1-P23 deveria ser 2, veio ${qtdCE1}`)
+  // kit de nome comprido com quantidade decimal "2,5": a tela não pode quebrar nem perder o valor
+  await page.getByPlaceholder(/Ex.: CE3/).fill(kitLongo.kit)
+  await page.getByRole('button', { name: new RegExp('^Adicionar ' + escapaRe(kitLongo.kit) + ' na operação') }).click()
+  const campoLongo = page.getByRole('textbox', { name: 'Quantidade de ' + kitLongo.kit, exact: true })
+  await campoLongo.fill('2,5')
+  await campoLongo.press('Tab')
+  const qtdLongo = await campoLongo.inputValue()
+  if (qtdLongo !== '2,5') falhas.push(`[${tag}] quantidade do kit comprido deveria ficar 2,5, veio ${qtdLongo}`)
   await axe(page, `${tag} estruturas`)
   await foto('02-estruturas')
 
@@ -104,6 +188,22 @@ async function rodada({ largura, altura, tema, movel }) {
 
   await irPara('Equipamento')
   await axe(page, `${tag} equipamento vazio`)
+  // equipamento com o ponto preenchido (sem ele a revisão bloqueia) e as duas fotos escolhidas ao mesmo tempo
+  await page.locator('main').getByRole('button', { name: 'Equipamento', exact: true }).click()
+  await page.getByLabel('Ponto', { exact: true }).fill('P1-12')
+  // campos com valores de teste (inventados), para conferir no Excel que chegam à ficha
+  const inst = page.getByRole('group', { name: 'Instalado', exact: true })
+  const ret = page.getByRole('group', { name: 'Retirado', exact: true })
+  for (const [rotulo, v] of [['Potência (kVA)', '75'], ['Patrimônio', '123456'], ['Fase instalação', 'ABC'], ['Série', 'SER-T1'], ['Marca', 'MARCA TESTE'], ['Fabricação (mês/ano)', '03/2025'], ['Nº da instalação', 'ET 111111'], ['NA', '127'], ['NB', '127'], ['NC', '127'], ['AB', '220'], ['AC', '220'], ['BC', '220']]) await inst.getByLabel(rotulo, { exact: true }).fill(v)
+  for (const [rotulo, v] of [['Potência (kVA)', '45'], ['Patrimônio', '654321'], ['Série', 'SER-T0'], ['Marca', 'MARCA VELHA'], ['Fabricação (mês/ano)', '2019'], ['Nº da instalação', 'ET 222222']]) await ret.getByLabel(rotulo, { exact: true }).fill(v)
+  const fotosEquip = page.locator('main input[type=file]')
+  await Promise.all([fotosEquip.nth(0).setInputFiles(path.join(DADOS, 'equip1.jpeg')), fotosEquip.nth(1).setInputFiles(path.join(DADOS, 'equip1.jpeg'))])
+  await page.waitForFunction(() => document.querySelectorAll('main img').length === 2, null, { timeout: 10000 }).catch(() => falhas.push(`[${tag}] as duas fotos do equipamento não ficaram`))
+  await page.waitForTimeout(300) // se uma sobrescrevesse a outra, apareceria aqui
+  const srcsEquip = await page.evaluate(() => [...document.querySelectorAll('main img')].map((i) => i.src))
+  if (srcsEquip.length !== 2 || new Set(srcsEquip).size !== 2) falhas.push(`[${tag}] fotos do equipamento: esperadas 2 diferentes, vieram ${srcsEquip.length} (${new Set(srcsEquip).size} diferentes)`)
+  await axe(page, `${tag} equipamento`)
+  await foto('04b-equipamento')
 
   await irPara('Desligamento')
   await page.getByRole('radio', { name: 'Teve desligamento' }).click()
@@ -121,6 +221,7 @@ async function rodada({ largura, altura, tema, movel }) {
   await irPara('Revisar e baixar')
   await axe(page, `${tag} revisão`)
   await foto('06-revisao')
+  await conferirRevisao(page, largura, altura, tag)
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByRole('button', { name: /Gerar e baixar/ }).click()])
   const destino = path.join(SAIDA, `${tag}-${dl.suggestedFilename()}`)
   await dl.saveAs(destino)
@@ -147,6 +248,7 @@ const gerados = []
 try {
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'light' }))
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'dark' }))
+  gerados.push(await rodada({ largura: 1920, altura: 1080, tema: 'light' }))
   gerados.push(await rodada({ largura: 390, altura: 844, tema: 'light', movel: true }))
   gerados.push(await rodada({ largura: 390, altura: 844, tema: 'dark', movel: true }))
 } catch (e) {
