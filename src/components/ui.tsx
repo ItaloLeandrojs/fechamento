@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Minus, Plus } from '@phosphor-icons/react'
+import { formatarQtd } from '../lib/busca'
 import { OPERACOES } from '../state'
 
 type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo'
@@ -110,7 +111,7 @@ export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1, 
       <input
         aria-label={rotulo}
         inputMode="decimal"
-        className={`num h-full bg-transparent text-center focus:outline-none ${grande ? 'w-16 text-xl font-semibold' : 'w-16 text-base font-medium'}`}
+        className={`num h-full bg-transparent text-center focus:outline-none ${grande ? 'w-24 text-xl font-semibold' : 'w-20 text-base font-medium'}`}
         value={texto}
         onChange={(e) => {
           const t = e.target.value.replace(/[^\d,.]/g, '')
@@ -136,4 +137,13 @@ export function Selo({ children, tom = 'neutro' }: { children: ReactNode; tom?: 
     perigo: 'bg-danger-soft text-danger',
   }[tom]
   return <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${t}`}>{children}</span>
+}
+
+/** Selo verde "N lançado(s)", único para todas as larguras (a lista de busca dá retorno do que já entrou). */
+export function SeloLancado({ qtd, singular, plural }: { qtd: number; singular: string; plural: string }) {
+  return (
+    <Selo tom="ok">
+      {formatarQtd(qtd)} {qtd === 1 ? singular : plural}
+    </Selo>
+  )
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { CaretDown, MagnifyingGlass, Plus, Stack, Trash, X } from '@phosphor-icons/react'
 import { casa, formatarQtd } from '../lib/busca'
 import { OPERACOES, nomeOper, novoId, type Atualiza, type EstruturaLanc, type Kit } from '../state'
-import { Botao, EscolhaOper, Painel, Quantidade, Selo, Titulo, Vazio } from './ui'
+import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Vazio } from './ui'
 
 export interface KitIndexado extends Kit {
   norm: string
@@ -115,21 +115,12 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                             </Selo>
                           )}
                           {!k.itens.length && <Selo tom="perigo">sem material</Selo>}
-                          {jaLancado > 0 && (
-                            <span className="sm:hidden">
-                              <Selo tom="ok">{formatarQtd(jaLancado)} lançada{jaLancado === 1 ? '' : 's'}</Selo>
-                            </span>
-                          )}
+                          {jaLancado > 0 && <SeloLancado qtd={jaLancado} singular="lançada" plural="lançadas" />}
                         </span>
                         <span className="block text-sm text-muted line-clamp-2">{k.descricao || 'Sem descrição'}</span>
                       </span>
                       <CaretDown size={18} className={`shrink-0 text-muted transition-transform ${exp ? 'rotate-180' : ''}`} />
                     </button>
-                    {jaLancado > 0 && (
-                      <span className="max-sm:hidden shrink-0">
-                        <Selo tom="ok">{formatarQtd(jaLancado)} lançada{jaLancado === 1 ? '' : 's'}</Selo>
-                      </span>
-                    )}
                     <Botao variante="secundario" onClick={() => adicionar(k.kit)} aria-label={`Adicionar ${k.kit} na operação ${oper}`} className="max-sm:px-2.5 max-sm:min-w-12 shrink-0">
                       <Plus size={18} weight="bold" /> <span className="max-sm:hidden">Adicionar</span>
                       <span className="num sm:hidden text-sm font-semibold">{oper}</span>
