@@ -47,19 +47,21 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
     return m
   }, [estruturas])
 
-  const textoInfo = busca.trim()
-    ? `${resultados.length === LIMITE ? `Mais de ${LIMITE - 1}` : resultados.length} ${resultados.length === 1 ? 'estrutura encontrada' : 'estruturas encontradas'}`
-    : 'Sugestões: estruturas com materiais previstos nesta obra'
+  const textoInfo = !busca.trim()
+    ? 'Sugestões: estruturas com materiais previstos nesta obra'
+    : resultados.length === LIMITE
+      ? `Mostrando as ${LIMITE} primeiras: escreva mais para refinar`
+      : `${resultados.length} ${resultados.length === 1 ? 'estrutura encontrada' : 'estruturas encontradas'}`
 
   return (
     <div>
-      <Titulo titulo="Estruturas" sub="Procure o kit pelo nome ou pela descrição. Os materiais de cada estrutura entram somados na ADS, na operação escolhida." />
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-6 items-start">
+      <Titulo titulo="Estruturas" sub="Procure o kit pelo nome ou pela descrição. Os materiais dele entram somados na ADS." />
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.7fr)] gap-6 items-start">
         <Painel>
-          <div className="grid gap-4 p-4 md:p-5 border-b border-line">
+          <div className="grid gap-4 p-4 md:p-5 xl:p-4 border-b border-line">
             <div className="grid gap-2">
               <span className="text-xs font-medium text-muted">Lançar na operação</span>
-              <EscolhaOper valor={oper} onChange={setOper} />
+              <EscolhaOper compacto valor={oper} onChange={setOper} />
             </div>
             <label className="relative block">
               <span className="sr-only">Buscar estrutura</span>
@@ -113,26 +115,38 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                             </Selo>
                           )}
                           {!k.itens.length && <Selo tom="perigo">sem material</Selo>}
-                          {jaLancado > 0 && <Selo tom="ok">{formatarQtd(jaLancado)} lançada{jaLancado === 1 ? '' : 's'}</Selo>}
+                          {jaLancado > 0 && (
+                            <span className="sm:hidden">
+                              <Selo tom="ok">{formatarQtd(jaLancado)} lançada{jaLancado === 1 ? '' : 's'}</Selo>
+                            </span>
+                          )}
                         </span>
-                        <span className="block text-sm text-muted truncate">{k.descricao || 'Sem descrição'}</span>
+                        <span className="block text-sm text-muted line-clamp-2">{k.descricao || 'Sem descrição'}</span>
                       </span>
                       <CaretDown size={18} className={`shrink-0 text-muted transition-transform ${exp ? 'rotate-180' : ''}`} />
                     </button>
-                    <Botao variante="secundario" onClick={() => adicionar(k.kit)} aria-label={`Adicionar ${k.kit} na operação ${oper}`} className="max-sm:w-12 max-sm:px-0 shrink-0">
+                    {jaLancado > 0 && (
+                      <span className="max-sm:hidden shrink-0">
+                        <Selo tom="ok">{formatarQtd(jaLancado)} lançada{jaLancado === 1 ? '' : 's'}</Selo>
+                      </span>
+                    )}
+                    <Botao variante="secundario" onClick={() => adicionar(k.kit)} aria-label={`Adicionar ${k.kit} na operação ${oper}`} className="max-sm:px-2.5 max-sm:min-w-12 shrink-0">
                       <Plus size={18} weight="bold" /> <span className="max-sm:hidden">Adicionar</span>
+                      <span className="num sm:hidden text-sm font-semibold">{oper}</span>
                     </Botao>
                   </div>
                   {exp && (
                     <ul className="entra mx-3 md:mx-4 mb-3 grid gap-2 rounded-ctl bg-surface-2 p-3 md:p-4 text-sm">
                       {k.itens.map((i) => (
-                        <li key={i.code} className="flex items-baseline gap-3">
-                          <span className="num text-muted w-[76px] shrink-0">{i.code}</span>
-                          <span className="flex-1 min-w-0">{i.desc}</span>
-                          <span className="num whitespace-nowrap font-medium">
-                            {formatarQtd(i.qtd)} {i.un}
+                        <li key={i.code} className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[76px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5">
+                          <span className="num text-muted max-sm:col-span-2 max-sm:text-xs">{i.code}</span>
+                          <span className="min-w-0">{i.desc}</span>
+                          <span className="flex flex-col items-end sm:flex-row sm:items-baseline sm:gap-3">
+                            <span className="num whitespace-nowrap font-medium">
+                              {formatarQtd(i.qtd)} {i.un}
+                            </span>
+                            {previstos.has(i.code) && <span className="text-xs font-medium text-accent-text">previsto</span>}
                           </span>
-                          {previstos.has(i.code) && <span className="shrink-0 text-xs font-medium text-accent-text">previsto</span>}
                         </li>
                       ))}
                     </ul>
@@ -168,7 +182,7 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                   <ul className="divide-y divide-line">
                     {doGrupo.map((e) => (
                       <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 px-1">
-                        <div className="flex-1 basis-40 min-w-0">
+                        <div className="flex-1 basis-56 min-w-0">
                           <p className="text-base font-semibold break-words">{e.kit}</p>
                           <p className="text-sm text-muted line-clamp-2">{porKit.get(e.kit)?.descricao}</p>
                         </div>

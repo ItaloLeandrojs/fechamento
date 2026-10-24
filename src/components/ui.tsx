@@ -68,10 +68,10 @@ export function Vazio({ icone, titulo, texto }: { icone: ReactNode; titulo: stri
   )
 }
 
-/** Escolha da operação (2000, 2020, 2010, 2030, 2040). */
+/** Escolha da operação (2000, 2020, 2010, 2030, 2040). No celular vira uma faixa rolável de uma linha. */
 export function EscolhaOper({ valor, onChange, compacto = false }: { valor: string; onChange: (o: string) => void; compacto?: boolean }) {
   return (
-    <div role="radiogroup" aria-label="Operação" className="flex flex-wrap gap-1.5">
+    <div role="radiogroup" aria-label="Operação" className="flex gap-1.5 py-1 -my-1 overflow-x-auto snap-x max-sm:-mx-4 max-sm:px-4 sm:flex-wrap sm:overflow-visible">
       {OPERACOES.map((o) => {
         const ativo = o.oper === valor
         return (
@@ -82,7 +82,7 @@ export function EscolhaOper({ valor, onChange, compacto = false }: { valor: stri
             aria-checked={ativo}
             aria-label={`${o.oper} ${o.nome}`}
             onClick={() => onChange(o.oper)}
-            className={`press rounded-ctl border px-3 h-12 md:h-11 ${compacto ? 'text-sm' : 'text-base'} text-left ${
+            className={`press shrink-0 snap-start whitespace-nowrap rounded-ctl border h-12 md:h-11 ${compacto ? 'px-2 text-sm' : 'px-3 text-base'} text-left ${
               ativo ? 'border-text bg-text text-bg' : 'border-line-strong bg-surface text-text hover:bg-surface-2'
             }`}
           >
@@ -110,7 +110,7 @@ export function Quantidade({ valor, onChange, rotulo = 'Quantidade', passo = 1, 
       <input
         aria-label={rotulo}
         inputMode="decimal"
-        className={`num h-full bg-transparent text-center focus:outline-none ${grande ? 'w-[4.5rem] text-xl font-semibold' : 'w-16 text-base font-medium'}`}
+        className={`num h-full bg-transparent text-center focus:outline-none ${grande ? 'w-16 text-xl font-semibold' : 'w-16 text-base font-medium'}`}
         value={texto}
         onChange={(e) => {
           const t = e.target.value.replace(/[^\d,.]/g, '')

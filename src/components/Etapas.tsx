@@ -21,9 +21,9 @@ function Marcador({ etapa }: { etapa: Etapa }) {
     <span className="ml-auto flex items-center gap-1.5 pl-2">
       {etapa.n ? <span className="num text-xs font-medium bg-surface-2 text-text rounded-md px-2 py-0.5 min-w-7 text-center">{etapa.n}</span> : null}
       {etapa.restam ? (
-        <span className="num text-xs font-medium text-muted border border-line-strong rounded-md px-2 py-0.5 min-w-7 text-center">
-          {etapa.restam}
-          <span className="sr-only"> {etapa.restam === 1 ? 'pendência' : 'pendências'}</span>
+        <span className="text-xs font-medium text-muted whitespace-nowrap">
+          <span aria-hidden>{etapa.restam} pend.</span>
+          <span className="sr-only">{etapa.restam} {etapa.restam === 1 ? 'pendência' : 'pendências'}</span>
         </span>
       ) : null}
       {etapa.estado === 'pendente' && <span className="text-xs font-medium text-danger">falta</span>}
