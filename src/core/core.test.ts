@@ -66,6 +66,10 @@ describe('fórmulas', () => {
     expect(growRangeEnds('B2:N123 P2:P123', 123, 130)).toBe('B2:N130 P2:P130')
     expect(growRangeEnds('SUMIF(ADS!$G2:$G$123,"M",ADS!$L$2:$L$123)', 123, 130)).toBe('SUMIF(ADS!$G2:$G$130,"M",ADS!$L$2:$L$130)')
     expect(growRangeEnds('A1:A1234', 123, 130)).toBe('A1:A1234')
+    // soma que ia só até a última prevista (62) cobre as reservas usadas (até 65); a que já ia longe fica
+    expect(growRangeEnds('SUMIF(ADS!$G2:$G$62,"M",ADS!$L$2:$L$62)', 62, 65)).toBe('SUMIF(ADS!$G2:$G$65,"M",ADS!$L$2:$L$65)')
+    expect(growRangeEnds('ADS!$L$2:$L$491', 88, 91)).toBe('ADS!$L$2:$L$491')
+    expect(growRangeEnds('ADS!$B$1:$L$1', 62, 65)).toBe('ADS!$B$1:$L$1')
   })
 })
 

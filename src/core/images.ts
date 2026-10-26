@@ -57,6 +57,14 @@ function paraCelula(pos: number, tamanhos: number[]): { idx: number; off: number
 
 const DRAWING_CT = 'application/vnd.openxmlformats-officedocument.drawing+xml'
 
+/** Nomes das imagens da aba (só lê: aba sem desenho devolve lista vazia). */
+export async function nomesDasImagens(wb: Workbook, sheetName: string): Promise<string[]> {
+  const info = wb.sheet(sheetName)
+  if (!info || !child((await wb.doc(info.path)).documentElement, 'drawing')) return []
+  const { doc } = await desenhoDaAba(wb, info.path)
+  return descendants(doc, 'pic').map((p) => descendants(p, 'cNvPr')[0]?.getAttribute('name') ?? '')
+}
+
 /** Abre (ou cria) o desenho da aba, onde ficam as imagens flutuantes. */
 async function desenhoDaAba(wb: Workbook, sheetPath: string): Promise<{ path: string; doc: Document }> {
   const sheetDoc = await wb.doc(sheetPath)

@@ -3,6 +3,7 @@ import { child, children, descendants } from './xml'
 import type { Workbook } from './workbook'
 import { gravarValorGuardado } from './cache'
 import { criarFormatoNumero, criarPintorVermelho } from './estilos'
+import { normalizarRotulo } from './rotulos'
 
 export const ADS_SHEET = 'ADS'
 
@@ -74,6 +75,33 @@ function lerCodigo(ed: SheetEditor, ref: string): { code: number | null; emTexto
     return { code: Number(v.trim()), emTexto: !(cel && ed.formula(cel)) }
   }
   return { code: null, emTexto: false }
+}
+
+/** Títulos que a linha 1 da ADS precisa ter: o site grava por coluna fixa. */
+const TITULOS: [string, string][] = [
+  [COL.code, 'Código'],
+  [COL.desc, 'Descrição'],
+  [COL.unid, 'Unid.'],
+  [COL.plan, 'Planejado'],
+  [COL.apl, 'Aplicado'],
+  [COL.adic, 'Adicional'],
+  [COL.dev, 'Devolvido'],
+]
+
+/**
+ * Para antes de gravar se as colunas da ADS não forem as do modelo da EDP:
+ * gravar o Aplicado numa coluna trocada estragaria o fechamento sem aviso.
+ */
+export function conferirTitulosAds(ed: SheetEditor) {
+  for (const [col, titulo] of TITULOS) {
+    const visto = String(ed.value(col + '1') ?? '')
+    if (normalizarRotulo(visto) !== normalizarRotulo(titulo)) {
+      throw new Error(
+        `A aba ADS deste inventário tem as colunas em outra ordem: a coluna ${col} devia ser "${titulo}" e é "${visto.trim() || 'vazia'}". ` +
+          'O site não gravou nada para não errar o fechamento. Mande este inventário para conferência.',
+      )
+    }
+  }
 }
 
 export function readAds(ed: SheetEditor): AdsRow[] {
@@ -165,31 +193,36 @@ export function unshareFormulas(ed: SheetEditor) {
   }
 }
 
-/** Estica referências que terminavam na última linha antiga (ex.: B2:N123 → B2:N130). */
-export function growRangeEnds(text: string, oldLast: number, newLast: number): string {
-  const re = new RegExp(`:(\\$?[A-Z]{1,3})(\\$?)${oldLast}(?!\\d)`, 'g')
-  return text.replace(re, (_m, c: string, d: string) => `:${c}${d}${newLast}`)
+/**
+ * Estica referências que terminavam entre `desde` e a nova última linha (ex.: B2:N123 → B2:N130).
+ * `desde` é a última linha prevista: algumas ADS somam só até ela, e os itens novos que
+ * entram nas reservas logo abaixo ficariam fora do total da Check-list e da impressão.
+ */
+export function growRangeEnds(text: string, desde: number, newLast: number): string {
+  return text.replace(/:(\$?[A-Z]{1,3})(\$?)(\d+)(?!\d)/g, (m, c: string, d: string, n: string) =>
+    Number(n) >= desde && Number(n) < newLast ? `:${c}${d}${newLast}` : m,
+  )
 }
 
-async function growAdsReferences(wb: Workbook, ed: SheetEditor, oldLast: number, newLast: number) {
+async function growAdsReferences(wb: Workbook, ed: SheetEditor, desde: number, newLast: number) {
   const root = ed.root
   const dim = child(root, 'dimension')
-  if (dim) dim.setAttribute('ref', growRangeEnds(dim.getAttribute('ref')!, oldLast, newLast))
+  if (dim) dim.setAttribute('ref', growRangeEnds(dim.getAttribute('ref')!, desde, newLast))
   for (const tag of ['conditionalFormatting', 'protectedRange', 'dataValidation']) {
     for (const el of descendants(root, tag)) {
       const a = el.getAttribute('sqref')
-      if (a) el.setAttribute('sqref', growRangeEnds(a, oldLast, newLast))
+      if (a) el.setAttribute('sqref', growRangeEnds(a, desde, newLast))
     }
   }
-  for (const el of descendants(root, 'sortState')) el.setAttribute('ref', growRangeEnds(el.getAttribute('ref')!, oldLast, newLast))
-  for (const el of descendants(root, 'sortCondition')) el.setAttribute('ref', growRangeEnds(el.getAttribute('ref')!, oldLast, newLast))
+  for (const el of descendants(root, 'sortState')) el.setAttribute('ref', growRangeEnds(el.getAttribute('ref')!, desde, newLast))
+  for (const el of descendants(root, 'sortCondition')) el.setAttribute('ref', growRangeEnds(el.getAttribute('ref')!, desde, newLast))
 
   // nomes definidos (área de impressão) e fórmulas de outras abas que somam a ADS
   const book = await wb.doc('xl/workbook.xml')
   for (const dn of descendants(book, 'definedName')) {
     const t = dn.textContent ?? ''
     if (/^'?ADS'?!/.test(t)) {
-      dn.textContent = growRangeEnds(t, oldLast, newLast)
+      dn.textContent = growRangeEnds(t, desde, newLast)
       wb.touch('xl/workbook.xml')
     }
   }
@@ -200,7 +233,7 @@ async function growAdsReferences(wb: Workbook, ed: SheetEditor, oldLast: number,
     for (const f of descendants(d, 'f')) {
       const t = f.textContent ?? ''
       if (!t.includes('ADS!')) continue
-      const novo = t.replace(/ADS!\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+/g, (m) => growRangeEnds(m, oldLast, newLast))
+      const novo = t.replace(/ADS!\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+/g, (m) => growRangeEnds(m, desde, newLast))
       if (novo !== t) {
         f.textContent = novo
         mudou = true
@@ -221,49 +254,81 @@ export interface AdsResultado {
 const EXTERNA = /\[\d+\]/
 
 /**
- * Fórmulas da linha nova, todas na MaterialServico da própria planilha. Alguns
- * inventários trazem as linhas de reserva buscando tudo na planilha externa da
- * EDP pelo ID; essa planilha não conhece o item novo, e a linha sairia #N/D.
+ * Fórmulas padrão da linha nova, todas na MaterialServico da própria planilha
+ * (usadas quando a linha prevista do inventário não tem uma fórmula interna para copiar).
  * Preço: serviço (código 7…) pelo contrato (coluna A = código + contrato),
- * material só pelo código, como no próprio modelo da EDP.
+ * material só pelo código. Valor = preço x aplicado, como no modelo da EDP.
  * TRIM: a MaterialServico traz unidades como "KG " (com espaço) e o Valor de
  * Material da Check-list soma por unidade exata ("KG"); sem isso o item ficava de fora.
  */
-const FORMULA_NOVA: Record<string, (r: number) => string> = {
+const FORMULA_PADRAO: Record<string, (r: number) => string> = {
   [COL.desc]: (r) => `TRIM(VLOOKUP(E${r},MaterialServico!C:D,2,0))`,
   [COL.unid]: (r) => `TRIM(VLOOKUP(E${r},MaterialServico!C:E,3,0))`,
+  L: (r) => `IF(I${r}<>"",(M${r}*I${r})+(I${r}*Q${r}),(H${r}*M${r})+(H${r}*Q${r}))`,
   M: (r) => `IFERROR(IF(LEFT(E${r},1)="7",VLOOKUP(E${r}&'Check-list'!$G$6,MaterialServico!A:F,6,0),0),"0")`,
   Q: (r) => `IFERROR(IF(LEFT(E${r},1)<>"7",VLOOKUP(E${r},MaterialServico!B:F,5,0),0),"0")`,
 }
-/** Título que a coluna precisa ter para receber a fórmula de preço. */
-const TITULO_PRECO: Record<string, string> = { M: 'valor servico', Q: 'valor material' }
-
-function semAcento(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
-}
+/** Título que a coluna precisa ter para receber a fórmula de valor e preço. */
+const TITULO_VALOR: Record<string, string> = { L: 'Valor', M: 'Valor Serviço', Q: 'Valor Material' }
+/** Colunas que o site preenche à parte (código, quantidades); o resto da linha nova é arrumado aqui. */
+const PREENCHIDAS = new Set<string>([COL.id, COL.item, COL.oper, COL.descOper, COL.code, COL.plan, COL.apl, COL.adic, COL.dev, COL.copiaPlan])
 
 /**
- * Deixa a linha nova sem nenhuma dependência da planilha externa: descrição,
- * unidade e preço passam a vir da MaterialServico; o resto que buscava fora fica vazio.
+ * Arruma a linha nova para qualquer modelo de inventário, com as mesmas contas
+ * das linhas previstas dele:
+ * - descrição e unidade: sempre a fórmula padrão (com TRIM);
+ * - valor e preços: a fórmula da última linha prevista, se for da própria planilha;
+ *   se ela buscar em outro arquivo (ex.: [1]Dados, que não conhece o item novo)
+ *   ou for só um valor colado, a fórmula padrão. A célula que faltar é criada;
+ * - o resto que buscava fora ou trazia erro colado (#N/D das reservas) fica vazio.
  */
-function prepararLinhaNova(ed: SheetEditor, r: number, temCatalogo: boolean) {
+function prepararLinhaNova(ed: SheetEditor, r: number, modelo: number | null, temCatalogo: boolean) {
+  const formulas = new Map<string, string>()
+  if (temCatalogo) {
+    for (const [col, padrao] of Object.entries(FORMULA_PADRAO)) {
+      const titulo = TITULO_VALOR[col]
+      if (titulo && normalizarRotulo(String(ed.value(col + '1') ?? '')) !== normalizarRotulo(titulo)) continue
+      const fm = modelo !== null && titulo ? (child(ed.cell(col + modelo) ?? ed.root, 'f')?.textContent ?? '') : ''
+      formulas.set(col, fm && !EXTERNA.test(fm) ? shiftFormula(fm, r - modelo!) : padrao(r))
+    }
+  }
+  for (const [col, f] of formulas) ed.setFormula(col + r, f)
   for (const c of children(ed.row(r)!, 'c')) {
     const ref = c.getAttribute('r')!
     const col = ref.replace(/\d+$/, '')
+    if (formulas.has(col) || PREENCHIDAS.has(col)) continue
     const f = child(c, 'f')?.textContent ?? ''
-    const nova = FORMULA_NOVA[col]
-    const precoOk = !TITULO_PRECO[col] || semAcento(String(ed.value(col + '1') ?? '')) === TITULO_PRECO[col]
-    // descrição e unidade: sempre a fórmula com TRIM; preço: só no lugar da fórmula externa
-    if (nova && temCatalogo && precoOk && (EXTERNA.test(f) || col === COL.desc || col === COL.unid)) {
-      ed.setFormula(ref, nova(r))
-    } else if (EXTERNA.test(f)) {
-      ed.setBlank(ref)
-    } else if (f) {
-      // fórmula interna (ex.: o valor da linha): o valor guardado era da linha vazia
-      for (const v of [child(c, 'v')]) if (v) c.removeChild(v)
+    if (EXTERNA.test(f) || (!f && c.getAttribute('t') === 'e')) ed.setBlank(ref)
+    else if (f) {
+      // fórmula interna: o valor guardado era o da linha vazia
+      const v = child(c, 'v')
+      if (v) c.removeChild(v)
       c.removeAttribute('t')
     }
   }
+}
+
+/**
+ * Linhas onde podem entrar os itens não previstos: as que vêm depois do último
+ * item previsto, sem código e sem texto digitado (fórmula, erro e vazio podem;
+ * é assim que o modelo da EDP deixa as reservas). A primeira linha com texto
+ * digitado (total, observação...) encerra as reservas: nada é escrito por cima dela.
+ */
+function linhasDeReserva(ed: SheetEditor, rows: AdsRow[]): { reservas: number[]; bloqueio: number | null } {
+  const ultimaPrevista = rows.reduce((m, r) => (r.code !== null ? Math.max(m, r.row) : m), 1)
+  const reservas: number[] = []
+  for (const r of rows) {
+    if (r.row <= ultimaPrevista || r.code !== null) continue
+    const temTexto = children(ed.row(r.row)!, 'c').some((c) => {
+      const col = c.getAttribute('r')!.replace(/\d+$/, '')
+      if (col === COL.id || col.length > 1 || col > COL.dev || child(c, 'f')) return false
+      const t = c.getAttribute('t')
+      return (t === 's' || t === 'inlineStr' || t === 'str') && String(ed.cellValue(c) ?? '').trim() !== ''
+    })
+    if (temTexto) return { reservas, bloqueio: r.row }
+    reservas.push(r.row)
+  }
+  return { reservas, bloqueio: null }
 }
 
 /** Descrição e unidade de cada código (aba MaterialServico). */
@@ -288,6 +353,7 @@ function guardarDescricao(ed: SheetEditor, r: number, code: number, catalogo: Ca
 export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Catalogo = new Map()): Promise<AdsResultado> {
   const info = wb.sheet(ADS_SHEET)!
   const ed = new SheetEditor(await wb.doc(info.path), wb.sharedStrings)
+  conferirTitulosAds(ed)
   wb.touch(info.path)
   unshareFormulas(ed)
 
@@ -334,8 +400,9 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
     else novas.set(k, { code: d.code, qty: d.qty })
   }
 
-  // linhas de reserva (sem código) no fim da ADS, na ordem
-  const reservas = rows.filter((r) => r.code === null).map((r) => r.row)
+  const { reservas, bloqueio } = linhasDeReserva(ed, rows)
+  // a última linha prevista é o modelo das contas (valor e preços) da linha nova
+  const ultimaPrevista = rows.reduce<number | null>((m, x) => (x.code !== null ? Math.max(m ?? 0, x.row) : m), null)
   const oldLast = ed.lastRow
   let last = oldLast
   const linhasNovas: number[] = []
@@ -343,6 +410,12 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
   for (const [chave, n] of novas) {
     let r = reservas.shift()
     if (r === undefined) {
+      if (bloqueio !== null) {
+        throw new Error(
+          `A ADS não tem linhas livres para os ${novas.size} itens não previstos: a linha ${bloqueio} tem conteúdo e o site não escreve por cima dela. ` +
+            'Abra o inventário, insira linhas em branco antes dela e tente de novo.',
+        )
+      }
       last += 1
       ed.copyRow(last - 1, last)
       r = last
@@ -357,7 +430,7 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
     ed.setNumber(COL.plan + r, 0)
     if (ed.cell(COL.copiaPlan + r)) ed.setNumber(COL.copiaPlan + r, 0)
     escreverQuantidades(r, 0, n.qty)
-    prepararLinhaNova(ed, r, !!wb.sheet('MaterialServico'))
+    prepararLinhaNova(ed, r, ultimaPrevista, !!wb.sheet('MaterialServico'))
     guardarDescricao(ed, r, n.code, catalogo)
     // item que não estava previsto: a linha inteira em vermelho
     pintarVermelho(ed.row(r)!)
@@ -366,7 +439,9 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
       if (d.motivo === 'nova' && d.code + '|' + groupOf(d.oper).join(',') === chave) d.row = r
     }
   }
-  if (last > oldLast) await growAdsReferences(wb, ed, oldLast, last)
+  // somas e área de impressão passam a cobrir até a última linha nova (no fim da planilha ou nas reservas)
+  const ateNova = Math.max(last, ...linhasNovas)
+  if (linhasNovas.length) await growAdsReferences(wb, ed, Math.min(ultimaPrevista ?? oldLast, oldLast), ateNova)
 
   return { destinos, linhasNovas, zeradas, mudaramDeValor: mudaram }
 }

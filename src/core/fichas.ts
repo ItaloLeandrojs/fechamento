@@ -1,6 +1,7 @@
 import { SheetEditor, indexToCol, type Range } from './sheet'
 import { caixaDoIntervalo, encaixar, inserirImagem, removerFotosVinculadas, removerImagensNaFaixa, type Caixa, type Imagem } from './images'
 import { apagarLinhas } from './linhas'
+import { normalizarRotulo, valorDoRotulo } from './rotulos'
 import type { Workbook } from './workbook'
 
 const EMU_PX = 9525
@@ -165,7 +166,7 @@ export async function aplicarCarimbo(wb: Workbook, tec: Tecnico, hoje: Date): Pr
     const ehCheck = s === check
     gravarSeNaoVemDaCheckList(ed, rod.registro, numOuTexto(String(tec.registro)), ehCheck)
     gravarSeNaoVemDaCheckList(ed, rod.nome, tec.nome.toUpperCase(), ehCheck)
-    if (ehCheck) ed.setNumber('Q4', dataExcel(hoje))
+    if (ehCheck) ed.setNumber(valorDoRotulo(ed, 'Data da fiscalização', 'Q4'), dataExcel(hoje))
     if (!tec.carimbo) continue
     await removerImagensNaFaixa(wb, s.name, rod.linhaInicio - 4, rod.linhaNome + 1)
     await removerFotosVinculadas(wb, s.name)
@@ -208,8 +209,18 @@ export async function aplicarAterramento(wb: Workbook, pontos: PontoAterramento[
   const linhasTabela: number[] = []
   for (let r = cab.row + 2; r < primeiraFoto; r++) if (ed.mergeAt(indexToCol(cab.col) + r)) linhasTabela.push(r)
 
-  if (pontos.length > linhasTabela.length) throw new Error(`A tabela da ficha tem ${linhasTabela.length} linhas e foram lançados ${pontos.length} pontos.`)
-  if (pontos.length > blocos.length) throw new Error(`A ficha tem ${blocos.length} quadros de foto e foram lançados ${pontos.length} pontos.`)
+  if (pontos.length > linhasTabela.length) {
+    throw new Error(
+      `A tabela da ficha de aterramento deste inventário tem ${linhasTabela.length} linha(s) e foram lançados ${pontos.length} pontos. ` +
+        'Se ela já foi preenchida antes, as linhas que sobravam foram apagadas: use o inventário original da EDP.',
+    )
+  }
+  if (pontos.length > blocos.length) {
+    throw new Error(
+      `A ficha de aterramento deste inventário tem ${blocos.length} quadro(s) de foto e foram lançados ${pontos.length} pontos. ` +
+        'Se ela já foi preenchida antes, os quadros que sobravam foram apagados: use o inventário original da EDP.',
+    )
+  }
 
   pontos.forEach((p, i) => {
     const r = linhasTabela[i]
@@ -272,6 +283,35 @@ function blocosDeFoto(ed: SheetEditor): BlocoFoto[] {
 
 // ---------------- ficha de equipamento ----------------
 
+/** Rótulos que precisam estar no lugar de sempre (coluna, linhas abaixo do "Ponto"). */
+const ROTULOS_EQUIPAMENTO: [number, number, string][] = [
+  [3, 1, 'POTÊNCIA (KVA)'],
+  [6, 1, 'PATRIMÔNIO'],
+  [10, 1, 'SÉRIE'],
+  [12, 1, 'MARCA'],
+  [3, 6, 'POTÊNCIA (KVA)'],
+  [6, 6, 'PATRIMÔNIO'],
+  [8, 6, 'SÉRIE'],
+  [11, 6, 'MARCA'],
+]
+
+/**
+ * Os dados do transformador são gravados a uma distância fixa do "Ponto".
+ * Se o desenho da ficha for outro, para em vez de gravar no lugar errado.
+ */
+function conferirDesenhoEquipamento(ed: SheetEditor, at: (col: number, row: number) => string, p: number) {
+  for (const [col, dl, rotulo] of ROTULOS_EQUIPAMENTO) {
+    const ref = at(col, p + dl)
+    const visto = String(ed.value(ref) ?? '')
+    if (normalizarRotulo(visto) !== normalizarRotulo(rotulo)) {
+      throw new Error(
+        `A ficha de equipamento deste inventário tem outro desenho: em ${ref} devia estar "${rotulo}" e está "${visto.trim() || 'vazio'}". ` +
+          'O site não preencheu a ficha para não errar. Mande este inventário para conferência.',
+      )
+    }
+  }
+}
+
 export async function aplicarEquipamentos(wb: Workbook, equips: Equipamento[]): Promise<void> {
   if (!equips.length) return
   const aba = wb.sheetByPrefix('Ficha Equipamento')
@@ -288,6 +328,7 @@ export async function aplicarEquipamentos(wb: Workbook, equips: Equipamento[]): 
     const { row: p, col: c0 } = vagas[i]
     const d = c0 - 2 // deslocamento de colunas (0 à esquerda, 18 à direita)
     const at = (col: number, row: number) => indexToCol(col + d) + row
+    conferirDesenhoEquipamento(ed, at, p)
     ed.set(at(5, p), e.ponto || null)
     const ins = e.instalado
     ed.set(at(3, p + 3), numOuTexto(ins.potencia))

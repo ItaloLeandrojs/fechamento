@@ -1,6 +1,7 @@
 import { Workbook } from './workbook'
 import { SheetEditor } from './sheet'
-import { ADS_SHEET, readAds, type AdsRow } from './ads'
+import { ADS_SHEET, conferirTitulosAds, readAds, type AdsRow } from './ads'
+import { valorDoRotulo } from './rotulos'
 
 export interface ItemCatalogo {
   code: number
@@ -65,7 +66,9 @@ export async function lerCatalogo(wb: Workbook): Promise<ItemCatalogo[]> {
 export async function lerInventario(data: ArrayBuffer | Uint8Array): Promise<ResumoInventario> {
   const wb = await Workbook.open(data)
   if (!wb.sheet(ADS_SHEET)) throw new Error('Este arquivo não tem a aba ADS. Confira se é o inventário da obra.')
-  const ads = readAds(new SheetEditor(await wb.sheetDoc(ADS_SHEET), wb.sharedStrings))
+  const adsEditor = new SheetEditor(await wb.sheetDoc(ADS_SHEET), wb.sharedStrings)
+  conferirTitulosAds(adsEditor)
+  const ads = readAds(adsEditor)
 
   let nota = ''
   let empreiteira = ''
@@ -74,10 +77,13 @@ export async function lerInventario(data: ArrayBuffer | Uint8Array): Promise<Res
   const check = wb.sheetByPrefix('Check-list')
   if (check) {
     const ed = new SheetEditor(await wb.doc(check.path), wb.sharedStrings)
-    nota = txt(ed.value('G4'))
-    empreiteira = txt(ed.value('G5'))
-    tipoObra = txt(ed.value('G9'))
-    for (const ref of ['G10', 'G11']) {
+    nota = txt(ed.value(valorDoRotulo(ed, 'Nota / OV', 'G4')))
+    empreiteira = txt(ed.value(valorDoRotulo(ed, 'Empreiteira', 'G5')))
+    tipoObra = txt(ed.value(valorDoRotulo(ed, 'Tipo Obra', 'G9')))
+    // as ordens ficam na linha do rótulo e na de baixo (G10 e G11)
+    const ordem = valorDoRotulo(ed, 'Ordem/Diagrama', 'G10')
+    const [colOrdem, linhaOrdem] = [ordem.replace(/\d+$/, ''), Number(ordem.replace(/^[A-Z]+/, ''))]
+    for (const ref of [ordem, colOrdem + (linhaOrdem + 1)]) {
       const o = txt(ed.value(ref))
       if (o && o !== '0') ordens.push(o)
     }

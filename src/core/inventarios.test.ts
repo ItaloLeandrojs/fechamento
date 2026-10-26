@@ -1,12 +1,14 @@
 // Testes com inventários reais de outras obras (pasta ../inventarios-teste, fora do git:
 // cada teste pula onde o arquivo não existe).
 import { describe, expect, it } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { setXmlImpl, child } from './xml'
 import { Workbook } from './workbook'
 import { SheetEditor } from './sheet'
-import { gerarFechamento } from './build'
+import { gerarFechamento, type DadosFechamento } from './build'
+import { conferirArquivo } from './conferencia'
+import { readAds } from './ads'
 
 setXmlImpl(DOMParser as never, XMLSerializer as never)
 
@@ -77,4 +79,92 @@ describe.skipIf(!existsSync(AMIGO))('inventário com fórmulas para a planilha e
     expect(res.ads.linhasNovas).toEqual([])
     expect(res.ads.destinos[0]).toMatchObject({ row: 2, motivo: 'prevista' })
   })
+})
+
+// ---------- todos os inventários reais da pasta de teste ----------
+
+const PASTA = '../inventarios-teste/'
+const TODOS = (existsSync(PASTA) ? [...readdirSync(PASTA).filter((f) => f.endsWith('.xlsx')).map((f) => PASTA + f), PASTA + 'do-amigo/original.xlsx'] : [])
+  .concat('e2e/dados/inv.xlsx')
+  .filter((f) => existsSync(f))
+
+const foto = (f: string) => ({ data: new Uint8Array(readFileSync('e2e/dados/' + f)), width: 1200, height: 1600, ext: 'jpeg' as const })
+
+async function dadosCompletos(original: Uint8Array): Promise<DadosFechamento> {
+  const wb = await Workbook.open(original)
+  const previsto = readAds(new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)).find((r) => r.code !== null)!
+  const tec = JSON.parse(readFileSync('e2e/dados/tec.json', 'utf8')).tecnicos[0]
+  return {
+    // um previsto (a quantidade planejada) e três que não estão em nenhuma dessas obras: material, material em kg e serviço
+    lancamentos: [
+      { code: previsto.code!, oper: previsto.oper || '2000', qty: previsto.planejado || 1 },
+      { code: 30053440, oper: '2000', qty: 3 },
+      { code: 30057582, oper: '2000', qty: 0.33 },
+      { code: 71000919, oper: '2000', qty: 1 },
+    ],
+    tecnico: { nome: 'TESTE DO SITE', registro: 1234, carimbo: { data: Uint8Array.from(Buffer.from(tec.carimbo.png, 'base64')), width: tec.carimbo.width, height: tec.carimbo.height, ext: 'png' } },
+    aterramento: [
+      { rua: 'RUA TESTE A', ponto: 'P1', tipoPoste: 'CONC', ohms: 12.5, hastes: 3, fotoVala: foto('vala1.jpeg'), fotoMedicao: foto('med1.jpeg') },
+      { rua: 'RUA TESTE B', ponto: 'P2', tipoPoste: 'MAD', ohms: 9, hastes: 2, fotoVala: foto('vala1.jpeg'), fotoMedicao: foto('med1.jpeg') },
+    ],
+    equipamentos: [{ ponto: 'P1', instalado: { potencia: '75', patrimonio: '123456', fase: 'ABC', serie: 'S1', marca: 'MARCA', ano: '03/2025', nInstalacao: 'ET 1', tensoes: { NA: 127 } }, retirado: { potencia: '45', patrimonio: '654321', serie: 'S0', marca: 'VELHA', ano: '2019', nInstalacao: 'ET 2' }, fotos: [foto('equip1.jpeg')] }],
+    fotoDP: foto('dp.jpeg'),
+    boletim: 'parcial',
+    hoje: new Date(2026, 9, 26),
+  }
+}
+
+describe.skipIf(!TODOS.length)('todos os inventários reais: fechamento completo e conferência automática', () => {
+  it.each(TODOS)('%s', async (arquivo) => {
+    const original = new Uint8Array(readFileSync(arquivo))
+    let dados = await dadosCompletos(original)
+    let res
+    try {
+      res = await gerarFechamento(original, dados)
+    } catch (e) {
+      // inventário que já teve a ficha de aterramento preenchida: o site para e diz por quê
+      expect((e as Error).message).toMatch(/aterramento.*inventário original/s)
+      dados = { ...dados, aterramento: [] }
+      res = await gerarFechamento(original, dados)
+    }
+    const conf = await conferirArquivo(res.arquivo, dados, res)
+    expect(conf.problemas).toEqual([])
+    expect(conf.conferidos).toBeGreaterThan(15)
+    expect(res.ads.linhasNovas).toHaveLength(3)
+  }, 120000)
+})
+
+describe.skipIf(!existsSync('e2e/dados/inv.xlsx'))('a conferência automática acusa o que não bate', () => {
+  const INV = 'e2e/dados/inv.xlsx'
+
+  it('aplicado diferente do lançado, foto que não entrou, parcial não marcado e código fora da MaterialServico', async () => {
+    const original = new Uint8Array(readFileSync(INV))
+    const dados = await dadosCompletos(original)
+    // gera com um código que não existe na MaterialServico, sem a foto da DP e como final
+    const gerado = await gerarFechamento(original, { ...dados, lancamentos: [...dados.lancamentos, { code: 12345678, oper: '2000', qty: 1 }], fotoDP: undefined, boletim: 'final' })
+    // e confere como se tivesse lançado 99 no previsto, com foto da DP e parcial
+    const destinos = gerado.ads.destinos.map((d, i) => (i === 0 ? { ...d, qty: 99 } : d))
+    const conf = await conferirArquivo(gerado.arquivo, dados, { ...gerado, ads: { ...gerado.ads, destinos } })
+    const texto = conf.problemas.join('\n')
+    expect(texto).toMatch(/foi lançado 99 e o Aplicado ficou/)
+    expect(texto).toMatch(/12345678 não está na aba MaterialServico/)
+    expect(texto).toMatch(/DP: a foto/)
+    expect(texto).toMatch(/caixa PARCIAL/)
+  }, 120000)
+
+  it('aba sem carimbo e total da Check-list que não cobre as linhas novas', async () => {
+    const original = new Uint8Array(readFileSync(INV))
+    const dados = await dadosCompletos(original)
+    const gerado = await gerarFechamento(original, dados)
+    // estraga o arquivo: tira o carimbo da DP e encurta a soma da Check-list
+    const wb = await Workbook.open(gerado.arquivo)
+    const ck = wb.sheetByPrefix('Check-list')!
+    const doc = await wb.doc(ck.path)
+    for (const f of Array.from(doc.getElementsByTagName('f'))) f.textContent = (f.textContent ?? '').replace(/:\$L\$(\d+)/g, (_m, n) => `:$L$${Number(n) - 3}`)
+    wb.touch(ck.path)
+    const conf = await conferirArquivo(await wb.save(), dados, { ...gerado, abasComCarimbo: gerado.abasComCarimbo.filter((a) => a !== 'DP') })
+    const texto = conf.problemas.join('\n')
+    expect(texto).toMatch(/"DP" ficou sem o carimbo/)
+    expect(texto).toMatch(/soma a ADS só até a linha/)
+  }, 120000)
 })

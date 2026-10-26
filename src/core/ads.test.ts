@@ -4,7 +4,7 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { setXmlImpl, child, children } from './xml'
 import { Workbook } from './workbook'
 import { SheetEditor } from './sheet'
-import { aplicarAds, readAds } from './ads'
+import { aplicarAds, conferirTitulosAds, readAds } from './ads'
 
 setXmlImpl(DOMParser as never, XMLSerializer as never)
 
@@ -20,9 +20,12 @@ function linha(r: number, code: string, plan: number) {
   return `<row r="${r}"><c r="A${r}" s="1"><v>${r - 1}</v></c><c r="C${r}" t="inlineStr" s="1"><is><t>2000</t></is></c><c r="E${r}" s="1"${code}</c><c r="F${r}" s="1" t="e">${procv(r, 'D', 2)}<v>#N/A</v></c><c r="G${r}" s="1" t="e">${procv(r, 'E', 3)}<v>#N/A</v></c><c r="H${r}" s="1"><v>${plan}</v></c><c r="I${r}" s="2"><v>0</v></c></row>`
 }
 
-async function montar(): Promise<Workbook> {
+const tit = (col: string, t: string) => `<c r="${col}1" t="inlineStr"><is><t>${t}</t></is></c>`
+const TITULOS = `<row r="1">${tit('A', 'ID')}${tit('E', 'Código')}${tit('F', 'Descrição')}${tit('G', 'Unid.')}${tit('H', 'Planejado')}${tit('I', 'Aplicado')}${tit('J', 'Adicional')}${tit('K', 'Devolvido ')}</row>`
+
+async function montar(titulos = TITULOS): Promise<Workbook> {
   const abas = {
-    ADS: `<row r="1"><c r="E1" t="inlineStr"><is><t>Código</t></is></c></row>` +
+    ADS: titulos +
       linha(2, ` t="inlineStr"><is><t> 30050165 </t></is>`, 5) + // código gravado como texto
       linha(3, `><v>10050572</v>`, 2),
     MaterialServico: `<row r="1"><c r="C1"><v>30050165</v></c><c r="D1" t="inlineStr"><is><t>ALÇA PREFORMADA</t></is></c><c r="E1" t="inlineStr"><is><t>PEÇ</t></is></c></row>` +
@@ -140,5 +143,56 @@ describe('linha nova (item não previsto)', () => {
     expect(child(duas.fonteDe('E5'), 'color')?.getAttribute('rgb')).toBe('FFFF0000')
     // só as 2 fontes usadas na ADS ganharam uma cópia vermelha
     expect(uma.fontes.length).toBe(2 + 2)
+  })
+})
+
+describe('títulos da ADS', () => {
+  it('para antes de gravar quando as colunas estão em outra ordem', async () => {
+    const trocada = TITULOS.replace('<t>Aplicado</t>', '<t>Adicional</t>').replace('<t>Adicional</t></is></c><c r="K1"', '<t>Aplicado</t></is></c><c r="K1"')
+    const wb = await montar(trocada)
+    await expect(aplicarAds(wb, [{ code: 30050165, oper: '2000', qty: 1 }])).rejects.toThrow(/coluna I devia ser "Aplicado"/)
+  })
+
+  it('aceita diferença de acento, espaço e maiúscula no título', async () => {
+    const wb = await montar(TITULOS.replace('<t>Descrição</t>', '<t>DESCRICAO </t>'))
+    const ed = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    expect(() => conferirTitulosAds(ed)).not.toThrow()
+  })
+})
+
+describe('linhas de reserva', () => {
+  const reserva = (r: number) => `<row r="${r}"><c r="A${r}" s="1"><v>${r - 1}</v></c><c r="E${r}" s="1" t="e"><v>#N/A</v></c><c r="F${r}" s="1" t="e">${procv(r, 'D', 2)}<v>#N/A</v></c></row>`
+  const total = (r: number) => `<row r="${r}"><c r="F${r}" t="inlineStr"><is><t>TOTAL</t></is></c><c r="H${r}"><f>SUM(H2:H${r - 1})</f><v>7</v></c></row>`
+
+  async function comLinhas(extra: string) {
+    const z = await montar()
+    const aba = z.sheet('ADS')!
+    const doc = await z.doc(aba.path)
+    const sd = doc.getElementsByTagName('sheetData')[0]
+    const tmp = new DOMParser().parseFromString(`<x xmlns="${NS}">${extra}</x>`, 'application/xml').documentElement
+    for (const r of Array.from(tmp.getElementsByTagName('row'))) sd.appendChild(doc.importNode(r, true))
+    z.touch(aba.path)
+    return Workbook.open(await z.save())
+  }
+
+  it('usa as reservas do modelo (fórmula com erro) antes de criar linha nova', async () => {
+    const wb = await comLinhas(reserva(4) + reserva(5))
+    const res = await aplicarAds(wb, [{ code: 90011604, oper: '2000', qty: 3 }], catalogo)
+    expect(res.linhasNovas).toEqual([4])
+  })
+
+  it('não escreve por cima de uma linha de total: para e avisa', async () => {
+    const wb = await comLinhas(reserva(4) + total(5))
+    await expect(
+      aplicarAds(wb, [{ code: 90011604, oper: '2000', qty: 3 }, { code: 12345678, oper: '2000', qty: 1 }], catalogo),
+    ).rejects.toThrow(/linha 5 tem conteúdo/)
+  })
+
+  it('com reserva suficiente antes do total, o total fica intacto', async () => {
+    const wb = await comLinhas(reserva(4) + total(5))
+    await aplicarAds(wb, [{ code: 90011604, oper: '2000', qty: 3 }], catalogo)
+    const ed = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    expect(ed.value('F5')).toBe('TOTAL')
+    expect(ed.value('E4')).toBe(90011604)
   })
 })
