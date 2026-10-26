@@ -2,7 +2,7 @@ import { SheetEditor, shiftFormula, splitRef } from './sheet'
 import { child, descendants } from './xml'
 import type { Workbook } from './workbook'
 import { gravarValorGuardado } from './cache'
-import { criarPintorVermelho } from './estilos'
+import { criarFormatoNumero, criarPintorVermelho } from './estilos'
 
 export const ADS_SHEET = 'ADS'
 
@@ -243,6 +243,9 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
   const porLinha = new Map<number, number>()
   for (const d of destinos) if (d.row !== null) porLinha.set(d.row, (porLinha.get(d.row) ?? 0) + d.qty)
 
+  // coluna do código no formato "Número" (no modelo da EDP ela vem como "Geral")
+  const formatoNumero = await criarFormatoNumero(wb)
+
   let zeradas = 0
   let mudaram = 0
   const escreverQuantidades = (r: number, plan: number, apl: number) => {
@@ -260,6 +263,7 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
       ed.setNumber(COL.code + r.row, r.code)
       guardarDescricao(ed, r.row, r.code, catalogo)
     }
+    formatoNumero(ed.cell(COL.code + r.row)!)
     const apl = porLinha.get(r.row) ?? 0
     if (apl === 0) zeradas++
     if (r.aplicado !== null && Math.abs(r.aplicado - apl) > 1e-9) mudaram++
@@ -295,6 +299,7 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
     ed.setBlank(COL.oper + r)
     ed.setBlank(COL.descOper + r)
     ed.setNumber(COL.code + r, n.code)
+    formatoNumero(ed.cell(COL.code + r)!)
     ed.setNumber(COL.plan + r, 0)
     if (ed.cell(COL.copiaPlan + r)) ed.setNumber(COL.copiaPlan + r, 0)
     escreverQuantidades(r, 0, n.qty)

@@ -84,6 +84,21 @@ describe('código da ADS', () => {
   })
 })
 
+describe('formato da coluna de código', () => {
+  it('todo código sai no formato Número (0), prevista ou nova, sem perder a borda', async () => {
+    const { ed, xfs } = await gerar([{ code: 90011604, oper: '2000', qty: 3 }])
+    for (const ref of ['E2', 'E3', 'E4']) {
+      const xf = xfs[Number(ed.cell(ref)!.getAttribute('s'))]
+      expect(xf.getAttribute('numFmtId'), ref).toBe('1')
+      expect(xf.getAttribute('applyNumberFormat'), ref).toBe('1')
+      expect(xf.getAttribute('applyBorder'), ref).toBe('1')
+    }
+    // o cabeçalho e as outras colunas não mudam de formato
+    expect(ed.cell('E1')!.getAttribute('s') || null).toBeNull()
+    expect(xfs[Number(ed.cell('H2')!.getAttribute('s'))].getAttribute('numFmtId')).toBe('0')
+  })
+})
+
 describe('linha nova (item não previsto)', () => {
   it('sai inteira em vermelho e negrito, com borda e formato de número mantidos', async () => {
     const { res, ed, fonteDe, xfs } = await gerar([{ code: 90011604, oper: '2000', qty: 3 }])
@@ -119,6 +134,10 @@ describe('linha nova (item não previsto)', () => {
     expect(duas.res.linhasNovas).toEqual([4, 5])
     expect(duas.xfs.length).toBe(uma.xfs.length)
     expect(duas.fontes.length).toBe(uma.fontes.length)
+    // a segunda linha nova continua vermelha e em Número
+    const xf5 = duas.xfs[Number(duas.ed.cell('E5')!.getAttribute('s'))]
+    expect(xf5.getAttribute('numFmtId')).toBe('1')
+    expect(child(duas.fonteDe('E5'), 'color')?.getAttribute('rgb')).toBe('FFFF0000')
     // só as 2 fontes usadas na ADS ganharam uma cópia vermelha
     expect(uma.fontes.length).toBe(2 + 2)
   })
