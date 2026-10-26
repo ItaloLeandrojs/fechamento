@@ -53,7 +53,7 @@ export async function atualizarValoresGuardados(wb: Workbook): Promise<void> {
 }
 
 /** Troca só o <v> (e o tipo) da célula, mantendo a fórmula e o estilo. */
-function gravarValorGuardado(c: Element, f: Element, valor: CellValue, ehErro: boolean) {
+export function gravarValorGuardado(c: Element, f: Element, valor: CellValue, ehErro: boolean) {
   const doc = c.ownerDocument!
   for (const v of [child(c, 'v'), child(c, 'is')]) if (v) c.removeChild(v)
   c.removeAttribute('t')

@@ -1,6 +1,8 @@
 import { SheetEditor, shiftFormula, splitRef } from './sheet'
 import { child, descendants } from './xml'
 import type { Workbook } from './workbook'
+import { gravarValorGuardado } from './cache'
+import { criarPintorVermelho } from './estilos'
 
 export const ADS_SHEET = 'ADS'
 
@@ -20,6 +22,8 @@ export interface AdsRow {
   item: string
   oper: string
   code: number | null
+  /** O código veio gravado como texto ("30050165"): sai convertido em número. */
+  codigoEmTexto: boolean
   descricao: string
   unidade: string
   planejado: number
@@ -54,12 +58,24 @@ function txt(v: unknown): string {
   return v === null || v === undefined ? '' : String(v).trim()
 }
 
+/**
+ * Código como número. Alguns inventários trazem o código gravado como texto;
+ * sem isto o item previsto não era reconhecido e o lançamento virava uma linha
+ * nova duplicada.
+ */
+function lerCodigo(ed: SheetEditor, ref: string): { code: number | null; emTexto: boolean } {
+  if (ed.isError(ref)) return { code: null, emTexto: false }
+  const v = ed.value(ref)
+  if (typeof v === 'number') return { code: v, emTexto: false }
+  if (typeof v === 'string' && /^\d+$/.test(v.trim())) return { code: Number(v.trim()), emTexto: true }
+  return { code: null, emTexto: false }
+}
+
 export function readAds(ed: SheetEditor): AdsRow[] {
   const out: AdsRow[] = []
   for (let r = 2; r <= ed.lastRow; r++) {
     if (!ed.row(r)) continue
-    const codeV = ed.value(COL.code + r)
-    const code = typeof codeV === 'number' && !ed.isError(COL.code + r) ? codeV : null
+    const { code, emTexto } = lerCodigo(ed, COL.code + r)
     const apl = ed.value(COL.apl + r)
     const idV = ed.value(COL.id + r)
     out.push({
@@ -68,6 +84,7 @@ export function readAds(ed: SheetEditor): AdsRow[] {
       item: txt(ed.value(COL.item + r)),
       oper: ed.isError(COL.oper + r) ? '' : txt(ed.value(COL.oper + r)),
       code,
+      codigoEmTexto: emTexto,
       descricao: ed.isError(COL.desc + r) ? '' : txt(ed.value(COL.desc + r)),
       unidade: ed.isError(COL.unid + r) ? '' : txt(ed.value(COL.unid + r)),
       planejado: num(ed.value(COL.plan + r)),
@@ -195,8 +212,26 @@ export interface AdsResultado {
   mudaramDeValor: number // linhas que já tinham Aplicado e mudaram
 }
 
+/** Descrição e unidade de cada código (aba MaterialServico). */
+export type Catalogo = Map<number, { desc: string; un: string }>
+
+/**
+ * Grava o valor guardado da descrição (F) e da unidade (G), que são PROCV na
+ * MaterialServico: o Modo Protegido do Excel não recalcula e mostraria vazio.
+ */
+function guardarDescricao(ed: SheetEditor, r: number, code: number, catalogo: Catalogo) {
+  const item = catalogo.get(code)
+  for (const [col, campo] of [[COL.desc, 'desc'], [COL.unid, 'un']] as const) {
+    const c = ed.cell(col + r)
+    const f = c && child(c, 'f')
+    if (!c || !f || !(f.textContent ?? '').includes('MaterialServico')) continue
+    if (item) gravarValorGuardado(c, f, item[campo], false)
+    else gravarValorGuardado(c, f, '#N/A', true)
+  }
+}
+
 /** Grava o Aplicado (e Adicional/Devolvido) na ADS. */
-export async function aplicarAds(wb: Workbook, lancs: Lancamento[]): Promise<AdsResultado> {
+export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Catalogo = new Map()): Promise<AdsResultado> {
   const info = wb.sheet(ADS_SHEET)!
   const ed = new SheetEditor(await wb.doc(info.path), wb.sharedStrings)
   wb.touch(info.path)
@@ -221,6 +256,10 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[]): Promise<Ads
 
   for (const r of rows) {
     if (r.code === null) continue
+    if (r.codigoEmTexto) {
+      ed.setNumber(COL.code + r.row, r.code)
+      guardarDescricao(ed, r.row, r.code, catalogo)
+    }
     const apl = porLinha.get(r.row) ?? 0
     if (apl === 0) zeradas++
     if (r.aplicado !== null && Math.abs(r.aplicado - apl) > 1e-9) mudaram++
@@ -242,6 +281,7 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[]): Promise<Ads
   const oldLast = ed.lastRow
   let last = oldLast
   const linhasNovas: number[] = []
+  const pintarVermelho = await criarPintorVermelho(wb)
   for (const [chave, n] of novas) {
     let r = reservas.shift()
     if (r === undefined) {
@@ -258,6 +298,9 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[]): Promise<Ads
     ed.setNumber(COL.plan + r, 0)
     if (ed.cell(COL.copiaPlan + r)) ed.setNumber(COL.copiaPlan + r, 0)
     escreverQuantidades(r, 0, n.qty)
+    guardarDescricao(ed, r, n.code, catalogo)
+    // item que não estava previsto: a linha inteira em vermelho
+    pintarVermelho(ed.row(r)!)
     // registra em que linha cada lançamento novo caiu
     for (const d of destinos) {
       if (d.motivo === 'nova' && d.code + '|' + groupOf(d.oper).join(',') === chave) d.row = r

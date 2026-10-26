@@ -28,7 +28,7 @@ function txt(v: unknown): string {
  * Lê o cadastro MaterialServico direto do texto do XML (a aba tem ~40 mil
  * linhas e montar o XML inteiro na memória seria lento). Só colunas C, D e E.
  */
-async function lerCatalogo(wb: Workbook): Promise<ItemCatalogo[]> {
+export async function lerCatalogo(wb: Workbook): Promise<ItemCatalogo[]> {
   const aba = wb.sheet('MaterialServico')
   if (!aba) return []
   const xml = await wb.zip.file(aba.path)!.async('string')

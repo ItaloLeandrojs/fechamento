@@ -3,6 +3,7 @@ import { aplicarAds, type AdsResultado, type Lancamento } from './ads'
 import { aplicarAterramento, aplicarCarimbo, aplicarDP, aplicarEquipamentos, type Equipamento, type PontoAterramento, type Tecnico } from './fichas'
 import type { Imagem } from './images'
 import { atualizarValoresGuardados } from './cache'
+import { lerCatalogo } from './inventario'
 
 export interface DadosFechamento {
   lancamentos: Lancamento[]
@@ -22,7 +23,8 @@ export interface ResultadoFechamento {
 /** Gera o inventário preenchido a partir do arquivo original da EDP (que não é alterado). */
 export async function gerarFechamento(original: ArrayBuffer | Uint8Array, dados: DadosFechamento): Promise<ResultadoFechamento> {
   const wb = await Workbook.open(original)
-  const ads = await aplicarAds(wb, dados.lancamentos)
+  const catalogo = new Map((await lerCatalogo(wb)).map((i) => [i.code, { desc: i.desc, un: i.un }]))
+  const ads = await aplicarAds(wb, dados.lancamentos, catalogo)
   await aplicarAterramento(wb, dados.aterramento)
   await aplicarEquipamentos(wb, dados.equipamentos)
   await aplicarDP(wb, dados.fotoDP)

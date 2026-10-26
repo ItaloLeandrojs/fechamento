@@ -45,6 +45,21 @@ export interface EstruturaLanc {
   kit: string
   oper: string
   qtd: number
+  /**
+   * Materiais mudados nesta linha: código → quantidade por estrutura.
+   * 0 = material tirado da soma (ex.: as alças dos outros condutores da CE3).
+   */
+  ajuste?: Record<number, number>
+}
+
+/** Quantidade de um material do kit em uma estrutura, já com o ajuste da linha. */
+export function qtdNoKit(est: EstruturaLanc, it: ItemKit): number {
+  return est.ajuste?.[it.code] ?? it.qtd
+}
+
+/** A linha tem algum material mudado em relação ao kit da KIT MATERIAL? */
+export function temAjuste(est: EstruturaLanc, k: Kit | undefined): boolean {
+  return !!k && k.itens.some((i) => qtdNoKit(est, i) !== i.qtd)
 }
 
 export interface ItemLanc {
@@ -128,7 +143,10 @@ export function montarLancamentos(e: Estado, kits: Map<string, Kit>): { lancamen
       continue
     }
     if (!k.itens.length) avisos.push(`A estrutura ${est.kit} não tem materiais cadastrados na KIT MATERIAL; lance os materiais avulsos.`)
-    for (const it of k.itens) lancamentos.push({ code: it.code, oper: est.oper, qty: it.qtd * est.qtd })
+    for (const it of k.itens) {
+      const q = qtdNoKit(est, it)
+      if (q > 0) lancamentos.push({ code: it.code, oper: est.oper, qty: q * est.qtd })
+    }
   }
   for (const it of e.itens) lancamentos.push({ code: it.code, oper: it.oper, qty: it.qtd })
   return { lancamentos, avisos }

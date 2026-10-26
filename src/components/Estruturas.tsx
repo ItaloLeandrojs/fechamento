@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { CaretDown, MagnifyingGlass, Plus, Stack, Trash, X } from '@phosphor-icons/react'
+import { CaretDown, MagnifyingGlass, Plus, SlidersHorizontal, Stack, Trash, X } from '@phosphor-icons/react'
 import { casa, formatarQtd } from '../lib/busca'
-import { OPERACOES, kitEmQuilo, nomeOper, novoId, type Atualiza, type EstruturaLanc, type Kit } from '../state'
+import { OPERACOES, kitEmQuilo, nomeOper, novoId, qtdNoKit, temAjuste, type Atualiza, type EstruturaLanc, type Kit } from '../state'
+import { AjusteMateriais } from './AjusteMateriais'
 import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Vazio } from './ui'
 
 export interface KitIndexado extends Kit {
@@ -21,6 +22,7 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
   const [busca, setBusca] = useState('')
   const [oper, setOper] = useState('2000')
   const [aberto, setAberto] = useState<string | null>(null)
+  const [ajustando, setAjustando] = useState<string | null>(null)
 
   const comPontos = useMemo(
     () => kits.map((k) => ({ k, nPrev: k.itens.filter((i) => previstos.has(i.code)).length })),
@@ -32,13 +34,14 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
     return lista.sort((a, b) => b.nPrev / Math.max(1, b.k.itens.length) - a.nPrev / Math.max(1, a.k.itens.length)).slice(0, LIMITE)
   }, [busca, comPontos])
 
+  const porKit = useMemo(() => new Map(kits.map((k) => [k.kit, k])), [kits])
+
+  // soma na linha do mesmo kit e operação que ainda está como o kit; a ajustada fica separada
   const adicionar = (kit: string) =>
     onChange((lista) => {
-      const existente = lista.find((e) => e.kit === kit && e.oper === oper)
+      const existente = lista.find((e) => e.kit === kit && e.oper === oper && !temAjuste(e, porKit.get(kit)))
       return existente ? lista.map((e) => (e === existente ? { ...e, qtd: e.qtd + 1 } : e)) : [...lista, { id: novoId(), kit, oper, qtd: 1 }]
     })
-
-  const porKit = useMemo(() => new Map(kits.map((k) => [k.kit, k])), [kits])
   const kitEmQuiloPorNome = (nome: string) => {
     const k = porKit.get(nome)
     return !!k && kitEmQuilo(k)
@@ -176,27 +179,48 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                     <span className="num text-sm font-semibold">{formatarQtd(doGrupo.reduce((s, e) => s + e.qtd, 0))}</span>
                   </div>
                   <ul className="divide-y divide-line">
-                    {doGrupo.map((e) => (
-                      <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 px-1">
-                        <div className="flex-1 basis-56 min-w-0">
-                          <p className="text-base font-semibold break-words">{e.kit}</p>
-                          <p className="text-sm text-muted line-clamp-2" title={porKit.get(e.kit)?.descricao}>{porKit.get(e.kit)?.descricao}</p>
-                        </div>
-                        <div className="ml-auto flex items-center gap-2">
-                          <Quantidade grande valor={e.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === e.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${e.kit}`} emQuilo={kitEmQuiloPorNome(e.kit)} />
-                          <Botao
-                            variante="perigo"
-                            icone
-                            className="border border-line-strong"
-                            aria-label={`Remover ${e.kit}`}
-                            title="Remover"
-                            onClick={() => onChange((l) => l.filter((x) => x.id !== e.id))}
-                          >
-                            <Trash size={20} />
-                          </Botao>
-                        </div>
-                      </li>
-                    ))}
+                    {doGrupo.map((e) => {
+                      const k = porKit.get(e.kit)
+                      const abertoAjuste = ajustando === e.id
+                      const tirados = k ? k.itens.filter((i) => qtdNoKit(e, i) === 0).length : 0
+                      const mudados = k ? k.itens.filter((i) => qtdNoKit(e, i) > 0 && qtdNoKit(e, i) !== i.qtd).length : 0
+                      return (
+                        <li key={e.id} className="py-3 px-1">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                            <div className="flex-1 basis-56 min-w-0">
+                              <p className="text-base font-semibold break-words">{e.kit}</p>
+                              <p className="text-sm text-muted line-clamp-2" title={porKit.get(e.kit)?.descricao}>{porKit.get(e.kit)?.descricao}</p>
+                            </div>
+                            <div className="ml-auto flex items-center gap-2">
+                              <Quantidade grande valor={e.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === e.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${e.kit}`} emQuilo={kitEmQuiloPorNome(e.kit)} />
+                              <Botao
+                                variante="perigo"
+                                icone
+                                className="border border-line-strong"
+                                aria-label={`Remover ${e.kit}`}
+                                title="Remover"
+                                onClick={() => onChange((l) => l.filter((x) => x.id !== e.id))}
+                              >
+                                <Trash size={20} />
+                              </Botao>
+                            </div>
+                          </div>
+                          {k && k.itens.length > 0 && (
+                            <>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <Botao variante="fantasma" className="-ml-2 text-sm" aria-expanded={abertoAjuste} onClick={() => setAjustando(abertoAjuste ? null : e.id)}>
+                                  <SlidersHorizontal size={18} /> Materiais ({k.itens.length})
+                                  <CaretDown size={16} className={`transition-transform ${abertoAjuste ? 'rotate-180' : ''}`} />
+                                </Botao>
+                                {tirados > 0 && <Selo tom="perigo">{tirados} {tirados === 1 ? 'tirado' : 'tirados'}</Selo>}
+                                {mudados > 0 && <Selo tom="destaque">{mudados} {mudados === 1 ? 'alterado' : 'alterados'}</Selo>}
+                              </div>
+                              {abertoAjuste && <AjusteMateriais est={e} kit={k} onChange={(ajuste) => onChange((l) => l.map((x) => (x.id === e.id ? { ...x, ajuste } : x)))} />}
+                            </>
+                          )}
+                        </li>
+                      )
+                    })}
                   </ul>
                 </div>
               )

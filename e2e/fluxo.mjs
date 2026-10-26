@@ -189,6 +189,22 @@ async function rodada({ largura, altura, tema, movel }) {
   await page.getByRole('button', { name: 'Adicionar KP-TRAFO 75KVA M na operação 2010' }).click()
   const qtdCE1 = await page.getByRole('textbox', { name: 'Quantidade de KP-CE1-P23' }).inputValue()
   if (qtdCE1 !== '2') falhas.push(`[${tag}] quantidade do KP-CE1-P23 deveria ser 2, veio ${qtdCE1}`)
+  // ajuste dos materiais da estrutura: tirar um material da soma e mudar a quantidade de outro
+  const lancadas = page.locator('#lancadas').locator('xpath=..')
+  await lancadas.getByRole('button', { name: /^Materiais \(\d+\)/ }).first().click()
+  const caixasMat = lancadas.getByRole('checkbox')
+  if ((await caixasMat.count()) < 2) falhas.push(`[${tag}] ajuste: a CE1 deveria mostrar os materiais com caixa de marcar`)
+  await caixasMat.nth(0).uncheck()
+  const qtdMat = lancadas.getByRole('textbox', { name: /por estrutura$/ }).first()
+  await qtdMat.fill('5')
+  await qtdMat.press('Tab')
+  for (const selo of ['1 tirado', '1 alterado']) {
+    if (!(await lancadas.getByText(selo, { exact: true }).count())) falhas.push(`[${tag}] ajuste: falta o aviso "${selo}"`)
+  }
+  await axe(page, `${tag} ajuste de materiais`, { topo: false })
+  await lancadas.getByRole('button', { name: /^Materiais \(\d+\)/ }).first().scrollIntoViewIfNeeded()
+  await foto('02b-ajuste-materiais')
+  await lancadas.getByRole('button', { name: /^Materiais \(\d+\)/ }).first().click()
   // foco com a página rolada: busca e "Limpar busca" ficam sob o cabeçalho preso e o foco tem que trazê-los para baixo dele
   await page.getByPlaceholder(/Ex.: CE3/).fill('kp') // lista longa (60 kits)
   await focoLivre(page, page.getByPlaceholder(/Ex.: CE3/), 'Buscar estrutura', tag)
