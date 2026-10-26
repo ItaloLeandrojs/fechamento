@@ -193,6 +193,15 @@ export class SheetEditor {
     c.appendChild(is)
   }
 
+  /** Troca o conteúdo por uma fórmula (sem valor guardado: o Excel calcula ao abrir). */
+  setFormula(ref: string, formula: string) {
+    const c = this.cell(ref, true)!
+    this.clear(c)
+    const f = this.doc.createElementNS(NS.main, 'f')
+    f.textContent = formula
+    c.appendChild(f)
+  }
+
   setBlank(ref: string) {
     const c = this.cell(ref)
     if (c) this.clear(c)

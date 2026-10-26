@@ -1,5 +1,5 @@
 import { SheetEditor, shiftFormula, splitRef } from './sheet'
-import { child, descendants } from './xml'
+import { child, children, descendants } from './xml'
 import type { Workbook } from './workbook'
 import { gravarValorGuardado } from './cache'
 import { criarFormatoNumero, criarPintorVermelho } from './estilos'
@@ -59,15 +59,20 @@ function txt(v: unknown): string {
 }
 
 /**
- * Código como número. Alguns inventários trazem o código gravado como texto;
- * sem isto o item previsto não era reconhecido e o lançamento virava uma linha
- * nova duplicada.
+ * Código como número. Alguns inventários trazem o código como texto; sem isto
+ * o item previsto não era reconhecido e o lançamento virava uma linha nova duplicada.
+ * `emTexto` (converter para número na planilha) só vale para texto digitado: quando o
+ * código é uma fórmula da EDP, outras fórmulas da linha (preço) procuram esse mesmo
+ * texto na planilha externa, e trocar por número quebraria o valor da obra (#VALOR!).
  */
 function lerCodigo(ed: SheetEditor, ref: string): { code: number | null; emTexto: boolean } {
   if (ed.isError(ref)) return { code: null, emTexto: false }
   const v = ed.value(ref)
   if (typeof v === 'number') return { code: v, emTexto: false }
-  if (typeof v === 'string' && /^\d+$/.test(v.trim())) return { code: Number(v.trim()), emTexto: true }
+  if (typeof v === 'string' && /^\d+$/.test(v.trim())) {
+    const cel = ed.cell(ref)
+    return { code: Number(v.trim()), emTexto: !(cel && ed.formula(cel)) }
+  }
   return { code: null, emTexto: false }
 }
 
@@ -212,6 +217,55 @@ export interface AdsResultado {
   mudaramDeValor: number // linhas que já tinham Aplicado e mudaram
 }
 
+/** Fórmula que busca em outro arquivo (ex.: [1]Dados, a planilha da EDP que gerou o inventário). */
+const EXTERNA = /\[\d+\]/
+
+/**
+ * Fórmulas da linha nova, todas na MaterialServico da própria planilha. Alguns
+ * inventários trazem as linhas de reserva buscando tudo na planilha externa da
+ * EDP pelo ID; essa planilha não conhece o item novo, e a linha sairia #N/D.
+ * Preço: serviço (código 7…) pelo contrato (coluna A = código + contrato),
+ * material só pelo código, como no próprio modelo da EDP.
+ * TRIM: a MaterialServico traz unidades como "KG " (com espaço) e o Valor de
+ * Material da Check-list soma por unidade exata ("KG"); sem isso o item ficava de fora.
+ */
+const FORMULA_NOVA: Record<string, (r: number) => string> = {
+  [COL.desc]: (r) => `TRIM(VLOOKUP(E${r},MaterialServico!C:D,2,0))`,
+  [COL.unid]: (r) => `TRIM(VLOOKUP(E${r},MaterialServico!C:E,3,0))`,
+  M: (r) => `IFERROR(IF(LEFT(E${r},1)="7",VLOOKUP(E${r}&'Check-list'!$G$6,MaterialServico!A:F,6,0),0),"0")`,
+  Q: (r) => `IFERROR(IF(LEFT(E${r},1)<>"7",VLOOKUP(E${r},MaterialServico!B:F,5,0),0),"0")`,
+}
+/** Título que a coluna precisa ter para receber a fórmula de preço. */
+const TITULO_PRECO: Record<string, string> = { M: 'valor servico', Q: 'valor material' }
+
+function semAcento(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
+}
+
+/**
+ * Deixa a linha nova sem nenhuma dependência da planilha externa: descrição,
+ * unidade e preço passam a vir da MaterialServico; o resto que buscava fora fica vazio.
+ */
+function prepararLinhaNova(ed: SheetEditor, r: number, temCatalogo: boolean) {
+  for (const c of children(ed.row(r)!, 'c')) {
+    const ref = c.getAttribute('r')!
+    const col = ref.replace(/\d+$/, '')
+    const f = child(c, 'f')?.textContent ?? ''
+    const nova = FORMULA_NOVA[col]
+    const precoOk = !TITULO_PRECO[col] || semAcento(String(ed.value(col + '1') ?? '')) === TITULO_PRECO[col]
+    // descrição e unidade: sempre a fórmula com TRIM; preço: só no lugar da fórmula externa
+    if (nova && temCatalogo && precoOk && (EXTERNA.test(f) || col === COL.desc || col === COL.unid)) {
+      ed.setFormula(ref, nova(r))
+    } else if (EXTERNA.test(f)) {
+      ed.setBlank(ref)
+    } else if (f) {
+      // fórmula interna (ex.: o valor da linha): o valor guardado era da linha vazia
+      for (const v of [child(c, 'v')]) if (v) c.removeChild(v)
+      c.removeAttribute('t')
+    }
+  }
+}
+
 /** Descrição e unidade de cada código (aba MaterialServico). */
 export type Catalogo = Map<number, { desc: string; un: string }>
 
@@ -303,6 +357,7 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
     ed.setNumber(COL.plan + r, 0)
     if (ed.cell(COL.copiaPlan + r)) ed.setNumber(COL.copiaPlan + r, 0)
     escreverQuantidades(r, 0, n.qty)
+    prepararLinhaNova(ed, r, !!wb.sheet('MaterialServico'))
     guardarDescricao(ed, r, n.code, catalogo)
     // item que não estava previsto: a linha inteira em vermelho
     pintarVermelho(ed.row(r)!)

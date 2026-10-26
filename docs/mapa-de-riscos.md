@@ -19,10 +19,11 @@ O site foi testado com **um inventário real só** (nota 16646602). Ele procura 
 
 | # | Situação | O que acontece hoje | Gravidade | Proteção proposta |
 |---|---|---|---|---|
-| 1 | Linha nova da ADS sem a fórmula PROCV na descrição (F) e na unidade (G), ou com a fórmula apontando para outra aba | Descrição e unidade vazias (**o erro de agora**). Sem a unidade, o "Valor de Material" da Check-list não soma aquele material | Alta | Se faltar a fórmula, o site escreve a fórmula do modelo e o valor já calculado; sem a aba MaterialServico, escreve o texto da descrição |
+| 1 | Linha nova da ADS sem a fórmula PROCV na descrição (F) e na unidade (G), ou com a fórmula apontando para outra aba | **Corrigido em 26/10** (inventário 4001933383). As linhas de reserva buscavam tudo na planilha externa da EDP ([1]Dados) pelo ID. Agora a linha nova busca descrição, unidade e preço na MaterialServico da própria planilha, com TRIM ('KG ' com espaço ficava fora do Valor de Material) | - | Teste com o inventário real |
 | 2 | Colunas da ADS em outra ordem (o site supõe E código, F descrição, G unidade, H planejado, I aplicado, J adicional, K devolvido, O e P) | Quantidades gravadas na coluna errada | Alta | Ler os títulos da linha 1 antes de gravar; se não baterem, parar e avisar |
 | 3 | Linha sem código no meio ou no fim da ADS que não é reserva (total, observação, assinatura) | O site usa essa linha para um item novo e apaga o que tinha nela | Alta | Só reaproveitar linha de reserva de verdade (com o mesmo jeito das linhas da tabela); o resto fica intacto e a linha nova vai para baixo |
 | 4 | Código gravado como texto | Corrigido em 26/10 | - | Já coberto por teste |
+| 4b | Código que é **fórmula** da EDP (vem como texto) | **Corrigido em 26/10.** Converter para número quebrava o preço das linhas previstas (#VALOR! no Valor de Material e de Serviço da Check-list). Agora o código de fórmula fica como a EDP mandou; só o texto digitado vira número | - | Teste com o inventário real e conferência no Excel |
 | 5 | Check-list com a nota, o tipo de obra ou as ordens em outra célula (o site lê G4, G5, G9, G10 e G11) | Nome do arquivo baixado errado ("obra - ADS.xlsx") e cabeçalho do site vazio | Média | Achar pelos rótulos ("Nota / OV", "Tipo Obra", "Ordem/Diagrama") em vez da célula fixa |
 | 6 | Data da fiscalização em outra célula (o site grava em Q4) | Data do dia não entra, ou cai em outra célula | Alta | Achar pelo rótulo "Data da fiscalização" |
 | 7 | Caixas FINAL/PARCIAL em outro lugar (o site usa W5:X7) | Caixas a mais ao lado das existentes | Média | Achar pelos textos FINAL e PARCIAL; só criar em W5:X7 se não existirem |
@@ -33,6 +34,13 @@ O site foi testado com **um inventário real só** (nota 16646602). Ele procura 
 | 12 | Aba com nome diferente ("ADS ", "Ficha Medicao", "D.P.") | O site para com erro de aba não encontrada | Média | Aceitar variações de nome (sem acento, espaço, maiúscula) |
 | 13 | MaterialServico com as colunas em outra ordem (o site lê C código, D descrição, E unidade) | Busca de materiais vazia e descrições erradas | Alta | Achar as colunas pelo título |
 | 14 | Inventário de outro tipo de obra (MT, reparo, subterrânea), com abas a mais ou a menos | Não testado | ? | Testar com inventários reais de cada tipo |
+
+## Modelos de inventário já vistos
+
+| Nota | Como a ADS vem | Observação |
+|---|---|---|
+| 16646602 | Código e quantidades digitados; descrição e unidade por PROCV na MaterialServico | Modelo dos testes desde o início |
+| 4001933383 | Tudo por fórmula ligada à planilha externa da EDP (GERAR ADS / Dados), código em texto, 490 linhas de reserva | Do amigo do Italo; a DP imprime em 2 páginas já no original |
 
 ## 2. Jeito de usar
 
