@@ -4,7 +4,7 @@
 
 ## A causa comum dos erros até agora
 
-O site foi testado com **um inventário real só** (nota 16646602). Ele procura células fixas, textos e nomes de aba que existem nesse inventário. Quando o inventário de outra obra vem um pouco diferente, o site erra. Pior: às vezes ele erra **sem avisar**. Foi assim com:
+O site foi testado com **um inventário real só** (o de exemplo). Ele procura células fixas, textos e nomes de aba que existem nesse inventário. Quando o inventário de outra obra vem um pouco diferente, o site erra. Pior: às vezes ele erra **sem avisar**. Foi assim com:
 
 - o código gravado como texto, que gerava linha duplicada;
 - a aba DP sem a palavra LIVRE;
@@ -19,7 +19,7 @@ O site foi testado com **um inventário real só** (nota 16646602). Ele procura 
 
 | # | Situação | O que acontece hoje | Gravidade | Proteção proposta |
 |---|---|---|---|---|
-| 1 | Linha nova da ADS sem a fórmula PROCV na descrição (F) e na unidade (G), ou com a fórmula apontando para outra aba | **Corrigido em 26/10** (inventário 4001933383). As linhas de reserva buscavam tudo na planilha externa da EDP ([1]Dados) pelo ID. Agora a linha nova busca descrição, unidade e preço na MaterialServico da própria planilha, com TRIM ('KG ' com espaço ficava fora do Valor de Material) | - | Teste com o inventário real |
+| 1 | Linha nova da ADS sem a fórmula PROCV na descrição (F) e na unidade (G), ou com a fórmula apontando para outra aba | **Corrigido em 26/10** (inventário do amigo do Italo). As linhas de reserva buscavam tudo na planilha externa da EDP ([1]Dados) pelo ID. Agora a linha nova busca descrição, unidade e preço na MaterialServico da própria planilha, com TRIM ('KG ' com espaço ficava fora do Valor de Material) | - | Teste com o inventário real |
 | 2 | ✔ 26/10: confere os títulos e para com aviso. Colunas da ADS em outra ordem (o site supõe E código, F descrição, G unidade, H planejado, I aplicado, J adicional, K devolvido, O e P) | Quantidades gravadas na coluna errada | Alta | Ler os títulos da linha 1 antes de gravar; se não baterem, parar e avisar |
 | 3 | ✔ 26/10: só reserva depois da última prevista e sem texto; para e avisa se faltar. Linha sem código no meio ou no fim da ADS que não é reserva (total, observação, assinatura) | O site usa essa linha para um item novo e apaga o que tinha nela | Alta | Só reaproveitar linha de reserva de verdade (com o mesmo jeito das linhas da tabela); o resto fica intacto e a linha nova vai para baixo |
 | 4 | Código gravado como texto | Corrigido em 26/10 | - | Já coberto por teste |
@@ -37,14 +37,16 @@ O site foi testado com **um inventário real só** (nota 16646602). Ele procura 
 
 ## Modelos de inventário já vistos
 
-| Nota | Como a ADS vem | Observação |
+| Inventário (nome na pasta de teste) | Como a ADS vem | Observação |
 |---|---|---|
-| 16646602 | Código e quantidades digitados; descrição e unidade por PROCV na MaterialServico | Modelo dos testes desde o início |
-| 4001933383 | Tudo por fórmula ligada à planilha externa da EDP (GERAR ADS / Dados), código em texto, 490 linhas de reserva | Do amigo do Italo; a DP imprime em 2 páginas já no original |
-| 14037543, 14338896, 15867904 | Só valores colados, sem nenhuma fórmula; reservas com #N/D colado | O Valor da linha prevista não acompanha o Aplicado (é valor fixo, como vem da EDP) |
-| 16400313, 16404730, 16622743 | Código digitado como texto; PROCV na MaterialServico | No original toda descrição sai #N/D (texto x número); depois do site, saem certas |
-| 16399656, 16400821, 16404483, 16626102, 16626111 | Já fechados (Aplicado preenchido, fotos) | A soma da Check-list ia só até a última prevista (16399656); 16626111 tem a ficha de aterramento já reduzida |
-| 4989850 | 418 itens previstos | Obra grande |
+| exemplo (e2e/dados) | Código e quantidades digitados; descrição e unidade por PROCV na MaterialServico | Modelo dos testes desde o início |
+| do-amigo | Tudo por fórmula ligada à planilha externa da EDP (GERAR ADS / Dados), código em texto, 490 linhas de reserva | A DP imprime em 2 páginas já no original |
+| colado-1 a 3 | Só valores colados, sem nenhuma fórmula; reservas com #N/D colado | O Valor da linha prevista não acompanha o Aplicado (é valor fixo, como vem da EDP) |
+| texto-1 a 3 | Código digitado como texto; PROCV na MaterialServico | No original toda descrição sai #N/D (texto x número); depois do site, saem certas |
+| fechado-1 a 5 | Já fechados (Aplicado preenchido, fotos) | A soma da Check-list ia só até a última prevista (fechado-1); fechado-5 tem a ficha de aterramento já reduzida |
+| grande-1 | 418 itens previstos | Obra grande |
+
+A relação entre esses nomes e as notas fica só no computador do Italo (inventarios-teste/LEIA-ME.txt), fora do git.
 
 Todos os 14 entram no teste automático (src/core/inventarios.test.ts): geram um fechamento completo e passam na conferência automática.
 

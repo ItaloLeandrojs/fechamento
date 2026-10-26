@@ -14,9 +14,9 @@ setXmlImpl(DOMParser as never, XMLSerializer as never)
 
 const AMIGO = '../inventarios-teste/do-amigo/original.xlsx'
 // inventário sem nada preenchido: o do amigo; sem ele, um original da pasta de teste
-const AMIGO_OU_EXEMPLO = existsSync(AMIGO) ? AMIGO : '../inventarios-teste/14037543.xlsx'
+const AMIGO_OU_EXEMPLO = existsSync(AMIGO) ? AMIGO : '../inventarios-teste/colado-1.xlsx'
 
-describe.skipIf(!existsSync(AMIGO))('inventário com fórmulas para a planilha externa da EDP (nota 4001933383)', () => {
+describe.skipIf(!existsSync(AMIGO))('inventário com fórmulas para a planilha externa da EDP (do amigo)', () => {
   // material novo, material em kg novo e serviço novo (código 7…), nenhum previsto nesta obra
   const lancamentos = [
     { code: 30053440, oper: '2000', qty: 3 },
@@ -186,9 +186,9 @@ describe.skipIf(!existsSync('e2e/dados/inv.xlsx') || !existsSync(AMIGO_OU_EXEMPL
   }, 120000)
 })
 
-describe.skipIf(!existsSync('../inventarios-teste/14037543.xlsx'))('somas da Check-list com itens novos nas reservas', () => {
+describe.skipIf(!existsSync('../inventarios-teste/colado-1.xlsx'))('somas da Check-list com itens novos nas reservas', () => {
   it('estica só até a última linha nova, não até o fim da aba', async () => {
-    const res = await gerarFechamento(readFileSync('../inventarios-teste/14037543.xlsx'), { lancamentos: [{ code: 30053440, oper: '2000', qty: 3 }], aterramento: [], equipamentos: [] })
+    const res = await gerarFechamento(readFileSync('../inventarios-teste/colado-1.xlsx'), { lancamentos: [{ code: 30053440, oper: '2000', qty: 3 }], aterramento: [], equipamentos: [] })
     const wb = await Workbook.open(res.arquivo)
     const ck = new SheetEditor(await wb.doc(wb.sheetByPrefix('Check-list')!.path), wb.sharedStrings)
     const f = child(ck.cell('Q11')!, 'f')!.textContent!

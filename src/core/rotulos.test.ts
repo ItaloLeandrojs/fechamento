@@ -13,7 +13,7 @@ const editor = (linhas: string, merges: string[]) =>
 
 describe('valorDoRotulo (Check-list)', () => {
   it('acha o valor à direita do rótulo mesclado, como no modelo da EDP', () => {
-    const ed = editor(`<row r="4">${txt('C4', 'Nota / OV :')}<c r="G4"><v>16646602</v></c>${txt('M4', 'Data da fiscalização ')}<c r="Q4" s="1"/></row>`, ['C4:F4', 'M4:P4', 'Q4:R4'])
+    const ed = editor(`<row r="4">${txt('C4', 'Nota / OV :')}<c r="G4"><v>12345678</v></c>${txt('M4', 'Data da fiscalização ')}<c r="Q4" s="1"/></row>`, ['C4:F4', 'M4:P4', 'Q4:R4'])
     expect(valorDoRotulo(ed, 'Nota / OV', 'G4')).toBe('G4')
     // célula vazia mas que abre uma mesclagem também vale (a data ainda não foi preenchida)
     expect(valorDoRotulo(ed, 'Data da fiscalização', 'Q4')).toBe('Q4')

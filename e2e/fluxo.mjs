@@ -312,7 +312,7 @@ async function rodada({ largura, altura, tema, movel }) {
   const destino = path.join(SAIDA, `${tag}-${dl.suggestedFilename()}`)
   await dl.saveAs(destino)
   const tam = fs.statSync(destino).size
-  if (dl.suggestedFilename() !== '16646602 - ADS.xlsx') falhas.push(`[${tag}] nome do arquivo: ${dl.suggestedFilename()}`)
+  if (!/^\d+ - ADS\.xlsx$/.test(dl.suggestedFilename())) falhas.push(`[${tag}] nome do arquivo: ${dl.suggestedFilename()}`)
   if (tam < 1e6) falhas.push(`[${tag}] arquivo pequeno demais: ${tam} bytes`)
   // caixas FINAL/PARCIAL da Check-list: com X em PARCIAL no parcial, nada no final
   const zip = await JSZip.loadAsync(fs.readFileSync(destino))

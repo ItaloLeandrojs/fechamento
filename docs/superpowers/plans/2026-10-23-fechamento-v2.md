@@ -19,7 +19,7 @@
 - Cores: amarelo #F2B705 e grafite; tema claro e escuro pelo sistema (tokens de `src/index.css`); texto amarelo só onde passar contraste AA.
 - Não mudar as regras da ADS, o carimbo nem o formato do arquivo (exceto a ficha de aterramento, Tarefa 1).
 - Nada sai do navegador; a CSP de `vite.config.ts` continua; nenhum dado pessoal no repositório nem no `dist/`.
-- Dados reais de teste só em `e2e/dados/` (fora do git): `inv.xlsx` (16646602), `vala1.jpeg`, `med1.jpeg`, `dp.jpeg`, `equip1.jpeg`, `tec.json`.
+- Dados reais de teste só em `e2e/dados/` (fora do git): `inv.xlsx` (inventário de exemplo), `vala1.jpeg`, `med1.jpeg`, `dp.jpeg`, `equip1.jpeg`, `tec.json`.
 - Toda tarefa termina com `npm test` passando e `npx tsc -p tsconfig.app.json --noEmit` sem erro; tarefas de tela também com `npm run build && npm run e2e` passando e prints olhados em 1366, 1920 e 390 px.
 
 ## Foco da revisão
