@@ -340,8 +340,31 @@ async function rodada({ largura, altura, tema, movel }) {
   return destino
 }
 
+// inventário de modelo diferente (gerado à parte, fora do git): o aviso aparece ao abrir, e dá para continuar
+async function modeloDiferente() {
+  const arq = path.join(DADOS, 'inv-diferente.xlsx')
+  if (!fs.existsSync(arq)) return
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'light' })
+  await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
+  const page = await ctx.newPage()
+  await page.goto(URL_SITE)
+  await page.setInputFiles('input[type=file]', arq)
+  await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
+  const aviso = page.getByRole('region', { name: 'Este inventário é de um modelo diferente dos já testados' })
+  if (!(await aviso.count())) falhas.push('[modelo diferente] o aviso não apareceu')
+  else {
+    const t = await aviso.innerText()
+    for (const esperado of ['coluna M devia ser "Valor Serviço"', 'não tem o rodapé']) if (!t.includes(esperado)) falhas.push(`[modelo diferente] o aviso não fala de: ${esperado}`)
+  }
+  await axe(page, 'modelo diferente')
+  await page.screenshot({ path: path.join(PRINTS, '1366-light-08-modelo-diferente.png') })
+  placar.telas++
+  await ctx.close()
+}
+
 const gerados = []
 try {
+  await modeloDiferente()
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'light' }))
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'dark' }))
   gerados.push(await rodada({ largura: 1920, altura: 1080, tema: 'light' }))

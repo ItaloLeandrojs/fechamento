@@ -264,6 +264,22 @@ export default function App() {
               </span>
             </p>
           )}
+          {obra.resumo.diagnostico.diferencas.length > 0 && (
+            <section aria-labelledby="modelo-diferente" className="mb-6 rounded-panel border border-accent bg-accent-soft p-4 text-sm text-text">
+              <h2 id="modelo-diferente" className="flex gap-2.5 font-semibold">
+                <WarningCircle size={22} weight="bold" className="shrink-0 text-accent-text" aria-hidden="true" />
+                Este inventário é de um modelo diferente dos já testados
+              </h2>
+              <ul className="mt-2 ml-8 grid gap-1 list-disc pl-4">
+                {obra.resumo.diagnostico.diferencas.map((d, i) => (
+                  <li key={i} className="break-words">
+                    {d}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 ml-8">Pode continuar: gere, confira no Excel antes de enviar e mande este inventário para o Italo, para ele ser testado.</p>
+            </section>
+          )}
           {estado.boletim === null && <PerguntaBoletim onEscolher={(boletim) => set({ boletim })} />}
           <div className="entra">
             {secao === 'estruturas' && <Estruturas kits={kits} previstos={obra.codigosPrevistos} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}

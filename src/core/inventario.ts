@@ -2,6 +2,7 @@ import { Workbook } from './workbook'
 import { SheetEditor } from './sheet'
 import { ADS_SHEET, conferirTitulosAds, readAds, type AdsRow } from './ads'
 import { valorDoRotulo } from './rotulos'
+import { diagnosticarInventario, type Diagnostico } from './diagnostico'
 
 export interface ItemCatalogo {
   code: number
@@ -24,6 +25,8 @@ export interface ResumoInventario {
   abas: string[]
   /** O arquivo parece já ter sido fechado (pelo site ou à mão): melhor usar o original da EDP. */
   avisoJaFechado: string | null
+  /** Raio-x: modelo da ADS e o que é diferente dos inventários já testados. */
+  diagnostico: Diagnostico
 }
 
 function txt(v: unknown): string {
@@ -113,5 +116,7 @@ export async function lerInventario(data: ArrayBuffer | Uint8Array): Promise<Res
       ? `Este inventário já vem com Aplicado preenchido em ${comAplicado} linha(s) da ADS: parece que ele já foi fechado. O certo é usar o inventário original da EDP.`
       : null
 
-  return { nota, empreiteira, tipoObra, ordens, ads, catalogo: await lerCatalogo(wb), operacoes, abas: wb.sheets.map((s) => s.name), avisoJaFechado }
+  const diagnostico = await diagnosticarInventario(wb)
+
+  return { nota, empreiteira, tipoObra, ordens, ads, catalogo: await lerCatalogo(wb), operacoes, abas: wb.sheets.map((s) => s.name), avisoJaFechado, diagnostico }
 }

@@ -198,3 +198,55 @@ describe.skipIf(!existsSync('../inventarios-teste/colado-1.xlsx'))('somas da Che
     expect(f).not.toMatch(/\$L\$495/)
   }, 120000)
 })
+
+describe.skipIf(!TODOS.length)('diagnóstico ao abrir: os inventários já testados são modelo conhecido', () => {
+  it.each(TODOS)('%s', async (arquivo) => {
+    const { lerInventario } = await import('./inventario')
+    const { diagnostico } = await lerInventario(new Uint8Array(readFileSync(arquivo)))
+    expect(diagnostico.diferencas).toEqual([])
+    expect(diagnostico.modelo).not.toMatch(/desconhecido/)
+  }, 120000)
+})
+
+describe.skipIf(!existsSync('e2e/dados/inv.xlsx'))('diagnóstico ao abrir: acusa o que mudou', () => {
+  it('coluna de valor trocada, descrição com outra fórmula, campo da Check-list, DP sem quadro e aba sem rodapé', async () => {
+    const { diagnosticarInventario } = await import('./diagnostico')
+    const wb = await Workbook.open(readFileSync('e2e/dados/inv.xlsx'))
+    const ads = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    ads.setString('M1', 'Preço')
+    ads.setFormula('F2', 'B2&"x"')
+    wb.touch(wb.sheet('ADS')!.path)
+    const ck = wb.sheetByPrefix('Check-list')!
+    const eck = new SheetEditor(await wb.doc(ck.path), wb.sharedStrings)
+    for (const c of eck.findText('Contrato :')) eck.setString(c.ref, 'Nº do contrato')
+    const dp = wb.sheet('DP')!
+    const edp = new SheetEditor(await wb.doc(dp.path), wb.sharedStrings)
+    for (const c of edp.findText('LIVRE')) edp.setBlank(c.ref)
+    for (const c of edp.findText('Registro')) edp.setString(c.ref, 'Matrícula')
+    // sem quadro grande: desfaz as mesclagens da DP
+    const mc = edp.root.getElementsByTagName('mergeCells')[0]
+    mc.parentNode!.removeChild(mc)
+    const d = await diagnosticarInventario(wb)
+    const texto = d.diferencas.join('\n')
+    expect(texto).toMatch(/coluna M devia ser "Valor Serviço"/)
+    expect(texto).toMatch(/descrição da ADS vem de um jeito/)
+    expect(texto).toMatch(/não achei o campo "Contrato"/)
+    expect(texto).toMatch(/DP: não achei o quadro/)
+    expect(texto).toMatch(/"DP" não tem o rodapé/)
+    expect(d.modelo).toMatch(/desconhecido/)
+  }, 120000)
+})
+
+describe.skipIf(!existsSync('../inventarios-teste/colado-1.xlsx'))('conferência: preço que ficou de fora', () => {
+  it('coluna de preço com outro título: a linha nova fica sem preço e a conferência acusa', async () => {
+    const wb = await Workbook.open(readFileSync('../inventarios-teste/colado-1.xlsx'))
+    const ads = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    ads.setString('M1', 'Preço')
+    wb.touch(wb.sheet('ADS')!.path)
+    const original = await wb.save()
+    const dados = { lancamentos: [{ code: 71000919, oper: '2000', qty: 1 }], aterramento: [], equipamentos: [] }
+    const res = await gerarFechamento(original, dados)
+    const conf = await conferirArquivo(res.arquivo, dados, res)
+    expect(conf.problemas.join(' ')).toMatch(/usa a coluna M, que ficou sem preço/)
+  }, 120000)
+})

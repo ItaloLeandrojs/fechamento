@@ -82,6 +82,14 @@ export async function conferirArquivo(arquivo: Uint8Array, dados: DadosFechament
       .map(([col]) => col)
     ok(!semConta.length, `ADS linha nova ${r}: as colunas ${semConta.join(', ')} (valor e preço) ficaram sem a conta; o item sairia sem valor.`)
     ok(await ehVermelha(wb, ads.cell('E' + r)), `ADS linha nova ${r}: a linha não ficou vermelha.`)
+    // a conta do valor (L) usa células da própria linha: as de preço precisam ter conta ou número
+    const contaValor = child(ads.cell('L' + r) ?? ads.root, 'f')?.textContent ?? ''
+    const usadas = [...new Set([...contaValor.matchAll(new RegExp(`(?<![A-Z$])([A-Z]{1,2})${r}(?!\\d)`, 'g'))].map((m) => m[1]))]
+    const semPreco = usadas.filter((col) => !['H', 'I'].includes(col)).filter((col) => {
+      const c = ads.cell(col + r)
+      return !c || (!child(c, 'f') && typeof ads.cellValue(c) !== 'number')
+    })
+    ok(!semPreco.length, `ADS linha nova ${r}: a conta do valor usa a coluna ${semPreco.join(', ')}, que ficou sem preço; o item vai sair sem valor (ou com erro) no Excel.`)
   }
 
   // ---- Check-list: data, parcial/final, e se o total cobre os itens novos

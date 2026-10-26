@@ -100,7 +100,7 @@ interface Rodape {
  * (fórmula para a Check-list, valor digitado, rótulo trocado), então a busca
  * é pela posição, e não pelo texto "Colaborador Parceira".
  */
-function acharRodape(ed: SheetEditor): Rodape | undefined {
+export function acharRodape(ed: SheetEditor): Rodape | undefined {
   const regs = ed.findText('Registro').sort((a, b) => a.row - b.row)
   if (!regs.length) return undefined
   const baixo = regs[regs.length - 1]
@@ -263,7 +263,7 @@ interface BlocoFoto {
 }
 
 /** Blocos "Ponto ___ / Ponto ___" com os dois quadros de foto logo abaixo. */
-function blocosDeFoto(ed: SheetEditor): BlocoFoto[] {
+export function blocosDeFoto(ed: SheetEditor): BlocoFoto[] {
   const rotulos = ed.findText('Ponto')
   const porLinha = new Map<number, number[]>()
   for (const r of rotulos) porLinha.set(r.row, [...(porLinha.get(r.row) ?? []), r.col])
@@ -299,6 +299,20 @@ const ROTULOS_EQUIPAMENTO: [number, number, string][] = [
  * Os dados do transformador são gravados a uma distância fixa do "Ponto".
  * Se o desenho da ficha for outro, para em vez de gravar no lugar errado.
  */
+/** Lugares de equipamento da ficha: rótulo "Ponto" na coluna B (esquerda) ou T (direita). */
+export function vagasEquipamento(ed: SheetEditor): { row: number; col: number }[] {
+  return ed
+    .findText('Ponto')
+    .filter((r) => r.col === 2 || r.col === 20)
+    .sort((a, b) => a.row - b.row || a.col - b.col)
+}
+
+/** Confere o desenho de um lugar de equipamento (para com erro explicado se for outro). */
+export function conferirVagaEquipamento(ed: SheetEditor, vaga: { row: number; col: number }) {
+  const d = vaga.col - 2
+  conferirDesenhoEquipamento(ed, (col, row) => indexToCol(col + d) + row, vaga.row)
+}
+
 function conferirDesenhoEquipamento(ed: SheetEditor, at: (col: number, row: number) => string, p: number) {
   for (const [col, dl, rotulo] of ROTULOS_EQUIPAMENTO) {
     const ref = at(col, p + dl)
@@ -319,8 +333,7 @@ export async function aplicarEquipamentos(wb: Workbook, equips: Equipamento[]): 
   const ed = await editor(wb, aba.name)
 
   // cada faixa tem dois equipamentos: esquerda (a partir de B) e direita (a partir de T)
-  const rotulos = ed.findText('Ponto').filter((r) => r.col === 2 || r.col === 20)
-  const vagas = rotulos.sort((a, b) => a.row - b.row || a.col - b.col)
+  const vagas = vagasEquipamento(ed)
   if (equips.length > vagas.length) throw new Error(`A ficha tem lugar para ${vagas.length} equipamentos e foram lançados ${equips.length}.`)
 
   for (let i = 0; i < equips.length; i++) {
@@ -363,7 +376,7 @@ export async function aplicarEquipamentos(wb: Workbook, equips: Equipamento[]): 
 // ---------------- desligamento programado ----------------
 
 /** Maior intervalo mesclado da aba (na DP, o quadro da foto: B6:Z42). Pequeno demais não conta. */
-function maiorQuadro(ed: SheetEditor): Range | undefined {
+export function maiorQuadro(ed: SheetEditor): Range | undefined {
   const area = (m: Range) => (m.c2 - m.c1 + 1) * (m.r2 - m.r1 + 1)
   const maior = ed.merges().sort((a, b) => area(b) - area(a))[0]
   return maior && maior.r2 - maior.r1 >= 10 && area(maior) >= 100 ? maior : undefined

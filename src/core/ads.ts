@@ -301,7 +301,9 @@ function prepararLinhaNova(ed: SheetEditor, r: number, modelo: number | null, te
     const col = ref.replace(/\d+$/, '')
     if (formulas.has(col) || PREENCHIDAS.has(col)) continue
     const f = child(c, 'f')?.textContent ?? ''
-    if (EXTERNA.test(f) || (!f && c.getAttribute('t') === 'e')) ed.setBlank(ref)
+    // erro ou texto vazio colado (reservas do modelo colado): texto vazio numa conta dá #VALOR!, célula vazia conta zero
+    const coladoVazio = !f && (c.getAttribute('t') === 'e' || (typeof ed.cellValue(c) === 'string' && String(ed.cellValue(c)).trim() === ''))
+    if (EXTERNA.test(f) || coladoVazio) ed.setBlank(ref)
     else if (f) {
       // fórmula interna: o valor guardado era o da linha vazia
       const v = child(c, 'v')
@@ -327,7 +329,7 @@ async function referenciaDoContrato(wb: Workbook): Promise<string> {
  * A primeira linha com texto ou número digitado (total, observação...) encerra
  * as reservas: nada é escrito por cima dela.
  */
-function linhasDeReserva(ed: SheetEditor, rows: AdsRow[]): { reservas: number[]; bloqueio: number | null } {
+export function linhasDeReserva(ed: SheetEditor, rows: AdsRow[]): { reservas: number[]; bloqueio: number | null } {
   const ultimaPrevista = rows.reduce((m, r) => (r.code !== null ? Math.max(m, r.row) : m), 1)
   const reservas: number[] = []
   for (const r of rows) {
