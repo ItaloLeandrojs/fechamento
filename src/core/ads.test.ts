@@ -188,11 +188,39 @@ describe('linhas de reserva', () => {
     ).rejects.toThrow(/linha 5 tem conteúdo/)
   })
 
+  it('linha só com número digitado (um total sem rótulo) também não é reserva', async () => {
+    const soNumero = (r: number) => `<row r="${r}"><c r="I${r}"><v>42</v></c></row>`
+    const wb = await comLinhas(reserva(4) + soNumero(5))
+    await expect(
+      aplicarAds(wb, [{ code: 90011604, oper: '2000', qty: 3 }, { code: 12345678, oper: '2000', qty: 1 }], catalogo),
+    ).rejects.toThrow(/linha 5 tem conteúdo/)
+  })
+
   it('com reserva suficiente antes do total, o total fica intacto', async () => {
     const wb = await comLinhas(reserva(4) + total(5))
     await aplicarAds(wb, [{ code: 90011604, oper: '2000', qty: 3 }], catalogo)
     const ed = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
     expect(ed.value('F5')).toBe('TOTAL')
     expect(ed.value('E4')).toBe(90011604)
+  })
+})
+
+describe('contas da linha nova', () => {
+  it('não copia fórmula de preço travada na linha prevista (traria o preço do item previsto)', async () => {
+    const tit2 = TITULOS.replace('</row>', `${tit('L', 'Valor')}${tit('M', 'Valor Serviço')}${tit('Q', 'Valor Material')}</row>`)
+    const wb = await montar(tit2)
+    // linha prevista 3 com o preço travado em M$3 e uma constante em Q
+    const ed0 = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    ed0.setFormula('M3', 'M$3*1')
+    ed0.setFormula('Q3', '23.8')
+    ed0.setFormula('L3', 'IF(I3<>"",(M3*I3)+(I3*Q3),(H3*M3)+(H3*Q3))')
+    wb.touch(wb.sheet('ADS')!.path)
+    const res = await aplicarAds(wb, [{ code: 90011604, oper: '2000', qty: 3 }], catalogo)
+    const ed = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    const r = res.linhasNovas[0]
+    expect(child(ed.cell('M' + r)!, 'f')?.textContent).toMatch(/^IFERROR\(IF\(LEFT\(E\d+,1\)="7"/)
+    expect(child(ed.cell('Q' + r)!, 'f')?.textContent).toMatch(/MaterialServico!B:F/)
+    // a do valor acompanha a linha: é copiada
+    expect(child(ed.cell('L' + r)!, 'f')?.textContent).toBe(`IF(I${r}<>"",(M${r}*I${r})+(I${r}*Q${r}),(H${r}*M${r})+(H${r}*Q${r}))`)
   })
 })

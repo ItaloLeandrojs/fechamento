@@ -151,8 +151,8 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
                   A conferência do arquivo achou {problemasArquivo.length === 1 ? '1 problema' : `${problemasArquivo.length} problemas`}. Ele ainda não foi baixado.
                 </h2>
                 <ul className="grid gap-1.5 list-disc pl-5">
-                  {problemasArquivo.map((p) => (
-                    <li key={p} className="break-words">
+                  {problemasArquivo.map((p, i) => (
+                    <li key={i} className="break-words">
                       {p}
                     </li>
                   ))}

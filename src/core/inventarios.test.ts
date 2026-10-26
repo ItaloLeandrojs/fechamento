@@ -185,3 +185,16 @@ describe.skipIf(!existsSync('e2e/dados/inv.xlsx') || !existsSync(AMIGO_OU_EXEMPL
     expect((await lerInventario(new Uint8Array(readFileSync('e2e/dados/inv.xlsx')))).avisoJaFechado).toMatch(/Aplicado preenchido em \d+ linha/)
   }, 120000)
 })
+
+describe.skipIf(!existsSync('../inventarios-teste/14037543.xlsx'))('somas da Check-list com itens novos nas reservas', () => {
+  it('estica só até a última linha nova, não até o fim da aba', async () => {
+    const res = await gerarFechamento(readFileSync('../inventarios-teste/14037543.xlsx'), { lancamentos: [{ code: 30053440, oper: '2000', qty: 3 }], aterramento: [], equipamentos: [] })
+    const wb = await Workbook.open(res.arquivo)
+    const ck = new SheetEditor(await wb.doc(wb.sheetByPrefix('Check-list')!.path), wb.sharedStrings)
+    const f = child(ck.cell('Q11')!, 'f')!.textContent!
+    expect(res.ads.linhasNovas).toEqual([31])
+    // a soma já ia até 491 (cobre a reserva 31): fica como estava
+    expect(f).toMatch(/\$L\$491/)
+    expect(f).not.toMatch(/\$L\$495/)
+  }, 120000)
+})

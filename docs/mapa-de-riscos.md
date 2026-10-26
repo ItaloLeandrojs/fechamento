@@ -65,12 +65,12 @@ Todos os 14 entram no teste automático (src/core/inventarios.test.ts): geram um
 **22. Conferência automática do arquivo gerado.** ✔ Feita em 26/10 (src/core/conferencia.ts). Depois de gerar, e antes de baixar, o site abre o próprio arquivo e confere:
 
 - cada material lançado tem o aplicado certo na ADS, com descrição e unidade;
-- todos os códigos estão como número;
+- os códigos digitados estão como número (o código que é fórmula da EDP fica como veio);
 - toda linha nova está vermelha;
-- o carimbo saiu em cada aba de assinatura, e a data e o técnico estão certos;
+- o carimbo saiu em cada aba que tem rodapé de assinatura, e a data é a de hoje;
 - as fotos estão nos quadros: aterramento, equipamento e DP;
 - as caixas Parcial e Final estão como escolhido;
-- o Valor de Material bate com a soma da ADS.
+- o total da Check-list cobre as linhas novas, e o valor e o preço delas têm a conta (não saem a R$ 0).
 
 Se algo não bater, o site mostra o que foi e não esconde. Assim, um inventário diferente vira um aviso na tela, e não um arquivo errado enviado.
 

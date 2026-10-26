@@ -1,10 +1,10 @@
 import { Workbook } from './workbook'
 import { SheetEditor } from './sheet'
-import { child } from './xml'
+import { child, children } from './xml'
 import { ADS_SHEET, readAds } from './ads'
 import { dataExcel } from './fichas'
 import { nomesDasImagens } from './images'
-import { valorDoRotulo } from './rotulos'
+import { normalizarRotulo, valorDoRotulo } from './rotulos'
 import type { DadosFechamento, ResultadoFechamento } from './build'
 
 export interface Conferencia {
@@ -17,6 +17,16 @@ export interface Conferencia {
 /** Abas que levam o carimbo da parceira, quando existem no inventário. */
 const ABAS_COM_CARIMBO = ['Check-list', 'Ficha Medi', 'Ficha Equipamento', 'Ficha Ramal', 'Reparo', 'DP']
 const EXTERNA = /\[\d+\]/
+const TITULO_VALOR: Record<string, string> = { L: 'Valor', M: 'Valor Serviço', Q: 'Valor Material' }
+
+/** A célula usa uma fonte vermelha (as linhas novas saem inteiras em vermelho)? */
+async function ehVermelha(wb: Workbook, c: Element | undefined): Promise<boolean> {
+  if (!c || !wb.zip.file('xl/styles.xml')) return false
+  const st = (await wb.doc('xl/styles.xml')).documentElement
+  const xf = children(child(st, 'cellXfs')!, 'xf')[Number(c.getAttribute('s') || 0)]
+  const fonte = xf && children(child(st, 'fonts')!, 'font')[Number(xf.getAttribute('fontId') || 0)]
+  return (fonte && child(fonte, 'color')?.getAttribute('rgb')?.toUpperCase()) === 'FFFF0000'
+}
 const fmt = (n: number) => String(Math.round(n * 1000) / 1000).replace('.', ',')
 
 /**
@@ -65,6 +75,13 @@ export async function conferirArquivo(arquivo: Uint8Array, dados: DadosFechament
     )
     const presas = ['F', 'G', 'L', 'M', 'Q'].filter((col) => EXTERNA.test(child(ads.cell(col + r) ?? ads.root, 'f')?.textContent ?? ''))
     ok(!presas.length, `ADS linha nova ${r}: as colunas ${presas.join(', ')} ainda buscam na planilha externa da EDP.`)
+    // valor e preços: onde a ADS tem a coluna, a linha nova precisa da conta (sem ela o item sai a R$ 0)
+    const semConta = Object.entries(TITULO_VALOR)
+      .filter(([col, titulo]) => normalizarRotulo(String(ads.value(col + '1') ?? '')) === normalizarRotulo(titulo))
+      .filter(([col]) => !child(ads.cell(col + r) ?? ads.root, 'f'))
+      .map(([col]) => col)
+    ok(!semConta.length, `ADS linha nova ${r}: as colunas ${semConta.join(', ')} (valor e preço) ficaram sem a conta; o item sairia sem valor.`)
+    ok(await ehVermelha(wb, ads.cell('E' + r)), `ADS linha nova ${r}: a linha não ficou vermelha.`)
   }
 
   // ---- Check-list: data, parcial/final, e se o total cobre os itens novos
@@ -91,7 +108,8 @@ export async function conferirArquivo(arquivo: Uint8Array, dados: DadosFechament
   if (dados.tecnico?.carimbo) {
     for (const prefixo of ABAS_COM_CARIMBO) {
       const aba = wb.sheetByPrefix(prefixo)
-      if (!aba) continue
+      // só cobra o carimbo onde existe o rodapé de assinatura
+      if (!aba || !new SheetEditor(await wb.doc(aba.path), wb.sharedStrings).findText('Registro').length) continue
       ok(res.abasComCarimbo.includes(aba.name) && (await nomesDasImagens(wb, aba.name)).includes('Carimbo'), `A aba "${aba.name}" ficou sem o carimbo.`)
     }
   }

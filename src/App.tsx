@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowsClockwise, DownloadSimple, Lightning, WarningCircle } from '@phosphor-icons/react'
 import { lerInventario, type ItemCatalogo, type ResumoInventario } from './core/inventario'
 import { gerarFechamento } from './core/build'
@@ -115,8 +115,13 @@ export default function App() {
     return a
   }, [avisos, estado.aterramento, lancamentos.length])
 
-  // o que foi lançado mudou: a conferência de um arquivo anterior não vale mais
-  useEffect(() => setReprovado(null), [estado])
+  // o que foi lançado (ou o técnico) mudou: a conferência de um arquivo anterior não vale mais,
+  // e um arquivo que ainda estava sendo gerado com os dados antigos é descartado
+  const versao = useRef(0)
+  useEffect(() => {
+    versao.current += 1
+    setReprovado(null)
+  }, [estado, tecnicos])
 
   const baixar = (arquivo: Uint8Array, nome: string) => {
     const a = document.createElement('a')
@@ -132,6 +137,7 @@ export default function App() {
     setErroGerar(null)
     setResultado(null)
     setReprovado(null)
+    const versaoAoGerar = versao.current
     try {
       const tec = tecnicos.find((t) => t.registro === estado.tecnico)
       const dados: Parameters<typeof gerarFechamento>[1] = {
@@ -154,11 +160,17 @@ export default function App() {
         })),
         fotoDP: estado.temDP ? estado.fotoDP?.imagem : undefined,
         boletim: estado.boletim ?? undefined,
+        // a mesma data na gravação e na conferência (gerado perto da meia-noite não dá alarme falso)
+        hoje: new Date(),
       }
       const res = await gerarFechamento(obra.bytes, dados)
       const nome = `${obra.resumo.nota} - ADS.xlsx`
       // abre o arquivo gerado e confere se ficou o que foi lançado, antes de baixar
       const conf = await conferirArquivo(res.arquivo, dados, res)
+      if (versao.current !== versaoAoGerar) {
+        setErroGerar('Algo foi alterado enquanto o arquivo era gerado. Gere de novo para baixar a versão atual.')
+        return
+      }
       if (conf.problemas.length) {
         setReprovado({ arquivo: res.arquivo, nome, problemas: conf.problemas })
         return
