@@ -27,6 +27,9 @@ interface Props {
   resultado: string | null
   erro: string | null
   onGerar: () => void
+  /** O que a conferência automática achou no arquivo gerado (null = nada pendente). */
+  problemasArquivo: string[] | null
+  onBaixarMesmoAssim: () => void
 }
 
 /** Diferença entre o aplicado e o planejado, sem ruído de ponto flutuante. */
@@ -37,7 +40,7 @@ function Numero({ valor, tom }: { valor: number; tom?: 'ok' | 'perigo' }) {
   return <span className={`num ${tom === 'ok' ? 'text-ok font-semibold' : tom === 'perigo' ? 'text-danger font-semibold' : ''}`}>{formatarQtd(valor)}</span>
 }
 
-export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerando, resultado, erro, onGerar }: Props) {
+export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerando, resultado, erro, onGerar, problemasArquivo, onBaixarMesmoAssim }: Props) {
   const [soMudancas, setSoMudancas] = useState(true)
 
   const { linhas, novas, mudouOper } = useMemo(() => {
@@ -140,6 +143,25 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
               <p role="status" className="flex gap-2.5 text-sm text-ok bg-ok-soft rounded-ctl p-3">
                 <CheckCircle size={20} weight="bold" className="shrink-0 mt-0.5" /> <span className="min-w-0 break-words">{resultado}</span>
               </p>
+            )}
+            {problemasArquivo && (
+              <section role="alert" aria-labelledby="rev-conf" className="grid gap-2 max-h-[40dvh] overflow-y-auto rounded-ctl bg-danger-soft p-3 text-sm text-danger">
+                <h2 id="rev-conf" className="flex gap-2 font-semibold">
+                  <WarningCircle size={20} weight="bold" className="shrink-0" />
+                  A conferência do arquivo achou {problemasArquivo.length === 1 ? '1 problema' : `${problemasArquivo.length} problemas`}. Ele ainda não foi baixado.
+                </h2>
+                <ul className="grid gap-1.5 list-disc pl-5">
+                  {problemasArquivo.map((p) => (
+                    <li key={p} className="break-words">
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-text">Corrija e gere de novo. Se precisar do arquivo assim mesmo, baixe e confira no Excel antes de enviar.</p>
+                <Botao variante="secundario" className="w-full text-sm" onClick={onBaixarMesmoAssim}>
+                  <DownloadSimple size={18} /> Baixar mesmo assim
+                </Botao>
+              </section>
             )}
             {erro && (
               <p role="alert" className="flex gap-2.5 text-sm text-danger bg-danger-soft rounded-ctl p-3">

@@ -20,16 +20,16 @@ O site foi testado com **um inventário real só** (nota 16646602). Ele procura 
 | # | Situação | O que acontece hoje | Gravidade | Proteção proposta |
 |---|---|---|---|---|
 | 1 | Linha nova da ADS sem a fórmula PROCV na descrição (F) e na unidade (G), ou com a fórmula apontando para outra aba | **Corrigido em 26/10** (inventário 4001933383). As linhas de reserva buscavam tudo na planilha externa da EDP ([1]Dados) pelo ID. Agora a linha nova busca descrição, unidade e preço na MaterialServico da própria planilha, com TRIM ('KG ' com espaço ficava fora do Valor de Material) | - | Teste com o inventário real |
-| 2 | Colunas da ADS em outra ordem (o site supõe E código, F descrição, G unidade, H planejado, I aplicado, J adicional, K devolvido, O e P) | Quantidades gravadas na coluna errada | Alta | Ler os títulos da linha 1 antes de gravar; se não baterem, parar e avisar |
-| 3 | Linha sem código no meio ou no fim da ADS que não é reserva (total, observação, assinatura) | O site usa essa linha para um item novo e apaga o que tinha nela | Alta | Só reaproveitar linha de reserva de verdade (com o mesmo jeito das linhas da tabela); o resto fica intacto e a linha nova vai para baixo |
+| 2 | ✔ 26/10: confere os títulos e para com aviso. Colunas da ADS em outra ordem (o site supõe E código, F descrição, G unidade, H planejado, I aplicado, J adicional, K devolvido, O e P) | Quantidades gravadas na coluna errada | Alta | Ler os títulos da linha 1 antes de gravar; se não baterem, parar e avisar |
+| 3 | ✔ 26/10: só reserva depois da última prevista e sem texto; para e avisa se faltar. Linha sem código no meio ou no fim da ADS que não é reserva (total, observação, assinatura) | O site usa essa linha para um item novo e apaga o que tinha nela | Alta | Só reaproveitar linha de reserva de verdade (com o mesmo jeito das linhas da tabela); o resto fica intacto e a linha nova vai para baixo |
 | 4 | Código gravado como texto | Corrigido em 26/10 | - | Já coberto por teste |
 | 4b | Código que é **fórmula** da EDP (vem como texto) | **Corrigido em 26/10.** Converter para número quebrava o preço das linhas previstas (#VALOR! no Valor de Material e de Serviço da Check-list). Agora o código de fórmula fica como a EDP mandou; só o texto digitado vira número | - | Teste com o inventário real e conferência no Excel |
-| 5 | Check-list com a nota, o tipo de obra ou as ordens em outra célula (o site lê G4, G5, G9, G10 e G11) | Nome do arquivo baixado errado ("obra - ADS.xlsx") e cabeçalho do site vazio | Média | Achar pelos rótulos ("Nota / OV", "Tipo Obra", "Ordem/Diagrama") em vez da célula fixa |
-| 6 | Data da fiscalização em outra célula (o site grava em Q4) | Data do dia não entra, ou cai em outra célula | Alta | Achar pelo rótulo "Data da fiscalização" |
+| 5 | ✔ 26/10: pelo rótulo. Check-list com a nota, o tipo de obra ou as ordens em outra célula (o site lê G4, G5, G9, G10 e G11) | Nome do arquivo baixado errado ("obra - ADS.xlsx") e cabeçalho do site vazio | Média | Achar pelos rótulos ("Nota / OV", "Tipo Obra", "Ordem/Diagrama") em vez da célula fixa |
+| 6 | ✔ 26/10: pelo rótulo. Data da fiscalização em outra célula (o site grava em Q4) | Data do dia não entra, ou cai em outra célula | Alta | Achar pelo rótulo "Data da fiscalização" |
 | 7 | Caixas FINAL/PARCIAL em outro lugar (o site usa W5:X7) | Caixas a mais ao lado das existentes | Média | Achar pelos textos FINAL e PARCIAL; só criar em W5:X7 se não existirem |
-| 8 | Aba sem o rótulo "Registro" no rodapé | Aba fica sem carimbo, sem aviso | Alta | Mostrar, depois de gerar, a lista de abas que receberam carimbo e as que deviam ter recebido |
+| 8 | ✔ 26/10: a conferência automática acusa. Aba sem o rótulo "Registro" no rodapé | Aba fica sem carimbo, sem aviso | Alta | Mostrar, depois de gerar, a lista de abas que receberam carimbo e as que deviam ter recebido |
 | 9 | Ficha de aterramento com outro cabeçalho ou outro desenho dos quadros "Ponto" | O site para com erro; ou, se o desenho mudar pouco, a foto cai no quadro errado | Média/Alta | Conferência do arquivo gerado (item 22) |
-| 10 | Ficha de equipamento com outro desenho (o site usa distâncias fixas a partir do "Ponto": +3, +4, +7, +9 linhas) | Dados do transformador em células erradas, sem aviso | Alta | Achar cada campo pelo rótulo (Potência, Patrimônio, Série...) |
+| 10 | ✔ 26/10: confere os rótulos e para com aviso. Ficha de equipamento com outro desenho (o site usa distâncias fixas a partir do "Ponto": +3, +4, +7, +9 linhas) | Dados do transformador em células erradas, sem aviso | Alta | Achar cada campo pelo rótulo (Potência, Patrimônio, Série...) |
 | 11 | Aba DP sem LIVRE | Corrigido em 26/10 (acha o maior quadro) | - | Já coberto por teste |
 | 12 | Aba com nome diferente ("ADS ", "Ficha Medicao", "D.P.") | O site para com erro de aba não encontrada | Média | Aceitar variações de nome (sem acento, espaço, maiúscula) |
 | 13 | MaterialServico com as colunas em outra ordem (o site lê C código, D descrição, E unidade) | Busca de materiais vazia e descrições erradas | Alta | Achar as colunas pelo título |
@@ -41,22 +41,28 @@ O site foi testado com **um inventário real só** (nota 16646602). Ele procura 
 |---|---|---|
 | 16646602 | Código e quantidades digitados; descrição e unidade por PROCV na MaterialServico | Modelo dos testes desde o início |
 | 4001933383 | Tudo por fórmula ligada à planilha externa da EDP (GERAR ADS / Dados), código em texto, 490 linhas de reserva | Do amigo do Italo; a DP imprime em 2 páginas já no original |
+| 14037543, 14338896, 15867904 | Só valores colados, sem nenhuma fórmula; reservas com #N/D colado | O Valor da linha prevista não acompanha o Aplicado (é valor fixo, como vem da EDP) |
+| 16400313, 16404730, 16622743 | Código digitado como texto; PROCV na MaterialServico | No original toda descrição sai #N/D (texto x número); depois do site, saem certas |
+| 16399656, 16400821, 16404483, 16626102, 16626111 | Já fechados (Aplicado preenchido, fotos) | A soma da Check-list ia só até a última prevista (16399656); 16626111 tem a ficha de aterramento já reduzida |
+| 4989850 | 418 itens previstos | Obra grande |
+
+Todos os 14 entram no teste automático (src/core/inventarios.test.ts): geram um fechamento completo e passam na conferência automática.
 
 ## 2. Jeito de usar
 
 | # | Situação | O que acontece hoje | Gravidade | Proteção proposta |
 |---|---|---|---|---|
-| 15 | Subir de novo um arquivo que já passou pelo site | As linhas vermelhas de antes passam a contar como previstas (planejado 0); a ficha de aterramento já vem com as linhas apagadas | Alta | Marcar por dentro o arquivo gerado e avisar ao abrir: "este arquivo já foi gerado pelo site, use o inventário original" |
+| 15 | ✔ 26/10: marca no arquivo gerado + aviso; também avisa quando a ADS já vem com Aplicado. Subir de novo um arquivo que já passou pelo site | As linhas vermelhas de antes passam a contar como previstas (planejado 0); a ficha de aterramento já vem com as linhas apagadas | Alta | Marcar por dentro o arquivo gerado e avisar ao abrir: "este arquivo já foi gerado pelo site, use o inventário original" |
 | 16 | Navegador com a versão antiga do site guardada | A pessoa usa um site com erro já corrigido | Média | Mostrar a versão e a data no rodapé, e avisar quando houver versão nova |
 | 17 | Abrir o arquivo baixado no Modo Protegido do Excel | Fórmulas que dependem da ADS mostram o valor antigo até clicar em Habilitar edição: Valor de Material da Check-list, coluna de valor da ADS. A matrícula, o nome, a data, a descrição e a unidade já foram corrigidos | Média | Guardar o valor calculado também nessas somas, ou avisar na tela: "abra e clique em Habilitar edição antes de conferir os valores" |
-| 18 | Código que não existe na MaterialServico desta obra | Descrição #N/D na linha nova (é o que o Excel calcula) | Média | Avisar na revisão, antes de baixar, com o código |
+| 18 | ✔ 26/10: a conferência automática acusa antes de baixar. Código que não existe na MaterialServico desta obra | Descrição #N/D na linha nova (é o que o Excel calcula) | Média | Avisar na revisão, antes de baixar, com o código |
 | 19 | Foto do iPhone em HEIC, foto muito grande, celular com pouca memória | HEIC pode não abrir no computador; muitas fotos grandes podem travar o celular | Média | Mensagem clara para HEIC; reduzir cada foto logo ao anexar (já reduz para 1600 px) |
 | 20 | Fechar ou recarregar a página no meio | O navegador avisa, mas o que foi lançado se perde se a pessoa confirmar | Média | Guardar o rascunho da obra no navegador e oferecer continuar |
 | 21 | Técnico do carimbo cadastrado em outro computador | O carimbo não aparece na lista | Baixa | Já explicado na tela; importar o arquivo dos técnicos |
 
 ## 3. A rede de segurança que falta (proposta)
 
-**22. Conferência automática do arquivo gerado.** Depois de gerar, e antes de baixar, o site abre o próprio arquivo e confere:
+**22. Conferência automática do arquivo gerado.** ✔ Feita em 26/10 (src/core/conferencia.ts). Depois de gerar, e antes de baixar, o site abre o próprio arquivo e confere:
 
 - cada material lançado tem o aplicado certo na ADS, com descrição e unidade;
 - todos os códigos estão como número;

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowsClockwise, DownloadSimple, Lightning } from '@phosphor-icons/react'
+import { ArrowsClockwise, DownloadSimple, Lightning, WarningCircle } from '@phosphor-icons/react'
 import { lerInventario, type ItemCatalogo, type ResumoInventario } from './core/inventario'
 import { gerarFechamento } from './core/build'
+import { conferirArquivo } from './core/conferencia'
 import { normalizar } from './lib/busca'
 import { listarTecnicos, type TecnicoSalvo } from './lib/tecnicos'
 import { estadoInicial, montarLancamentos, numero, type Estado, type Kit } from './state'
@@ -38,6 +39,8 @@ export default function App() {
   const [gerando, setGerando] = useState(false)
   const [resultado, setResultado] = useState<string | null>(null)
   const [erroGerar, setErroGerar] = useState<string | null>(null)
+  // arquivo gerado que a conferência reprovou: só baixa se a pessoa pedir
+  const [reprovado, setReprovado] = useState<{ arquivo: Uint8Array; nome: string; problemas: string[] } | null>(null)
 
   // kits (carregados à parte para a tela inicial abrir rápido) e técnicos guardados
   useEffect(() => {
@@ -112,14 +115,26 @@ export default function App() {
     return a
   }, [avisos, estado.aterramento, lancamentos.length])
 
+  // o que foi lançado mudou: a conferência de um arquivo anterior não vale mais
+  useEffect(() => setReprovado(null), [estado])
+
+  const baixar = (arquivo: Uint8Array, nome: string) => {
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([arquivo as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+    a.download = nome
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+  }
+
   const gerar = async () => {
     if (!obra) return
     setGerando(true)
     setErroGerar(null)
     setResultado(null)
+    setReprovado(null)
     try {
       const tec = tecnicos.find((t) => t.registro === estado.tecnico)
-      const res = await gerarFechamento(obra.bytes, {
+      const dados: Parameters<typeof gerarFechamento>[1] = {
         lancamentos,
         tecnico: tec && { nome: tec.nome, registro: tec.registro, carimbo: { data: tec.carimbo.png, width: tec.carimbo.width, height: tec.carimbo.height, ext: 'png' } },
         aterramento: estado.aterramento.map((p) => ({
@@ -139,14 +154,17 @@ export default function App() {
         })),
         fotoDP: estado.temDP ? estado.fotoDP?.imagem : undefined,
         boletim: estado.boletim ?? undefined,
-      })
+      }
+      const res = await gerarFechamento(obra.bytes, dados)
       const nome = `${obra.resumo.nota} - ADS.xlsx`
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(new Blob([res.arquivo as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-      a.download = nome
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000)
-      setResultado(`Baixado: ${nome}. ${res.ads.linhasNovas.length} linha(s) nova(s); carimbo em ${res.abasComCarimbo.length} aba(s).`)
+      // abre o arquivo gerado e confere se ficou o que foi lançado, antes de baixar
+      const conf = await conferirArquivo(res.arquivo, dados, res)
+      if (conf.problemas.length) {
+        setReprovado({ arquivo: res.arquivo, nome, problemas: conf.problemas })
+        return
+      }
+      baixar(res.arquivo, nome)
+      setResultado(`Baixado: ${nome}. Conferência do arquivo: ${conf.conferidos} itens, tudo certo. ${res.ads.linhasNovas.length} linha(s) nova(s); carimbo em ${res.abasComCarimbo.length} aba(s).`)
     } catch (e) {
       setErroGerar((e as Error).message || 'Falha ao gerar a planilha.')
     } finally {
@@ -225,6 +243,15 @@ export default function App() {
             </p>
             {estado.boletim && <SeletorBoletim valor={estado.boletim} onEscolher={(boletim) => set({ boletim })} />}
           </div>
+          {obra.resumo.avisoJaFechado && (
+            <p role="note" className="mb-6 flex gap-2.5 rounded-panel border border-accent bg-accent-soft p-4 text-sm text-text">
+              <WarningCircle size={22} weight="bold" className="shrink-0 text-accent-text" aria-hidden="true" />
+              <span className="min-w-0 break-words">
+                <span className="font-semibold">Atenção: </span>
+                {obra.resumo.avisoJaFechado}
+              </span>
+            </p>
+          )}
           {estado.boletim === null && <PerguntaBoletim onEscolher={(boletim) => set({ boletim })} />}
           <div className="entra">
             {secao === 'estruturas' && <Estruturas kits={kits} previstos={obra.codigosPrevistos} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}
@@ -245,6 +272,13 @@ export default function App() {
                 resultado={resultado}
                 erro={erroGerar}
                 onGerar={gerar}
+                problemasArquivo={reprovado?.problemas ?? null}
+                onBaixarMesmoAssim={() => {
+                  if (!reprovado) return
+                  baixar(reprovado.arquivo, reprovado.nome)
+                  setResultado(`Baixado: ${reprovado.nome}, com ${reprovado.problemas.length} problema(s) da conferência. Confira no Excel antes de enviar.`)
+                  setReprovado(null)
+                }}
               />
             )}
           </div>

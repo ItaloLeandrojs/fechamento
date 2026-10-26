@@ -194,6 +194,33 @@ export class Workbook {
     this.touch('xl/workbook.xml')
   }
 
+  /** Nome definido oculto da pasta (ex.: a marca de arquivo gerado pelo site). */
+  async definedName(nome: string): Promise<string | null> {
+    const book = await this.doc('xl/workbook.xml')
+    const dn = descendants(book, 'definedName').find((d) => d.getAttribute('name') === nome)
+    return dn ? (dn.textContent ?? '') : null
+  }
+
+  async setDefinedName(nome: string, valor: string) {
+    const book = await this.doc('xl/workbook.xml')
+    let dns = child(book.documentElement, 'definedNames')
+    if (!dns) {
+      dns = book.createElementNS(NS.main, 'definedNames')
+      // ordem do esquema: sheets, functionGroups, externalReferences, definedNames, calcPr...
+      const antes = ['externalReferences', 'functionGroups', 'sheets'].map((n) => child(book.documentElement, n)).find(Boolean)!
+      book.documentElement.insertBefore(dns, antes.nextSibling)
+    }
+    let dn = children(dns, 'definedName').find((d) => d.getAttribute('name') === nome)
+    if (!dn) {
+      dn = book.createElementNS(NS.main, 'definedName')
+      dn.setAttribute('name', nome)
+      dn.setAttribute('hidden', '1')
+      dns.appendChild(dn)
+    }
+    dn.textContent = valor
+    this.touch('xl/workbook.xml')
+  }
+
   unhideSheet(name: string) {
     const s = this.sheet(name)
     if (s && s.el.getAttribute('state')) {

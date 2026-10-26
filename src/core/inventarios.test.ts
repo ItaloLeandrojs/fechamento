@@ -13,6 +13,8 @@ import { readAds } from './ads'
 setXmlImpl(DOMParser as never, XMLSerializer as never)
 
 const AMIGO = '../inventarios-teste/do-amigo/original.xlsx'
+// inventário sem nada preenchido: o do amigo; sem ele, um original da pasta de teste
+const AMIGO_OU_EXEMPLO = existsSync(AMIGO) ? AMIGO : '../inventarios-teste/14037543.xlsx'
 
 describe.skipIf(!existsSync(AMIGO))('inventário com fórmulas para a planilha externa da EDP (nota 4001933383)', () => {
   // material novo, material em kg novo e serviço novo (código 7…), nenhum previsto nesta obra
@@ -166,5 +168,20 @@ describe.skipIf(!existsSync('e2e/dados/inv.xlsx'))('a conferência automática a
     const texto = conf.problemas.join('\n')
     expect(texto).toMatch(/"DP" ficou sem o carimbo/)
     expect(texto).toMatch(/soma a ADS só até a linha/)
+  }, 120000)
+})
+
+describe.skipIf(!existsSync('e2e/dados/inv.xlsx') || !existsSync(AMIGO_OU_EXEMPLO))('aviso de inventário que já foi fechado', () => {
+  it('arquivo gerado pelo site volta com a marca e o aviso; o original da EDP não', async () => {
+    const { lerInventario } = await import('./inventario')
+    const original = new Uint8Array(readFileSync(AMIGO_OU_EXEMPLO))
+    expect((await lerInventario(original)).avisoJaFechado).toBeNull()
+    const gerado = await gerarFechamento(original, { lancamentos: [], aterramento: [], equipamentos: [], hoje: new Date(2026, 9, 26) })
+    expect((await lerInventario(gerado.arquivo)).avisoJaFechado).toMatch(/já foi gerado pelo site \(26\/10\/2026\)/)
+  }, 120000)
+
+  it('inventário com Aplicado já preenchido (fechado à mão) também avisa', async () => {
+    const { lerInventario } = await import('./inventario')
+    expect((await lerInventario(new Uint8Array(readFileSync('e2e/dados/inv.xlsx')))).avisoJaFechado).toMatch(/Aplicado preenchido em \d+ linha/)
   }, 120000)
 })

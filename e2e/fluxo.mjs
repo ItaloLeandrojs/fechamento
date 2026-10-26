@@ -179,6 +179,8 @@ async function rodada({ largura, altura, tema, movel }) {
     await page.waitForTimeout(150)
   }
 
+  // o inventário de teste já vem com Aplicado preenchido: o aviso de "já fechado" tem que aparecer
+  if (!(await page.getByRole('note').filter({ hasText: 'já vem com Aplicado preenchido' }).count())) falhas.push(`[${tag}] faltou o aviso de inventário já fechado`)
   // parcial ou final: obrigatório; sem escolher, a revisão acusa a pendência
   const boletim = tema === 'light' ? 'Parcial' : 'Final'
   const pergunta = page.getByRole('region', { name: 'Este fechamento é parcial ou final?' })
@@ -320,6 +322,9 @@ async function rodada({ largura, altura, tema, movel }) {
   if (boletim === 'Parcial' && marcado.some((m) => !m)) falhas.push(`[${tag}] parcial: faltou X ou rótulo em W7/X5/X7 (${marcado})`)
   if (boletim === 'Final' && marcado.some(Boolean)) falhas.push(`[${tag}] final: as caixas FINAL/PARCIAL deviam sumir (${marcado})`)
   await page.waitForSelector('[role=status]')
+  const status = await page.locator('[role=status]').innerText()
+  if (!/Conferência do arquivo: \d+ itens, tudo certo/.test(status)) falhas.push(`[${tag}] a conferência automática não aprovou o arquivo: ${status}`)
+  await foto('07-baixado')
 
   const barrados = []
   // ruído conhecido: o antivírus Kaspersky injeta um script externo, que o teste bloqueia

@@ -9,6 +9,9 @@ export interface ItemCatalogo {
   un: string
 }
 
+/** Nome oculto que o site grava em todo arquivo gerado, com a data. */
+export const MARCA_GERADO = 'FechamentoSiteGerado'
+
 export interface ResumoInventario {
   nota: string
   empreiteira: string
@@ -19,6 +22,8 @@ export interface ResumoInventario {
   /** Operações que aparecem na ADS, com a descrição da EDP. */
   operacoes: { oper: string; descricao: string }[]
   abas: string[]
+  /** O arquivo parece já ter sido fechado (pelo site ou à mão): melhor usar o original da EDP. */
+  avisoJaFechado: string | null
 }
 
 function txt(v: unknown): string {
@@ -100,5 +105,13 @@ export async function lerInventario(data: ArrayBuffer | Uint8Array): Promise<Res
   }
   const operacoes = [...opMap].map(([oper, descricao]) => ({ oper, descricao })).sort((a, b) => a.oper.localeCompare(b.oper))
 
-  return { nota, empreiteira, tipoObra, ordens, ads, catalogo: await lerCatalogo(wb), operacoes, abas: wb.sheets.map((s) => s.name) }
+  const marca = await wb.definedName(MARCA_GERADO)
+  const comAplicado = ads.filter((r) => r.code !== null && (r.aplicado ?? 0) > 0).length
+  const avisoJaFechado = marca
+    ? `Este arquivo já foi gerado pelo site (${marca.replace(/"/g, '')}). Gerar de novo em cima dele pode dar diferença: o certo é usar o inventário original da EDP.`
+    : comAplicado
+      ? `Este inventário já vem com Aplicado preenchido em ${comAplicado} linha(s) da ADS: parece que ele já foi fechado. O certo é usar o inventário original da EDP.`
+      : null
+
+  return { nota, empreiteira, tipoObra, ordens, ads, catalogo: await lerCatalogo(wb), operacoes, abas: wb.sheets.map((s) => s.name), avisoJaFechado }
 }

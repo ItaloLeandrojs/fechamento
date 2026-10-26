@@ -3,7 +3,7 @@ import { aplicarAds, type AdsResultado, type Lancamento } from './ads'
 import { aplicarAterramento, aplicarCarimbo, aplicarDP, aplicarEquipamentos, type Equipamento, type PontoAterramento, type Tecnico } from './fichas'
 import type { Imagem } from './images'
 import { atualizarValoresGuardados } from './cache'
-import { lerCatalogo } from './inventario'
+import { MARCA_GERADO, lerCatalogo } from './inventario'
 import { aplicarTipoBoletim, type TipoBoletim } from './boletim'
 
 export interface DadosFechamento {
@@ -35,6 +35,9 @@ export async function gerarFechamento(original: ArrayBuffer | Uint8Array, dados:
   const abasComCarimbo = dados.tecnico ? await aplicarCarimbo(wb, dados.tecnico, dados.hoje ?? new Date()) : []
   // depois de tudo gravado: o Modo Protegido do Excel mostra o valor guardado, sem recalcular
   await atualizarValoresGuardados(wb)
+  // marca de arquivo gerado: se ele voltar para o site, a pessoa é avisada
+  const d = dados.hoje ?? new Date()
+  await wb.setDefinedName(MARCA_GERADO, `"${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}"`)
   await wb.dropCalcChainAndRecalc()
   return { arquivo: await wb.save(), ads, abasComCarimbo }
 }
