@@ -14,6 +14,7 @@ import { Carimbo } from './components/Carimbo'
 import { Revisao } from './components/Revisao'
 import { Etapas } from './components/Etapas'
 import { Botao } from './components/ui'
+import { PerguntaBoletim, SeletorBoletim } from './components/Boletim'
 import { montarEtapas, type Secao } from './etapas'
 
 interface Obra {
@@ -95,6 +96,7 @@ export default function App() {
 
   const pendencias = useMemo(() => {
     const p: string[] = []
+    if (estado.boletim === null) p.push('Escolha se o fechamento é parcial ou final.')
     if (estado.tecnico === null) p.push('Escolha o técnico do carimbo.')
     if (estado.aterramento.length > LIMITE_PONTOS) p.push(`A ficha de aterramento aceita até ${LIMITE_PONTOS} pontos.`)
     estado.aterramento.forEach((pt, i) => !pt.ponto.trim() && p.push(`Aterramento: o ponto ${i + 1} está sem número.`))
@@ -136,6 +138,7 @@ export default function App() {
           fotos: e.fotos.map((f) => f.imagem),
         })),
         fotoDP: estado.temDP ? estado.fotoDP?.imagem : undefined,
+        boletim: estado.boletim ?? undefined,
       })
       const nome = `${obra.resumo.nota} - ADS.xlsx`
       const a = document.createElement('a')
@@ -177,7 +180,15 @@ export default function App() {
               <dt className="text-xs text-muted">Tipo de obra</dt>
               <dd className="text-base font-semibold truncate max-w-[320px]">{obra.resumo.tipoObra || '-'}</dd>
             </div>
-            <div className="min-w-0 hidden xl:block">
+            {estado.boletim && (
+              <div className="shrink-0">
+                <dt className="text-xs text-muted">Boletim</dt>
+                <dd>
+                  <SeletorBoletim valor={estado.boletim} onEscolher={(boletim) => set({ boletim })} compacto />
+                </dd>
+              </div>
+            )}
+            <div className="min-w-0 hidden 2xl:block">
               <dt className="text-xs text-muted">Ordens</dt>
               <dd className="num text-base font-semibold truncate max-w-[320px]">{obra.resumo.ordens.join(' / ') || '-'}</dd>
             </div>
@@ -207,10 +218,14 @@ export default function App() {
         />
 
         <main className="py-6 md:py-8 min-w-0" key={secao}>
-          <p className="md:hidden mb-4 text-sm text-muted">
-            Nota <span className="num font-semibold text-text">{obra.resumo.nota}</span>
-            {obra.resumo.tipoObra ? <> · {obra.resumo.tipoObra}</> : null}
-          </p>
+          <div className="md:hidden mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-sm text-muted">
+              Nota <span className="num font-semibold text-text">{obra.resumo.nota}</span>
+              {obra.resumo.tipoObra ? <> · {obra.resumo.tipoObra}</> : null}
+            </p>
+            {estado.boletim && <SeletorBoletim valor={estado.boletim} onEscolher={(boletim) => set({ boletim })} />}
+          </div>
+          {estado.boletim === null && <PerguntaBoletim onEscolher={(boletim) => set({ boletim })} />}
           <div className="entra">
             {secao === 'estruturas' && <Estruturas kits={kits} previstos={obra.codigosPrevistos} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}
             {secao === 'materiais' && <Itens tipo="material" catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}

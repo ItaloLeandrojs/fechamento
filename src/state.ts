@@ -1,4 +1,5 @@
 import type { Lancamento } from './core/ads'
+import type { TipoBoletim } from './core/boletim'
 import type { Foto } from './lib/imagem'
 
 /** Atualiza uma lista sempre a partir do valor mais recente (evita perder mudanças simultâneas). */
@@ -100,6 +101,8 @@ export interface Estado {
   temDP: boolean
   fotoDP?: Foto
   tecnico: number | null
+  /** Parcial ou final: obrigatório, perguntado ao abrir o inventário. */
+  boletim: TipoBoletim | null
 }
 
 export const estadoInicial: Estado = {
@@ -109,6 +112,7 @@ export const estadoInicial: Estado = {
   equipamentos: [],
   temDP: false,
   tecnico: null,
+  boletim: null,
 }
 
 let seq = 0

@@ -4,6 +4,7 @@ import { aplicarAterramento, aplicarCarimbo, aplicarDP, aplicarEquipamentos, typ
 import type { Imagem } from './images'
 import { atualizarValoresGuardados } from './cache'
 import { lerCatalogo } from './inventario'
+import { aplicarTipoBoletim, type TipoBoletim } from './boletim'
 
 export interface DadosFechamento {
   lancamentos: Lancamento[]
@@ -11,6 +12,8 @@ export interface DadosFechamento {
   aterramento: PontoAterramento[]
   equipamentos: Equipamento[]
   fotoDP?: Imagem
+  /** Parcial marca as caixas FINAL/PARCIAL da Check-list; final deixa em branco. */
+  boletim?: TipoBoletim
   hoje?: Date
 }
 
@@ -28,6 +31,7 @@ export async function gerarFechamento(original: ArrayBuffer | Uint8Array, dados:
   await aplicarAterramento(wb, dados.aterramento)
   await aplicarEquipamentos(wb, dados.equipamentos)
   await aplicarDP(wb, dados.fotoDP)
+  if (dados.boletim) await aplicarTipoBoletim(wb, dados.boletim)
   const abasComCarimbo = dados.tecnico ? await aplicarCarimbo(wb, dados.tecnico, dados.hoje ?? new Date()) : []
   // depois de tudo gravado: o Modo Protegido do Excel mostra o valor guardado, sem recalcular
   await atualizarValoresGuardados(wb)

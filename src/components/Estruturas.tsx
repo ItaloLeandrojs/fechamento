@@ -165,6 +165,11 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
               <span className="text-sm text-muted">{total === 1 ? 'estrutura' : 'estruturas'}</span>
             </p>
           </div>
+          {estruturas.length > 0 && (
+            <p className="mt-2 text-sm text-muted">
+              Em <span className="font-medium text-text">Ajustar materiais</span>, tire da soma o que não entra (ex.: as alças dos outros condutores) ou mude a quantidade.
+            </p>
+          )}
           {!estruturas.length ? (
             <Vazio icone={<Stack size={32} />} titulo="Nenhuma estrutura ainda" texto="Escolha a operação, procure o kit e clique em Adicionar." />
           ) : (
@@ -207,9 +212,15 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
                           </div>
                           {k && k.itens.length > 0 && (
                             <>
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <Botao variante="fantasma" className="-ml-2 text-sm" aria-expanded={abertoAjuste} onClick={() => setAjustando(abertoAjuste ? null : e.id)}>
-                                  <SlidersHorizontal size={18} /> Materiais ({k.itens.length})
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Botao
+                                  variante="secundario"
+                                  className={`text-sm ${abertoAjuste ? 'border-text' : ''}`}
+                                  aria-expanded={abertoAjuste}
+                                  aria-label={`Ajustar materiais de ${e.kit} (${k.itens.length})`}
+                                  onClick={() => setAjustando(abertoAjuste ? null : e.id)}
+                                >
+                                  <SlidersHorizontal size={18} /> Ajustar materiais <span className="num text-muted">({k.itens.length})</span>
                                   <CaretDown size={16} className={`transition-transform ${abertoAjuste ? 'rotate-180' : ''}`} />
                                 </Botao>
                                 {tirados > 0 && <Selo tom="perigo">{tirados} {tirados === 1 ? 'tirado' : 'tirados'}</Selo>}

@@ -321,14 +321,24 @@ export async function aplicarEquipamentos(wb: Workbook, equips: Equipamento[]): 
 
 // ---------------- desligamento programado ----------------
 
+/** Maior intervalo mesclado da aba (na DP, o quadro da foto: B6:Z42). Pequeno demais não conta. */
+function maiorQuadro(ed: SheetEditor): Range | undefined {
+  const area = (m: Range) => (m.c2 - m.c1 + 1) * (m.r2 - m.r1 + 1)
+  const maior = ed.merges().sort((a, b) => area(b) - area(a))[0]
+  return maior && maior.r2 - maior.r1 >= 10 && area(maior) >= 100 ? maior : undefined
+}
+
 export async function aplicarDP(wb: Workbook, foto: Imagem | undefined): Promise<void> {
   if (!foto) return
   const aba = wb.sheet('DP')
   if (!aba) throw new Error('A aba "DP" não existe neste inventário.')
   const ed = await editor(wb, aba.name)
   const livre = ed.findText('LIVRE')[0]
-  if (!livre) throw new Error('O quadro "LIVRE" da aba DP não foi encontrado.')
-  const caixa = rangeOuCelula(ed, livre.col, livre.row)
-  ed.setBlank(livre.ref)
+  // sem o LIVRE (arquivo que já passou pelo site, ou apagado à mão): o quadro é o maior bloco mesclado da aba
+  const caixa = livre ? rangeOuCelula(ed, livre.col, livre.row) : maiorQuadro(ed)
+  if (!caixa) throw new Error('Não achei o quadro da foto na aba DP (o espaço grande escrito LIVRE). Use o inventário original da EDP.')
+  if (livre) ed.setBlank(livre.ref)
+  // foto de um fechamento anterior no mesmo quadro: sai, para não ficar uma em cima da outra
+  await removerImagensNaFaixa(wb, aba.name, caixa.r1, caixa.r2)
   await inserirImagem(wb, aba.name, foto, encaixar(caixaDoIntervalo(ed, caixa), foto, 6), 'Desligamento programado')
 }

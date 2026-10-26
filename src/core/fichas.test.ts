@@ -4,7 +4,7 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { setXmlImpl } from './xml'
 import { Workbook } from './workbook'
 import { SheetEditor } from './sheet'
-import { aplicarCarimbo } from './fichas'
+import { aplicarCarimbo, aplicarDP } from './fichas'
 
 setXmlImpl(DOMParser as never, XMLSerializer as never)
 
@@ -115,5 +115,57 @@ describe('aplicarCarimbo com o rótulo "Registro" mesclado', () => {
     expect(ed.value('K56')).toBe(1234)
     expect(ed.value('M56')).toBe('FULANO')
     expect(ed.value('L56')).toBeNull()
+  })
+})
+
+/** Aba DP: cabeçalho, o quadro grande B6:Z42 (escrito LIVRE no inventário original) e o rodapé. */
+function dp(comLivre: boolean): Layout {
+  return {
+    aba: 'DP',
+    cols: '<col min="2" max="26" width="4" customWidth="1"/>',
+    linhas: {
+      2: txt('B2', 'DESLIGAMENTO PROGRAMADO'),
+      5: txt('B5', 'Tipo de Obra :') + txt('F5', 'PROJETO BT ZERO'),
+      6: comLivre ? txt('B6', 'LIVRE') : vazia('B6'),
+      46: txt('D46', 'Registro'),
+    },
+    mesclagens: ['B2:Z3', 'B5:E5', 'F5:Q5', 'B6:Z42', 'D46:E46'],
+  }
+}
+
+const fotoDP = { data: new Uint8Array([255, 216, 255]), width: 1000, height: 1400, ext: 'jpeg' as const }
+
+async function fotosDaDP(wb: Workbook) {
+  const dr = await wb.doc('xl/drawings/drawing1.xml')
+  return [...Array.from(dr.getElementsByTagName('xdr:twoCellAnchor'))].map((a) => Number(a.getElementsByTagName('xdr:from')[0].getElementsByTagName('xdr:row')[0].textContent) + 1)
+}
+
+describe('aplicarDP', () => {
+  it('inventário original: apaga o LIVRE e põe a foto dentro do quadro', async () => {
+    const wb = await montar(dp(true))
+    await aplicarDP(wb, fotoDP)
+    const ed = new SheetEditor(await wb.sheetDoc('DP'), wb.sharedStrings)
+    expect(ed.value('B6')).toBeNull()
+    const linhas = await fotosDaDP(wb)
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]).toBeGreaterThanOrEqual(6)
+    expect(linhas[0]).toBeLessThanOrEqual(42)
+  })
+
+  it('sem a palavra LIVRE (arquivo já gerado antes ou apagado à mão): acha o quadro pelo tamanho', async () => {
+    const wb = await montar(dp(false))
+    await aplicarDP(wb, fotoDP)
+    const linhas = await fotosDaDP(wb)
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]).toBeGreaterThanOrEqual(6)
+    expect(linhas[0]).toBeLessThanOrEqual(42)
+  })
+
+  it('arquivo já gerado de novo: troca a foto antiga em vez de empilhar outra', async () => {
+    const wb = await montar(dp(true))
+    await aplicarDP(wb, fotoDP)
+    const wb2 = await Workbook.open(await wb.save())
+    await aplicarDP(wb2, fotoDP)
+    expect(await fotosDaDP(wb2)).toHaveLength(1)
   })
 })

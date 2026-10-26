@@ -20,6 +20,7 @@ const reqPw = createRequire('C:/Users/italo.silva/Desktop/CURSO CLAUDE/AULA 4/si
 const reqAxe = createRequire('C:/Users/italo.silva/Desktop/LINKEDIN/cosampa-site/package.json')
 const { chromium } = reqPw('playwright')
 const { AxeBuilder } = reqAxe('@axe-core/playwright')
+const JSZip = createRequire(path.join(PROJ, 'package.json'))('jszip')
 
 for (const d of [SAIDA, PRINTS]) fs.mkdirSync(d, { recursive: true })
 
@@ -178,6 +179,17 @@ async function rodada({ largura, altura, tema, movel }) {
     await page.waitForTimeout(150)
   }
 
+  // parcial ou final: obrigatório; sem escolher, a revisão acusa a pendência
+  const boletim = tema === 'light' ? 'Parcial' : 'Final'
+  const pergunta = page.getByRole('region', { name: 'Este fechamento é parcial ou final?' })
+  if (!(await pergunta.count())) falhas.push(`[${tag}] a pergunta Parcial ou Final não apareceu ao abrir o inventário`)
+  await axe(page, `${tag} pergunta do boletim`)
+  await foto('01b-boletim')
+  await pergunta.getByRole('radio', { name: new RegExp('^' + boletim) }).click()
+  if (await pergunta.count()) falhas.push(`[${tag}] a pergunta do boletim não sumiu depois de escolher`)
+  const seletor = page.getByRole('radiogroup', { name: 'Boletim' }).filter({ visible: true })
+  if ((await seletor.getByRole('radio', { name: boletim, checked: true }).count()) !== 1) falhas.push(`[${tag}] o seletor do boletim não mostra ${boletim}`)
+
   // estruturas
   await page.getByRole('radio', { name: '2020 Poste novo' }).click()
   await page.getByPlaceholder(/Ex.: CE3/).fill('KP-CE1-P23')
@@ -191,7 +203,7 @@ async function rodada({ largura, altura, tema, movel }) {
   if (qtdCE1 !== '2') falhas.push(`[${tag}] quantidade do KP-CE1-P23 deveria ser 2, veio ${qtdCE1}`)
   // ajuste dos materiais da estrutura: tirar um material da soma e mudar a quantidade de outro
   const lancadas = page.locator('#lancadas').locator('xpath=..')
-  await lancadas.getByRole('button', { name: /^Materiais \(\d+\)/ }).first().click()
+  await lancadas.getByRole('button', { name: /^Ajustar materiais de / }).first().click()
   const caixasMat = lancadas.getByRole('checkbox')
   if ((await caixasMat.count()) < 2) falhas.push(`[${tag}] ajuste: a CE1 deveria mostrar os materiais com caixa de marcar`)
   await caixasMat.nth(0).uncheck()
@@ -202,9 +214,9 @@ async function rodada({ largura, altura, tema, movel }) {
     if (!(await lancadas.getByText(selo, { exact: true }).count())) falhas.push(`[${tag}] ajuste: falta o aviso "${selo}"`)
   }
   await axe(page, `${tag} ajuste de materiais`, { topo: false })
-  await lancadas.getByRole('button', { name: /^Materiais \(\d+\)/ }).first().scrollIntoViewIfNeeded()
+  await lancadas.getByRole('button', { name: /^Ajustar materiais de / }).first().scrollIntoViewIfNeeded()
   await foto('02b-ajuste-materiais')
-  await lancadas.getByRole('button', { name: /^Materiais \(\d+\)/ }).first().click()
+  await lancadas.getByRole('button', { name: /^Ajustar materiais de / }).first().click()
   // foco com a página rolada: busca e "Limpar busca" ficam sob o cabeçalho preso e o foco tem que trazê-los para baixo dele
   await page.getByPlaceholder(/Ex.: CE3/).fill('kp') // lista longa (60 kits)
   await focoLivre(page, page.getByPlaceholder(/Ex.: CE3/), 'Buscar estrutura', tag)
@@ -300,6 +312,13 @@ async function rodada({ largura, altura, tema, movel }) {
   const tam = fs.statSync(destino).size
   if (dl.suggestedFilename() !== '16646602 - ADS.xlsx') falhas.push(`[${tag}] nome do arquivo: ${dl.suggestedFilename()}`)
   if (tam < 1e6) falhas.push(`[${tag}] arquivo pequeno demais: ${tam} bytes`)
+  // caixas FINAL/PARCIAL da Check-list: com X em PARCIAL no parcial, nada no final
+  const zip = await JSZip.loadAsync(fs.readFileSync(destino))
+  const check = await zip.file('xl/worksheets/sheet1.xml').async('string')
+  const temTexto = (ref) => new RegExp(`<c r="${ref}"[^>]*(?:t="(?:s|inlineStr|str)")[^>]*>`).test(check)
+  const marcado = ['W7', 'X5', 'X7'].map(temTexto)
+  if (boletim === 'Parcial' && marcado.some((m) => !m)) falhas.push(`[${tag}] parcial: faltou X ou rótulo em W7/X5/X7 (${marcado})`)
+  if (boletim === 'Final' && marcado.some(Boolean)) falhas.push(`[${tag}] final: as caixas FINAL/PARCIAL deviam sumir (${marcado})`)
   await page.waitForSelector('[role=status]')
 
   const barrados = []
