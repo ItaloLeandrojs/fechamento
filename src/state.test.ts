@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { estadoInicial, montarLancamentos, temAjuste, type EstruturaLanc, type Kit } from './state'
+import { ehMaoDeObra, estadoInicial, montarLancamentos, temAjuste, type EstruturaLanc, type Kit } from './state'
 
 const ce3: Kit = {
   kit: 'CE3',
@@ -33,5 +33,14 @@ describe('ajuste dos materiais da estrutura', () => {
     expect(temAjuste({ id: 'a', kit: 'CE3', oper: '2000', qtd: 1 }, ce3)).toBe(false)
     expect(temAjuste({ id: 'a', kit: 'CE3', oper: '2000', qtd: 1, ajuste: { 1: 3 } }, ce3)).toBe(false)
     expect(temAjuste({ id: 'a', kit: 'CE3', oper: '2000', qtd: 1, ajuste: { 2: 0 } }, ce3)).toBe(true)
+  })
+})
+
+describe('mão de obra', () => {
+  it('é o código que começa com 7, qualquer que seja a unidade', () => {
+    expect(ehMaoDeObra(71003305)).toBe(true) // banheiro químico, unidade PEÇ
+    expect(ehMaoDeObra(71000919)).toBe(true) // SRV
+    expect(ehMaoDeObra(30053440)).toBe(false)
+    expect(ehMaoDeObra(20012345)).toBe(false) // material com unidade SRV na MaterialServico
   })
 })

@@ -37,6 +37,16 @@ export function kitEmQuilo(k: Kit): boolean {
   return k.itens.length > 0 && k.itens.every((i) => ehQuilo(i.un))
 }
 
+/**
+ * Mão de obra é todo código que começa com 7 (a aba MaterialServico marca esses
+ * como SERVIÇO, com unidade SRV, UN ou PEÇ; a própria ADS da EDP separa o preço
+ * de serviço do de material assim). Pela unidade SRV ficavam de fora serviços
+ * como o banheiro químico (PEÇ).
+ */
+export function ehMaoDeObra(code: number): boolean {
+  return String(code).startsWith('7')
+}
+
 export function nomeOper(oper: string): string {
   return OPERACOES.find((o) => o.oper === oper)?.nome ?? oper
 }

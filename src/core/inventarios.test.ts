@@ -250,3 +250,31 @@ describe.skipIf(!existsSync('../inventarios-teste/colado-1.xlsx'))('conferência
     expect(conf.problemas.join(' ')).toMatch(/usa a coluna M, que ficou sem preço/)
   }, 120000)
 })
+
+describe('cadastro próprio do site (banheiro químico, 71003305)', () => {
+  const lanc = { lancamentos: [{ code: 71003305, oper: '2000', qty: 2 }], aterramento: [], equipamentos: [] }
+
+  it.skipIf(!existsSync(AMIGO))('inventário que não traz o item: entra com descrição e unidade escritas, sem #N/D', async () => {
+    const { lerInventario } = await import('./inventario')
+    const original = readFileSync(AMIGO)
+    expect((await lerInventario(new Uint8Array(original))).catalogo.some((c) => c.code === 71003305)).toBe(true)
+    const res = await gerarFechamento(original, lanc)
+    const wb = await Workbook.open(res.arquivo)
+    const ed = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    const r = res.ads.linhasNovas[0]
+    expect(ed.value('F' + r)).toBe('I - 100-BANHEIRO QUIMICO')
+    expect(ed.value('G' + r)).toBe('PEÇ')
+    expect(child(ed.cell('F' + r)!, 'f')).toBeUndefined()
+    expect((await conferirArquivo(res.arquivo, lanc, res)).problemas).toEqual([])
+  }, 120000)
+
+  it.skipIf(!existsSync('../inventarios-teste/texto-1.xlsx'))('inventário que traz o item: usa o PROCV da MaterialServico', async () => {
+    const res = await gerarFechamento(readFileSync('../inventarios-teste/texto-1.xlsx'), lanc)
+    const wb = await Workbook.open(res.arquivo)
+    const ed = new SheetEditor(await wb.sheetDoc('ADS'), wb.sharedStrings)
+    const r = res.ads.linhasNovas[0]
+    expect(child(ed.cell('F' + r)!, 'f')?.textContent).toMatch(/MaterialServico/)
+    expect(ed.value('F' + r)).toBe('I - 100-BANHEIRO QUIMICO')
+    expect((await conferirArquivo(res.arquivo, lanc, res)).problemas).toEqual([])
+  }, 120000)
+})

@@ -3,6 +3,7 @@ import { SheetEditor } from './sheet'
 import { ADS_SHEET, conferirTitulosAds, readAds, type AdsRow } from './ads'
 import { valorDoRotulo } from './rotulos'
 import { diagnosticarInventario, type Diagnostico } from './diagnostico'
+import cadastroExtra from '../data/cadastro-extra.json'
 
 export interface ItemCatalogo {
   code: number
@@ -71,6 +72,16 @@ export async function lerCatalogo(wb: Workbook): Promise<ItemCatalogo[]> {
   return out
 }
 
+/**
+ * Itens cadastrados no próprio site (src/data/cadastro-extra.json) para quando a
+ * MaterialServico do inventário não os traz. Entram na busca; na ADS, a linha
+ * sai com descrição e unidade escritas direto (o PROCV daria #N/D).
+ */
+export function comCadastroExtra(catalogo: ItemCatalogo[]): ItemCatalogo[] {
+  const tem = new Set(catalogo.map((c) => c.code))
+  return [...catalogo, ...(cadastroExtra as ItemCatalogo[]).filter((c) => !tem.has(c.code))]
+}
+
 export async function lerInventario(data: ArrayBuffer | Uint8Array): Promise<ResumoInventario> {
   const wb = await Workbook.open(data)
   if (!wb.sheet(ADS_SHEET)) throw new Error('Este arquivo não tem a aba ADS. Confira se é o inventário da obra.')
@@ -118,5 +129,5 @@ export async function lerInventario(data: ArrayBuffer | Uint8Array): Promise<Res
 
   const diagnostico = await diagnosticarInventario(wb)
 
-  return { nota, empreiteira, tipoObra, ordens, ads, catalogo: await lerCatalogo(wb), operacoes, abas: wb.sheets.map((s) => s.name), avisoJaFechado, diagnostico }
+  return { nota, empreiteira, tipoObra, ordens, ads, catalogo: comCadastroExtra(await lerCatalogo(wb)), operacoes, abas: wb.sheets.map((s) => s.name), avisoJaFechado, diagnostico }
 }

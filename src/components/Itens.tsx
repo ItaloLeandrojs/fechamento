@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { MagnifyingGlass, Package, Plus, Trash, Wrench, X } from '@phosphor-icons/react'
 import { casa, formatarQtd, normalizar } from '../lib/busca'
-import { OPERACOES, ehQuilo, nomeOper, novoId, type Atualiza, type ItemLanc } from '../state'
+import { OPERACOES, ehMaoDeObra, ehQuilo, nomeOper, novoId, type Atualiza, type ItemLanc } from '../state'
 import type { ItemCatalogo } from '../core/inventario'
 import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Unidade, Vazio } from './ui'
 
@@ -27,7 +27,6 @@ interface Props {
 const LIMITE = 60
 const LIMITE_PREVISTOS = 200
 
-const ehServico = (un: string) => un.trim().toUpperCase() === 'SRV'
 
 type Base = { code: number; desc: string; un: string }
 
@@ -37,7 +36,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
   const servico = tipo === 'servico'
 
   const meus = useMemo(() => itens.filter((i) => i.tipo === tipo), [itens, tipo])
-  const prevDoTipo = useMemo(() => previstos.filter((p) => (servico ? ehServico(p.un) : !ehServico(p.un))), [previstos, servico])
+  const prevDoTipo = useMemo(() => previstos.filter((p) => ehMaoDeObra(p.code) === servico), [previstos, servico])
 
   const q = busca.trim()
 
@@ -53,7 +52,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
     if (!q) return { cadastro: lista, cadastroCortado: false }
     const mostrados = new Set(prevFiltrados.map((p) => p.code))
     for (const c of catalogo) {
-      if ((servico ? !ehServico(c.un) : ehServico(c.un)) || mostrados.has(c.code) || !casa(c.norm, q)) continue
+      if (ehMaoDeObra(c.code) !== servico || mostrados.has(c.code) || !casa(c.norm, q)) continue
       if (lista.length >= LIMITE) return { cadastro: lista, cadastroCortado: true } // achou o 61º: há mais
       lista.push(c)
     }
@@ -75,7 +74,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
 
   const titulo = servico ? 'Mão de obra' : 'Materiais avulsos'
   const sub = servico
-    ? 'Serviços (unidade SRV) que entram além das estruturas. Procure pelo nome do serviço ou pelo código.'
+    ? 'Serviços (código que começa com 7) que entram além das estruturas. Procure pelo nome do serviço ou pelo código.'
     : 'Materiais que faltaram nas estruturas ou foram aplicados soltos. Os previstos da obra aparecem primeiro.'
   const nomeItem = servico ? 'serviço' : 'material'
   const nomeItens = servico ? 'serviços' : 'materiais'

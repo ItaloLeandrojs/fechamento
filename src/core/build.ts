@@ -3,7 +3,7 @@ import { aplicarAds, type AdsResultado, type Lancamento } from './ads'
 import { aplicarAterramento, aplicarCarimbo, aplicarDP, aplicarEquipamentos, type Equipamento, type PontoAterramento, type Tecnico } from './fichas'
 import type { Imagem } from './images'
 import { atualizarValoresGuardados } from './cache'
-import { MARCA_GERADO, lerCatalogo } from './inventario'
+import { MARCA_GERADO, comCadastroExtra, lerCatalogo } from './inventario'
 import { aplicarTipoBoletim, type TipoBoletim } from './boletim'
 
 export interface DadosFechamento {
@@ -27,7 +27,8 @@ export interface ResultadoFechamento {
 export async function gerarFechamento(original: ArrayBuffer | Uint8Array, dados: DadosFechamento): Promise<ResultadoFechamento> {
   const wb = await Workbook.open(original)
   const catalogo = new Map((await lerCatalogo(wb)).map((i) => [i.code, { desc: i.desc, un: i.un }]))
-  const ads = await aplicarAds(wb, dados.lancamentos, catalogo)
+  const extras = new Map(comCadastroExtra([]).map((i) => [i.code, { desc: i.desc, un: i.un }]))
+  const ads = await aplicarAds(wb, dados.lancamentos, catalogo, extras)
   await aplicarAterramento(wb, dados.aterramento)
   await aplicarEquipamentos(wb, dados.equipamentos)
   await aplicarDP(wb, dados.fotoDP)

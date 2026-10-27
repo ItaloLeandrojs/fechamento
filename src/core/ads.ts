@@ -365,7 +365,7 @@ function guardarDescricao(ed: SheetEditor, r: number, code: number, catalogo: Ca
 }
 
 /** Grava o Aplicado (e Adicional/Devolvido) na ADS. */
-export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Catalogo = new Map()): Promise<AdsResultado> {
+export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Catalogo = new Map(), extras: Catalogo = new Map()): Promise<AdsResultado> {
   const info = wb.sheet(ADS_SHEET)!
   const ed = new SheetEditor(await wb.doc(info.path), wb.sharedStrings)
   conferirTitulosAds(ed)
@@ -447,7 +447,12 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
     if (ed.cell(COL.copiaPlan + r)) ed.setNumber(COL.copiaPlan + r, 0)
     escreverQuantidades(r, 0, n.qty)
     prepararLinhaNova(ed, r, ultimaPrevista, !!wb.sheet('MaterialServico'), contrato)
-    guardarDescricao(ed, r, n.code, catalogo)
+    const extra = !catalogo.has(n.code) ? extras.get(n.code) : undefined
+    if (extra) {
+      // cadastrado no site e ausente da MaterialServico desta obra: o PROCV daria #N/D
+      ed.setString(COL.desc + r, extra.desc)
+      ed.setString(COL.unid + r, extra.un)
+    } else guardarDescricao(ed, r, n.code, catalogo)
     // item que não estava previsto: a linha inteira em vermelho
     pintarVermelho(ed.row(r)!)
     // registra em que linha cada lançamento novo caiu

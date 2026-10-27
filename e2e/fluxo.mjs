@@ -243,7 +243,13 @@ async function rodada({ largura, altura, tema, movel }) {
   await foto('03-materiais')
 
   await irPara('Mão de obra')
+  // serviço com unidade PEÇ (código 7…): tem que aparecer na mão de obra
+  await page.getByPlaceholder(/Ex.: estr prim/).fill('banheiro quimico')
+  const banheiro = page.locator('main button[aria-label^="Adicionar I - 100-BANHEIRO QUIMICO"]').first()
+  if (!(await banheiro.count())) falhas.push(`[${tag}] o banheiro químico (71003305, PEÇ) não aparece na mão de obra`)
+  else await banheiro.click()
   await axe(page, `${tag} mão de obra`)
+  await foto('03b-mao-de-obra')
 
   // aterramento: as duas fotos ao mesmo tempo (já perdeu foto assim)
   await irPara('Aterramento')
