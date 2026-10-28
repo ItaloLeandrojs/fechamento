@@ -10,7 +10,7 @@ export const ADS_SHEET = 'ADS'
 /** Grupos de operação: dentro do grupo um item pode cair em outra operação prevista. */
 export const OPER_GROUPS: string[][] = [
   ['2000', '2010', '2020'], // instalação (ODI); 2000 tem preferência
-  ['2030', '2040'], // retirada (ODD)
+  ['2030', '2040', '2050', '2060', '2070'], // retirada/sucata (ODD)
 ]
 
 export function groupOf(oper: string): string[] {

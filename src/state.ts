@@ -18,14 +18,41 @@ export interface Kit {
   itens: ItemKit[]
 }
 
-/** Operações com o significado combinado com o escritório. */
-export const OPERACOES: { oper: string; nome: string; grupo: 'instalacao' | 'retirada' }[] = [
+export interface Operacao {
+  oper: string
+  nome: string
+  grupo: 'instalacao' | 'retirada'
+}
+
+/** Reserva para modelos antigos sem descrição de operação. A tela usa as operações lidas da ADS. */
+export const OPERACOES: Operacao[] = [
   { oper: '2000', nome: 'Poste existente', grupo: 'instalacao' },
   { oper: '2020', nome: 'Poste novo', grupo: 'instalacao' },
   { oper: '2010', nome: 'Transformador', grupo: 'instalacao' },
   { oper: '2030', nome: 'Retirada de poste', grupo: 'retirada' },
   { oper: '2040', nome: 'Retirada de condutor', grupo: 'retirada' },
 ]
+
+/**
+ * Monta as opções da tela a partir da própria ADS. ODI é instalação (pode usar kits);
+ * ODD é retirada/sucata (lançamento avulso). O número da operação não define o nome:
+ * em inventários diferentes, por exemplo, 2010 pode ser poste ou transformador.
+ */
+export function operacoesDaAds(origem: { oper: string; descricao: string }[]): Operacao[] {
+  if (!origem.length) return OPERACOES
+  const vistos = new Set<string>()
+  const out: Operacao[] = []
+  for (const o of origem) {
+    const oper = o.oper.trim()
+    if (!oper || vistos.has(oper)) continue
+    vistos.add(oper)
+    const descricao = o.descricao.trim()
+    const retirada = /(?:^|\s|-)ODD(?:\s|-|$)/i.test(descricao) || (!/ODI/i.test(descricao) && Number(oper) >= 2030)
+    const nome = descricao.replace(/\s*-\s*OD[ID](?:\s*-.*)?$/i, '').trim() || `Operação ${oper}`
+    out.push({ oper, nome, grupo: retirada ? 'retirada' : 'instalacao' })
+  }
+  return out.length ? out : OPERACOES
+}
 
 /** Item medido em quilo (cabo nu, cordoalha): a quantidade é lançada já em kg, sem conversão. */
 export function ehQuilo(un: string): boolean {
@@ -45,10 +72,6 @@ export function kitEmQuilo(k: Kit): boolean {
  */
 export function ehMaoDeObra(code: number): boolean {
   return String(code).startsWith('7')
-}
-
-export function nomeOper(oper: string): string {
-  return OPERACOES.find((o) => o.oper === oper)?.nome ?? oper
 }
 
 export interface EstruturaLanc {

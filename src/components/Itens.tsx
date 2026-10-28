@@ -1,7 +1,7 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { MagnifyingGlass, Package, Plus, Trash, Wrench, X } from '@phosphor-icons/react'
 import { casa, formatarQtd, normalizar } from '../lib/busca'
-import { OPERACOES, ehMaoDeObra, ehQuilo, nomeOper, novoId, type Atualiza, type ItemLanc } from '../state'
+import { ehMaoDeObra, ehQuilo, novoId, type Atualiza, type ItemLanc, type Operacao } from '../state'
 import type { ItemCatalogo } from '../core/inventario'
 import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Unidade, Vazio } from './ui'
 
@@ -18,6 +18,7 @@ export interface Previsto {
 
 interface Props {
   tipo: 'material' | 'servico'
+  operacoes: Operacao[]
   catalogo: CatalogoIndexado[]
   previstos: Previsto[]
   itens: ItemLanc[]
@@ -30,10 +31,14 @@ const LIMITE_PREVISTOS = 200
 
 type Base = { code: number; desc: string; un: string }
 
-export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
+export function Itens({ tipo, operacoes, catalogo, previstos, itens, onChange }: Props) {
   const [busca, setBusca] = useState('')
-  const [oper, setOper] = useState('2000')
+  const [oper, setOper] = useState(() => operacoes[0]?.oper ?? '2000')
   const servico = tipo === 'servico'
+
+  useEffect(() => {
+    if (!operacoes.some((o) => o.oper === oper) && operacoes[0]) setOper(operacoes[0].oper)
+  }, [oper, operacoes])
 
   const meus = useMemo(() => itens.filter((i) => i.tipo === tipo), [itens, tipo])
   const prevDoTipo = useMemo(() => previstos.filter((p) => ehMaoDeObra(p.code) === servico), [previstos, servico])
@@ -75,7 +80,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
   const titulo = servico ? 'Mão de obra' : 'Materiais avulsos'
   const sub = servico
     ? 'Serviços (código que começa com 7) que entram além das estruturas. Procure pelo nome do serviço ou pelo código.'
-    : 'Materiais que faltaram nas estruturas ou foram aplicados soltos. Os previstos da obra aparecem primeiro.'
+    : 'Materiais que faltaram nas estruturas, foram aplicados soltos ou viraram sucata. Os previstos da obra aparecem primeiro.'
   const nomeItem = servico ? 'serviço' : 'material'
   const nomeItens = servico ? 'serviços' : 'materiais'
 
@@ -135,7 +140,7 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
           <div className="grid gap-4 p-4 md:p-5 xl:p-4 border-b border-line">
             <div className="grid gap-2">
               <span className="text-xs font-medium text-muted">Lançar na operação</span>
-              <EscolhaOper compacto valor={oper} onChange={setOper} />
+              <EscolhaOper compacto valor={oper} onChange={setOper} operacoes={operacoes} />
             </div>
             <label className="relative block">
               <span className="sr-only">Buscar {nomeItem}</span>
@@ -201,13 +206,13 @@ export function Itens({ tipo, catalogo, previstos, itens, onChange }: Props) {
           {!meus.length ? (
             <Vazio icone={servico ? <Wrench size={32} /> : <Package size={32} />} titulo="Nada lançado ainda" texto="Escolha a operação, procure o item e clique em Adicionar." />
           ) : (
-            OPERACOES.filter((o) => meus.some((i) => i.oper === o.oper)).map((o) => {
+            operacoes.filter((o) => meus.some((i) => i.oper === o.oper)).map((o) => {
               const doGrupo = meus.filter((i) => i.oper === o.oper)
               return (
                 <div key={o.oper} className="mt-4">
                   <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface-2 px-3 h-10">
                     <h3 className="text-sm font-semibold">
-                      <span className="num">{o.oper}</span> <span className="font-medium text-muted">{nomeOper(o.oper)}</span>
+                      <span className="num">{o.oper}</span> <span className="font-medium text-muted">{o.nome}</span>
                     </h3>
                     <span className="num text-sm font-semibold">{doGrupo.length}</span>
                   </div>

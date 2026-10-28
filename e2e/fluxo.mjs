@@ -193,12 +193,12 @@ async function rodada({ largura, altura, tema, movel }) {
   if ((await seletor.getByRole('radio', { name: boletim, checked: true }).count()) !== 1) falhas.push(`[${tag}] o seletor do boletim não mostra ${boletim}`)
 
   // estruturas
-  await page.getByRole('radio', { name: '2020 Poste novo' }).click()
+  await page.getByRole('radio', { name: /^2020 / }).click()
   await page.getByPlaceholder(/Ex.: CE3/).fill('KP-CE1-P23')
   const add = page.getByRole('button', { name: 'Adicionar KP-CE1-P23 na operação 2020' })
   await add.click()
   await add.click()
-  await page.getByRole('radio', { name: '2010 Transformador' }).click()
+  await page.getByRole('radio', { name: /^2010 / }).click()
   await page.getByPlaceholder(/Ex.: CE3/).fill('trafo 75')
   await page.getByRole('button', { name: 'Adicionar KP-TRAFO 75KVA M na operação 2010' }).click()
   const qtdCE1 = await page.getByRole('textbox', { name: 'Quantidade de KP-CE1-P23' }).inputValue()

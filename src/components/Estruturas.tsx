@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CaretDown, MagnifyingGlass, Plus, SlidersHorizontal, Stack, Trash, X } from '@phosphor-icons/react'
 import { casa, formatarQtd } from '../lib/busca'
-import { OPERACOES, kitEmQuilo, nomeOper, novoId, qtdNoKit, temAjuste, type Atualiza, type EstruturaLanc, type Kit } from '../state'
+import { kitEmQuilo, novoId, qtdNoKit, temAjuste, type Atualiza, type EstruturaLanc, type Kit, type Operacao } from '../state'
 import { AjusteMateriais } from './AjusteMateriais'
 import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Vazio } from './ui'
 
@@ -11,6 +11,7 @@ export interface KitIndexado extends Kit {
 
 interface Props {
   kits: KitIndexado[]
+  operacoes: Operacao[]
   previstos: Set<number> // códigos que estão planejados na ADS
   estruturas: EstruturaLanc[]
   onChange: Atualiza<EstruturaLanc[]>
@@ -18,11 +19,15 @@ interface Props {
 
 const LIMITE = 60
 
-export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
+export function Estruturas({ kits, operacoes, previstos, estruturas, onChange }: Props) {
   const [busca, setBusca] = useState('')
-  const [oper, setOper] = useState('2000')
+  const [oper, setOper] = useState(() => operacoes[0]?.oper ?? '2000')
   const [aberto, setAberto] = useState<string | null>(null)
   const [ajustando, setAjustando] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!operacoes.some((o) => o.oper === oper) && operacoes[0]) setOper(operacoes[0].oper)
+  }, [oper, operacoes])
 
   const comPontos = useMemo(
     () => kits.map((k) => ({ k, nPrev: k.itens.filter((i) => previstos.has(i.code)).length })),
@@ -62,13 +67,13 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
 
   return (
     <div>
-      <Titulo titulo="Estruturas" sub="Procure o kit pelo nome ou pela descrição. Os materiais dele entram somados na ADS." />
+      <Titulo titulo="Estruturas" sub="Procure o kit pelo nome ou pela descrição. Os materiais dele entram somados nas operações de instalação." />
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.7fr)] gap-6 items-start">
         <Painel>
           <div className="grid gap-4 p-4 md:p-5 xl:p-4 border-b border-line">
             <div className="grid gap-2">
               <span className="text-xs font-medium text-muted">Lançar na operação</span>
-              <EscolhaOper compacto valor={oper} onChange={setOper} />
+              <EscolhaOper compacto valor={oper} onChange={setOper} operacoes={operacoes} />
             </div>
             <label className="relative block">
               <span className="sr-only">Buscar estrutura</span>
@@ -173,13 +178,13 @@ export function Estruturas({ kits, previstos, estruturas, onChange }: Props) {
           {!estruturas.length ? (
             <Vazio icone={<Stack size={32} />} titulo="Nenhuma estrutura ainda" texto="Escolha a operação, procure o kit e clique em Adicionar." />
           ) : (
-            OPERACOES.filter((o) => estruturas.some((e) => e.oper === o.oper)).map((o) => {
+            operacoes.filter((o) => estruturas.some((e) => e.oper === o.oper)).map((o) => {
               const doGrupo = estruturas.filter((e) => e.oper === o.oper)
               return (
                 <div key={o.oper} className="mt-4">
                   <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface-2 px-3 h-10">
                     <h3 className="text-sm font-semibold">
-                      <span className="num">{o.oper}</span> <span className="font-medium text-muted">{nomeOper(o.oper)}</span>
+                      <span className="num">{o.oper}</span> <span className="font-medium text-muted">{o.nome}</span>
                     </h3>
                     <span className="num text-sm font-semibold">{formatarQtd(doGrupo.reduce((s, e) => s + e.qtd, 0))}</span>
                   </div>
