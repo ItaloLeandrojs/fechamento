@@ -282,9 +282,9 @@ export default function App() {
           )}
           {estado.boletim === null && <PerguntaBoletim onEscolher={(boletim) => set({ boletim })} />}
           <div className="entra">
-            {secao === 'estruturas' && <Estruturas kits={kits} previstos={obra.codigosPrevistos} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}
-            {secao === 'materiais' && <Itens tipo="material" catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
-            {secao === 'servicos' && <Itens tipo="servico" catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
+            {secao === 'estruturas' && <Estruturas kits={kits} previstos={obra.codigosPrevistos} operacoes={obra.resumo.operacoes.filter((o) => o.tipo !== 'retirada')} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}
+            {secao === 'materiais' && <Itens tipo="material" catalogo={obra.catalogo} previstos={obra.previstos} operacoes={obra.resumo.operacoes} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
+            {secao === 'servicos' && <Itens tipo="servico" catalogo={obra.catalogo} previstos={obra.previstos} operacoes={obra.resumo.operacoes} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
             {secao === 'aterramento' && <Aterramento pontos={estado.aterramento} onChange={(fn) => setEstado((e) => ({ ...e, aterramento: fn(e.aterramento) }))} />}
             {secao === 'equipamentos' && <Equipamentos equips={estado.equipamentos} onChange={(fn) => setEstado((e) => ({ ...e, equipamentos: fn(e.equipamentos) }))} />}
             {secao === 'dp' && <DP tem={estado.temDP} foto={estado.fotoDP} onChange={(temDP, fotoDP) => set({ temDP, fotoDP })} />}

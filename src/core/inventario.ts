@@ -1,6 +1,6 @@
 import { Workbook } from './workbook'
 import { SheetEditor } from './sheet'
-import { ADS_SHEET, conferirTitulosAds, readAds, type AdsRow } from './ads'
+import { ADS_SHEET, conferirTitulosAds, readAds, tipoDaOperacao, type AdsRow, type TipoOperacao } from './ads'
 import { valorDoRotulo } from './rotulos'
 import { diagnosticarInventario, type Diagnostico } from './diagnostico'
 import cadastroExtra from '../data/cadastro-extra.json'
@@ -14,6 +14,13 @@ export interface ItemCatalogo {
 /** Nome oculto que o site grava em todo arquivo gerado, com a data. */
 export const MARCA_GERADO = 'FechamentoSiteGerado'
 
+/** Operação da ADS desta obra, com a descrição da EDP e o tipo (instalação, retirada ou outra). */
+export interface Operacao {
+  oper: string
+  descricao: string
+  tipo: TipoOperacao
+}
+
 export interface ResumoInventario {
   nota: string
   empreiteira: string
@@ -22,7 +29,7 @@ export interface ResumoInventario {
   ads: AdsRow[]
   catalogo: ItemCatalogo[]
   /** Operações que aparecem na ADS, com a descrição da EDP. */
-  operacoes: { oper: string; descricao: string }[]
+  operacoes: Operacao[]
   abas: string[]
   /** O arquivo parece já ter sido fechado (pelo site ou à mão): melhor usar o original da EDP. */
   avisoJaFechado: string | null
@@ -117,7 +124,7 @@ export async function lerInventario(data: ArrayBuffer | Uint8Array): Promise<Res
     const d = adsEd.isError('D' + r.row) ? '' : txt(adsEd.value('D' + r.row))
     opMap.set(r.oper, d)
   }
-  const operacoes = [...opMap].map(([oper, descricao]) => ({ oper, descricao })).sort((a, b) => a.oper.localeCompare(b.oper))
+  const operacoes = [...opMap].map(([oper, descricao]) => ({ oper, descricao, tipo: tipoDaOperacao(descricao) })).sort((a, b) => a.oper.localeCompare(b.oper))
 
   const marca = await wb.definedName(MARCA_GERADO)
   const comAplicado = ads.filter((r) => r.code !== null && (r.aplicado ?? 0) > 0).length

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CheckCircle, DownloadSimple, Info, WarningCircle } from '@phosphor-icons/react'
-import { decidirDestinos, groupOf, type AdsRow, type Lancamento } from '../core/ads'
+import { decidirDestinos, gruposDaAds, type AdsRow, type Lancamento } from '../core/ads'
 import type { ItemCatalogo } from '../core/inventario'
 import { formatarQtd } from '../lib/busca'
 import { Botao, Painel, Selo, Titulo, Vazio } from './ui'
@@ -61,6 +61,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
         mudouOper: destinos.some((d) => d.row === r.row && d.motivo === 'outra-operacao'),
       }))
     const agrup = new Map<string, LinhaPrevia>()
+    const groupOf = gruposDaAds(ads)
     for (const d of destinos) {
       if (d.row !== null) continue
       const k = d.code + '|' + groupOf(d.oper).join(',')

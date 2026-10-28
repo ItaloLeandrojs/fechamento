@@ -7,14 +7,32 @@ import { normalizarRotulo, valorDoRotulo } from './rotulos'
 
 export const ADS_SHEET = 'ADS'
 
-/** Grupos de operação: dentro do grupo um item pode cair em outra operação prevista. */
-export const OPER_GROUPS: string[][] = [
-  ['2000', '2010', '2020'], // instalação (ODI); 2000 tem preferência
-  ['2030', '2040'], // retirada (ODD)
-]
+export type TipoOperacao = 'instalacao' | 'retirada' | 'outra'
 
-export function groupOf(oper: string): string[] {
-  return OPER_GROUPS.find((g) => g.includes(oper)) ?? [oper]
+/**
+ * O número da operação muda de sentido em cada obra (2000 é instalação numa e
+ * retirada em outra); quem diz o tipo é a descrição da EDP: ODI = instalação,
+ * ODD = desinstalação (sucata). O resto (LANDIS, ODOI, ODSR...) fica "outra".
+ */
+export function tipoDaOperacao(descricao: string): TipoOperacao {
+  if (/\bODI\b/i.test(descricao)) return 'instalacao'
+  if (/\bODD\b/i.test(descricao)) return 'retirada'
+  return 'outra'
+}
+
+/**
+ * Operações da mesma família, da menor para a maior: um item que não está
+ * previsto na operação escolhida pode cair em outra do mesmo tipo (instalação
+ * com instalação, retirada com retirada). Operação "outra" não troca.
+ */
+export function gruposDaAds(rows: AdsRow[]): (oper: string) => string[] {
+  const tipo = new Map<string, TipoOperacao>()
+  for (const r of rows) if (r.oper && !tipo.has(r.oper)) tipo.set(r.oper, tipoDaOperacao(r.descOper))
+  return (oper) => {
+    const t = tipo.get(oper)
+    if (!t || t === 'outra') return [oper]
+    return [...tipo].filter(([, x]) => x === t).map(([o]) => o).sort()
+  }
 }
 
 export interface AdsRow {
@@ -22,6 +40,8 @@ export interface AdsRow {
   id: number | null
   item: string
   oper: string
+  /** Descrição da operação (coluna D): diz se é instalação (ODI) ou retirada (ODD). */
+  descOper: string
   code: number | null
   /** O código veio gravado como texto ("30050165"): sai convertido em número. */
   codigoEmTexto: boolean
@@ -116,6 +136,7 @@ export function readAds(ed: SheetEditor): AdsRow[] {
       id: typeof idV === 'number' ? idV : null,
       item: txt(ed.value(COL.item + r)),
       oper: ed.isError(COL.oper + r) ? '' : txt(ed.value(COL.oper + r)),
+      descOper: ed.isError(COL.descOper + r) ? '' : txt(ed.value(COL.descOper + r)),
       code,
       codigoEmTexto: emTexto,
       descricao: ed.isError(COL.desc + r) ? '' : txt(ed.value(COL.desc + r)),
@@ -146,6 +167,7 @@ export function decidirDestinos(rows: AdsRow[], lancs: Lancamento[]): Destino[] 
     if (prev) prev.qty += l.qty
     else soma.set(k, { ...l })
   }
+  const groupOf = gruposDaAds(rows)
   const out: Destino[] = []
   for (const l of soma.values()) {
     const cands = byCode.get(l.code) ?? []
@@ -155,8 +177,8 @@ export function decidirDestinos(rows: AdsRow[], lancs: Lancamento[]): Destino[] 
       continue
     }
     const grupo = groupOf(l.oper)
-    const noGrupo = cands.filter((r) => grupo.includes(r.oper))
-    const escolhida = noGrupo.find((r) => r.oper === grupo[0]) ?? noGrupo[0]
+    // outra operação do mesmo tipo prevista para o código: a de número menor
+    const escolhida = cands.filter((r) => r.oper !== l.oper && grupo.includes(r.oper)).sort((a, b) => a.oper.localeCompare(b.oper))[0]
     if (escolhida) {
       out.push({ ...l, row: escolhida.row, operUsada: escolhida.oper, motivo: 'outra-operacao' })
       continue
@@ -406,6 +428,7 @@ export async function aplicarAds(wb: Workbook, lancs: Lancamento[], catalogo: Ca
   }
 
   // linhas novas: soma por código dentro do mesmo grupo de operação
+  const groupOf = gruposDaAds(rows)
   const novas = new Map<string, { code: number; qty: number }>()
   for (const d of destinos) {
     if (d.row !== null) continue

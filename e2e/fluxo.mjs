@@ -193,12 +193,14 @@ async function rodada({ largura, altura, tema, movel }) {
   if ((await seletor.getByRole('radio', { name: boletim, checked: true }).count()) !== 1) falhas.push(`[${tag}] o seletor do boletim não mostra ${boletim}`)
 
   // estruturas
-  await page.getByRole('radio', { name: '2020 Poste novo' }).click()
+  // estrutura é só instalação: nenhuma operação de sucata (ODD) na lista
+  if (await page.getByRole('radiogroup', { name: 'Operação' }).getByRole('radio', { name: /sucata/ }).count()) falhas.push(`[${tag}] estruturas mostra operação de sucata`)
+  await page.getByRole('radio', { name: /^2020 / }).click()
   await page.getByPlaceholder(/Ex.: CE3/).fill('KP-CE1-P23')
   const add = page.getByRole('button', { name: 'Adicionar KP-CE1-P23 na operação 2020' })
   await add.click()
   await add.click()
-  await page.getByRole('radio', { name: '2010 Transformador' }).click()
+  await page.getByRole('radio', { name: /^2010 / }).click()
   await page.getByPlaceholder(/Ex.: CE3/).fill('trafo 75')
   await page.getByRole('button', { name: 'Adicionar KP-TRAFO 75KVA M na operação 2010' }).click()
   const qtdCE1 = await page.getByRole('textbox', { name: 'Quantidade de KP-CE1-P23' }).inputValue()
@@ -237,6 +239,8 @@ async function rodada({ largura, altura, tema, movel }) {
 
   // material avulso
   await irPara('Materiais')
+  // materiais mostram também as operações de sucata da obra (2030 e 2040 neste inventário)
+  if ((await page.getByRole('radiogroup', { name: 'Operação' }).getByRole('radio', { name: /sucata/ }).count()) !== 2) falhas.push(`[${tag}] materiais devia mostrar as 2 operações de sucata`)
   await page.getByPlaceholder(/Ex.: isolador/).fill('cinta poste 200')
   await page.locator('main button[aria-label^="Adicionar CINTA POSTE"]').first().click()
   await axe(page, `${tag} materiais`)
@@ -368,9 +372,37 @@ async function modeloDiferente() {
   await ctx.close()
 }
 
+// inventário com operações 2000 a 2070 (fora do git): prints das listas de operação
+async function operacoesDaObra() {
+  const arq = path.join(DADOS, 'inv-sucata.xlsx')
+  if (!fs.existsSync(arq)) return
+  for (const [largura, altura, movel] of [[1366, 768, false], [390, 844, true]]) {
+    const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: 'light', isMobile: movel, hasTouch: movel })
+    await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
+    const page = await ctx.newPage()
+    await page.goto(URL_SITE)
+    await page.setInputFiles('input[type=file]', arq)
+    await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
+    await page.getByRole('radio', { name: /^Parcial/ }).first().click()
+    const grupo = page.getByRole('radiogroup', { name: 'Operação' })
+    const nEstr = await grupo.getByRole('radio').count()
+    if (nEstr !== 3) falhas.push(`[operações ${largura}] estruturas devia ter 3 operações (2000 a 2020), tem ${nEstr}`)
+    await axe(page, `operações ${largura} estruturas`)
+    await page.screenshot({ path: path.join(PRINTS, `${largura}-light-09-operacoes-estruturas.png`) })
+    await page.getByRole('navigation', { name: 'Etapas' }).getByRole('button', { name: /^Materiais/ }).click()
+    const nMat = await page.getByRole('radiogroup', { name: 'Operação' }).getByRole('radio').count()
+    if (nMat !== 8) falhas.push(`[operações ${largura}] materiais devia ter as 8 operações, tem ${nMat}`)
+    await axe(page, `operações ${largura} materiais`)
+    await page.screenshot({ path: path.join(PRINTS, `${largura}-light-10-operacoes-materiais.png`) })
+    placar.telas += 2
+    await ctx.close()
+  }
+}
+
 const gerados = []
 try {
   await modeloDiferente()
+  await operacoesDaObra()
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'light' }))
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'dark' }))
   gerados.push(await rodada({ largura: 1920, altura: 1080, tema: 'light' }))

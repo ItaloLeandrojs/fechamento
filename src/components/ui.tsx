@@ -1,7 +1,8 @@
 import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Minus, Plus } from '@phosphor-icons/react'
 import { formatarQtd } from '../lib/busca'
-import { OPERACOES, ehQuilo } from '../state'
+import { ehQuilo, nomeOperacao } from '../state'
+import type { Operacao } from '../core/inventario'
 
 type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo'
 
@@ -69,26 +70,29 @@ export function Vazio({ icone, titulo, texto }: { icone: ReactNode; titulo: stri
   )
 }
 
-/** Escolha da operação (2000, 2020, 2010, 2030, 2040). No celular vira uma faixa rolável de uma linha. */
-export function EscolhaOper({ valor, onChange, compacto = false }: { valor: string; onChange: (o: string) => void; compacto?: boolean }) {
+/** Operações da ADS desta obra; as de retirada (ODD) levam a marca "sucata". */
+export function EscolhaOper({ operacoes, valor, onChange, compacto = false }: { operacoes: Operacao[]; valor: string; onChange: (o: string) => void; compacto?: boolean }) {
   return (
     <div role="radiogroup" aria-label="Operação" className="flex gap-1.5 py-1 -my-1 overflow-x-auto snap-x max-sm:-mx-4 max-sm:px-4 sm:flex-wrap sm:overflow-visible">
-      {OPERACOES.map((o) => {
+      {operacoes.map((o) => {
         const ativo = o.oper === valor
+        const nome = nomeOperacao(o)
         return (
           <button
             key={o.oper}
             type="button"
             role="radio"
             aria-checked={ativo}
-            aria-label={`${o.oper} ${o.nome}`}
+            aria-label={`${o.oper} ${nome}${o.tipo === 'retirada' ? ' (sucata)' : ''}`}
+            title={o.descricao}
             onClick={() => onChange(o.oper)}
             className={`press shrink-0 snap-start whitespace-nowrap rounded-ctl border h-12 md:h-11 ${compacto ? 'px-2 text-sm' : 'px-3 text-base'} text-left ${
               ativo ? 'border-text bg-text text-bg' : 'border-line-strong bg-surface text-text hover:bg-surface-2'
             }`}
           >
             <span className="num font-semibold">{o.oper}</span>
-            <span className={`ml-1.5 ${ativo ? 'opacity-85' : 'text-muted'}`}>{o.nome}</span>
+            <span className={`ml-1.5 ${ativo ? 'opacity-85' : 'text-muted'}`}>{nome}</span>
+            {o.tipo === 'retirada' && <span className={`ml-1.5 text-xs font-medium ${ativo ? 'opacity-85' : 'text-danger'}`}>sucata</span>}
           </button>
         )
       })}

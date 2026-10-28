@@ -1,5 +1,6 @@
 import type { Lancamento } from './core/ads'
 import type { TipoBoletim } from './core/boletim'
+import type { Operacao } from './core/inventario'
 import type { Foto } from './lib/imagem'
 
 /** Atualiza uma lista sempre a partir do valor mais recente (evita perder mudanças simultâneas). */
@@ -18,14 +19,20 @@ export interface Kit {
   itens: ItemKit[]
 }
 
-/** Operações com o significado combinado com o escritório. */
-export const OPERACOES: { oper: string; nome: string; grupo: 'instalacao' | 'retirada' }[] = [
-  { oper: '2000', nome: 'Poste existente', grupo: 'instalacao' },
-  { oper: '2020', nome: 'Poste novo', grupo: 'instalacao' },
-  { oper: '2010', nome: 'Transformador', grupo: 'instalacao' },
-  { oper: '2030', nome: 'Retirada de poste', grupo: 'retirada' },
-  { oper: '2040', nome: 'Retirada de condutor', grupo: 'retirada' },
-]
+/**
+ * Nome curto da operação, tirado da descrição da EDP desta obra
+ * ("POSTE - ODI - ET - 40" → "POSTE"). O número sozinho não diz nada: muda de obra para obra.
+ */
+export function nomeOperacao(o: Operacao | undefined): string {
+  return o?.descricao.split(' - ')[0].trim() ?? ''
+}
+
+/** Operações que têm algo lançado, na ordem da obra (e as que não estão na lista, no fim). */
+export function operacoesComLancadas(operacoes: Operacao[], lancados: { oper: string }[]): Operacao[] {
+  const usadas = new Set(lancados.map((l) => l.oper))
+  const fora = [...usadas].filter((o) => !operacoes.some((x) => x.oper === o)).map((oper) => ({ oper, descricao: '', tipo: 'outra' as const }))
+  return [...operacoes.filter((o) => usadas.has(o.oper)), ...fora]
+}
 
 /** Item medido em quilo (cabo nu, cordoalha): a quantidade é lançada já em kg, sem conversão. */
 export function ehQuilo(un: string): boolean {
@@ -47,9 +54,6 @@ export function ehMaoDeObra(code: number): boolean {
   return String(code).startsWith('7')
 }
 
-export function nomeOper(oper: string): string {
-  return OPERACOES.find((o) => o.oper === oper)?.nome ?? oper
-}
 
 export interface EstruturaLanc {
   id: string

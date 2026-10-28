@@ -278,3 +278,19 @@ describe('cadastro próprio do site (banheiro químico, 71003305)', () => {
     expect((await conferirArquivo(res.arquivo, lanc, res)).problemas).toEqual([])
   }, 120000)
 })
+
+describe.skipIf(!existsSync('../inventarios-teste/sucata-1.xlsx'))('operações da obra (inventário com 2000 a 2070)', () => {
+  it('lê o tipo de cada operação pela descrição: 2000 a 2020 instalação, 2030 a 2070 retirada', async () => {
+    const { lerInventario } = await import('./inventario')
+    const r = await lerInventario(new Uint8Array(readFileSync('../inventarios-teste/sucata-1.xlsx')))
+    expect(r.operacoes.map((o) => `${o.oper}:${o.tipo}`)).toEqual([
+      '2000:instalacao', '2010:instalacao', '2020:instalacao',
+      '2030:retirada', '2040:retirada', '2050:retirada', '2060:retirada', '2070:retirada',
+    ])
+  }, 120000)
+
+  it('sucata lançada numa operação de retirada onde não está prevista cai na de retirada prevista, nunca na instalação', async () => {
+    const res = await gerarFechamento(readFileSync('../inventarios-teste/sucata-1.xlsx'), { lancamentos: [{ code: 90000092, oper: '2070', qty: 12 }], aterramento: [], equipamentos: [] })
+    expect(res.ads.destinos[0]).toMatchObject({ operUsada: '2030', motivo: 'outra-operacao' })
+  }, 120000)
+})

@@ -4,8 +4,16 @@ import { shiftFormula } from './sheet'
 import { dataExcel, mesAnoExcel } from './fichas'
 import { encaixar } from './images'
 
-const linha = (row: number, code: number, oper: string, planejado = 1): AdsRow => ({
-  row, id: row, item: '', oper, code, descricao: '', unidade: '', planejado, aplicado: null, ordem: '',
+// descrição da operação como vem na coluna D da ADS (o tipo sai daí, não do número)
+const DESC: Record<string, string> = {
+  '2000': 'CONDUTOR (VÃO/RM LIG) - ODI - ET - 40',
+  '2010': 'TRANSF DIST AÉREO VERDE - ODI - ET - 40',
+  '2020': 'POSTE - ODI - ET - 40',
+  '2030': 'POSTE - ODD - ET - 40',
+  '2040': 'CONDUTOR (VÃO/RM LIG) - ODD - ET - 40',
+}
+const linha = (row: number, code: number, oper: string, planejado = 1, descOper = DESC[oper] ?? ''): AdsRow => ({
+  row, id: row, item: '', oper, descOper, code, codigoEmTexto: false, descricao: '', unidade: '', planejado, aplicado: null, ordem: '',
 })
 
 describe('regras da ADS', () => {
@@ -17,6 +25,7 @@ describe('regras da ADS', () => {
     linha(6, 333, '2010'),
     linha(7, 444, '2030'),
     linha(8, 555, '2010'),
+    linha(9, 666, '2040'),
   ]
 
   it('previsto na operação escolhida vai nela', () => {
@@ -42,6 +51,20 @@ describe('regras da ADS', () => {
 
   it('não previsto vira linha nova', () => {
     expect(decidirDestinos(rows, [{ code: 999, oper: '2000', qty: 3 }])[0]).toMatchObject({ row: null, operUsada: '', motivo: 'nova' })
+  })
+
+  it('o tipo vem da descrição: numa obra em que 2000 é retirada (ODD), ela não recebe instalação', () => {
+    const outra = [linha(2, 111, '2000', 1, 'POSTE - ODD - ET - 40'), linha(3, 222, '2010', 1, 'POSTE - ODI - CT - 40'), linha(4, 222, '2020', 1, 'CONDUTOR - ODI - CT - 40')]
+    // instalação lançada em 2020 de um código previsto só na retirada 2000: vira linha nova
+    expect(decidirDestinos(outra, [{ code: 111, oper: '2020', qty: 1 }])[0]).toMatchObject({ row: null, motivo: 'nova' })
+    // 2010 e 2020 são instalação: o item cai na 2010 prevista
+    expect(decidirDestinos(outra, [{ code: 222, oper: '2010', qty: 1 }])[0]).toMatchObject({ row: 3, motivo: 'prevista' })
+  })
+
+  it('operação sem ODI nem ODD (LANDIS, ODOI...) fica só nela mesma', () => {
+    const landis = [linha(2, 111, '2000', 1, 'CONCENTRADOR SECUNDARIO - LANDIS'), linha(3, 222, '2010', 1, 'MÓDULO - LANDIS')]
+    expect(decidirDestinos(landis, [{ code: 111, oper: '2010', qty: 1 }])[0]).toMatchObject({ row: null, motivo: 'nova' })
+    expect(decidirDestinos(landis, [{ code: 111, oper: '2000', qty: 1 }])[0]).toMatchObject({ row: 2, motivo: 'prevista' })
   })
 
   it('soma lançamentos repetidos e ignora quantidade zero', () => {
