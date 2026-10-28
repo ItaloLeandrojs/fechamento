@@ -392,6 +392,24 @@ async function operacoesDaObra() {
     await page.getByRole('navigation', { name: 'Etapas' }).getByRole('button', { name: /^Materiais/ }).click()
     const nMat = await page.getByRole('radiogroup', { name: 'Operação' }).getByRole('radio').count()
     if (nMat !== 8) falhas.push(`[operações ${largura}] materiais devia ter as 8 operações, tem ${nMat}`)
+    // busca: na instalação, nada de sucata (9…); na sucata, os 9… vêm primeiro
+    const codigosDaBusca = async () => (await page.locator('main ul li p.text-sm').allInnerTexts()).map((t) => t.trim().slice(0, 8)).filter((t) => /^\d{8}$/.test(t))
+    await page.getByRole('radio', { name: /^2010 / }).click()
+    await page.getByPlaceholder(/Ex.: isolador/).fill('cinta poste')
+    const naInstalacao = await codigosDaBusca()
+    if (!naInstalacao.length) falhas.push(`[operações ${largura}] a busca na instalação não trouxe nada (a conferência não valeria)`)
+    if (naInstalacao.some((c) => c.startsWith('9'))) falhas.push(`[operações ${largura}] instalação mostrou sucata na busca`)
+    await page.getByRole('radio', { name: /^2070 / }).click()
+    const naSucata = await codigosDaBusca()
+    if (!naSucata.length || !naSucata[0].startsWith('9')) falhas.push(`[operações ${largura}] na sucata os códigos 9… deviam vir primeiro (veio ${naSucata[0]})`)
+    // material novo numa operação de sucata: entra, mas com aviso
+    const cod3 = (await codigosDaBusca()).find((c) => c.startsWith('3'))
+    if (!cod3) falhas.push(`[operações ${largura}] a busca na sucata não trouxe material novo (3…) para testar o aviso`)
+    else {
+      await page.getByPlaceholder(/Ex.: isolador/).fill(cod3)
+      await page.locator('main button[aria-label^="Adicionar"]').first().click()
+      if (!(await page.getByText('Material novo numa operação de sucata: confira').count())) falhas.push(`[operações ${largura}] faltou o aviso de material novo na sucata`)
+    }
     await axe(page, `operações ${largura} materiais`)
     await page.screenshot({ path: path.join(PRINTS, `${largura}-light-10-operacoes-materiais.png`) })
     placar.telas += 2
@@ -399,10 +417,31 @@ async function operacoesDaObra() {
   }
 }
 
+// inventário só de desativação (só ordem 19, fora do git): Estruturas avisa e não deixa adicionar
+async function soDesativacao() {
+  const arq = path.join(DADOS, 'inv-desativacao.xlsx')
+  if (!fs.existsSync(arq)) return
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'light' })
+  await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
+  const page = await ctx.newPage()
+  await page.goto(URL_SITE)
+  await page.setInputFiles('input[type=file]', arq)
+  await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
+  await page.getByRole('radio', { name: /^Parcial/ }).first().click()
+  if (!(await page.getByRole('note').filter({ hasText: 'só de desativação' }).count())) falhas.push('[só desativação] faltou o aviso em Estruturas')
+  const botoes = page.locator('main button[aria-label^="Adicionar"]')
+  if ((await botoes.count()) && (await botoes.first().isEnabled())) falhas.push('[só desativação] o Adicionar devia estar desligado')
+  await axe(page, 'só desativação')
+  await page.screenshot({ path: path.join(PRINTS, '1366-light-11-so-desativacao.png') })
+  placar.telas++
+  await ctx.close()
+}
+
 const gerados = []
 try {
   await modeloDiferente()
   await operacoesDaObra()
+  await soDesativacao()
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'light' }))
   gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'dark' }))
   gerados.push(await rodada({ largura: 1920, altura: 1080, tema: 'light' }))

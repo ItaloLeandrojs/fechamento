@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { MagnifyingGlass, Package, Plus, Trash, Wrench, X } from '@phosphor-icons/react'
 import { casa, formatarQtd, normalizar } from '../lib/busca'
-import { nomeOperacao, operacoesComLancadas, ehMaoDeObra, ehQuilo, novoId, type Atualiza, type ItemLanc } from '../state'
+import { ehSucata, materialNovoEmSucata, nomeOperacao, operacoesComLancadas, primeiroOs, ehMaoDeObra, ehQuilo, novoId, type Atualiza, type ItemLanc } from '../state'
 import type { ItemCatalogo } from '../core/inventario'
 import type { Operacao } from '../core/inventario'
 import { Botao, EscolhaOper, Painel, Quantidade, Selo, SeloLancado, Titulo, Unidade, Vazio } from './ui'
@@ -39,7 +39,28 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
   const servico = tipo === 'servico'
 
   const meus = useMemo(() => itens.filter((i) => i.tipo === tipo), [itens, tipo])
-  const prevDoTipo = useMemo(() => previstos.filter((p) => ehMaoDeObra(p.code) === servico), [previstos, servico])
+  const tipoOper = operacoes.find((o) => o.oper === oper)?.tipo
+  const tipoDe = (op: string) => operacoes.find((o) => o.oper === op)?.tipo
+
+  /**
+   * O que a lista mostra conforme a operação escolhida:
+   * - materiais em instalação: sem sucata (9…);
+   * - materiais em sucata (retirada): tudo, com a sucata em cima;
+   * - mão de obra: os previstos na própria operação em cima (pelo nome não dá para separar).
+   */
+  const ajustar = useMemo(() => {
+    return <T extends { code: number }>(lista: T[]): T[] => {
+      if (servico) return lista
+      if (tipoOper === 'instalacao') return lista.filter((x) => !ehSucata(x.code))
+      if (tipoOper === 'retirada') return primeiroOs(lista, (x) => ehSucata(x.code))
+      return lista
+    }
+  }, [servico, tipoOper])
+
+  const prevDoTipo = useMemo(() => {
+    const doTipo = ajustar(previstos.filter((p) => ehMaoDeObra(p.code) === servico))
+    return servico ? primeiroOs(doTipo, (p) => p.opers.some((o) => o.oper === oper)) : doTipo
+  }, [previstos, servico, ajustar, oper])
 
   const q = busca.trim()
 
@@ -54,13 +75,16 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
     const lista: CatalogoIndexado[] = []
     if (!q) return { cadastro: lista, cadastroCortado: false }
     const mostrados = new Set(prevFiltrados.map((p) => p.code))
-    for (const c of catalogo) {
+    // na sucata, a busca passa primeiro pelos códigos 9… (eles ficam em cima mesmo cortando no limite)
+    const ordem = !servico && tipoOper === 'retirada' ? primeiroOs(catalogo, (c) => ehSucata(c.code)) : catalogo
+    for (const c of ordem) {
       if (ehMaoDeObra(c.code) !== servico || mostrados.has(c.code) || !casa(c.norm, q)) continue
+      if (!servico && tipoOper === 'instalacao' && ehSucata(c.code)) continue
       if (lista.length >= LIMITE) return { cadastro: lista, cadastroCortado: true } // achou o 61º: há mais
       lista.push(c)
     }
     return { cadastro: lista, cadastroCortado: false }
-  }, [q, catalogo, prevFiltrados, servico])
+  }, [q, catalogo, prevFiltrados, servico, tipoOper])
 
   // quanto de cada código já foi lançado (em qualquer operação), para dar retorno na lista de busca
   const lancadoPorCodigo = useMemo(() => {
@@ -222,6 +246,11 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
                           <p className="text-sm text-muted">
                             <span className="num">{i.code}</span> · <Unidade un={i.un} />
                           </p>
+                          {materialNovoEmSucata(i.code, tipoDe(i.oper)) && (
+                            <p className="mt-1">
+                              <Selo tom="perigo">Material novo numa operação de sucata: confira</Selo>
+                            </p>
+                          )}
                         </div>
                         <div className="ml-auto flex items-center gap-2">
                           <Quantidade grande valor={i.qtd} onChange={(n) => onChange((l) => l.map((x) => (x.id === i.id ? { ...x, qtd: n } : x)))} rotulo={`Quantidade de ${i.desc}`} emQuilo={ehQuilo(i.un)} />

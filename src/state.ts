@@ -19,6 +19,24 @@ export interface Kit {
   itens: ItemKit[]
 }
 
+/** Código de sucata (material retirado): começa com 9. Não existe kit de sucata. */
+export function ehSucata(code: number): boolean {
+  return String(code).startsWith('9')
+}
+
+/** Material novo (não é sucata nem serviço) lançado numa operação de retirada: vale conferir. */
+export function materialNovoEmSucata(code: number, tipoOperacao: Operacao['tipo'] | undefined): boolean {
+  return tipoOperacao === 'retirada' && !ehSucata(code) && !ehMaoDeObra(code)
+}
+
+/**
+ * Ordem da lista de itens conforme a operação escolhida (o que for `primeiro` sobe,
+ * sem mudar a ordem entre os demais).
+ */
+export function primeiroOs<T>(lista: T[], primeiro: (x: T) => boolean): T[] {
+  return [...lista.filter(primeiro), ...lista.filter((x) => !primeiro(x))]
+}
+
 /**
  * Nome curto da operação, tirado da descrição da EDP desta obra
  * ("POSTE - ODI - ET - 40" → "POSTE"). O número sozinho não diz nada: muda de obra para obra.

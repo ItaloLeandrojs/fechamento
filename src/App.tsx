@@ -5,7 +5,7 @@ import { gerarFechamento } from './core/build'
 import { conferirArquivo } from './core/conferencia'
 import { normalizar } from './lib/busca'
 import { listarTecnicos, type TecnicoSalvo } from './lib/tecnicos'
-import { estadoInicial, montarLancamentos, numero, type Estado, type Kit } from './state'
+import { estadoInicial, materialNovoEmSucata, montarLancamentos, numero, type Estado, type Kit } from './state'
 import { Inicio } from './components/Inicio'
 import { Marca } from './components/Logo'
 import { Estruturas, type KitIndexado } from './components/Estruturas'
@@ -112,8 +112,12 @@ export default function App() {
     const a = [...avisos]
     estado.aterramento.forEach((pt) => (!pt.fotoVala || !pt.fotoMedicao) && a.push(`Ponto ${pt.ponto || '?'}: falta foto da ${!pt.fotoVala ? 'vala' : 'medição'}.`))
     if (!lancamentos.length) a.push('Nada foi lançado: todas as linhas da ADS ficarão com Aplicado 0.')
+    const tipoDe = (op: string) => obra?.resumo.operacoes.find((o) => o.oper === op)?.tipo
+    for (const i of estado.itens) {
+      if (materialNovoEmSucata(i.code, tipoDe(i.oper))) a.push(`Material novo ${i.code} (${i.desc.trim()}) lançado na operação de sucata ${i.oper}: confira.`)
+    }
     return a
-  }, [avisos, estado.aterramento, lancamentos.length])
+  }, [avisos, estado.aterramento, estado.itens, lancamentos.length, obra])
 
   // o que foi lançado (ou o técnico) mudou: a conferência de um arquivo anterior não vale mais,
   // e um arquivo que ainda estava sendo gerado com os dados antigos é descartado

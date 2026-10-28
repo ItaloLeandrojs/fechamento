@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ehMaoDeObra, estadoInicial, montarLancamentos, temAjuste, type EstruturaLanc, type Kit } from './state'
+import { ehMaoDeObra, ehSucata, materialNovoEmSucata, primeiroOs, estadoInicial, montarLancamentos, temAjuste, type EstruturaLanc, type Kit } from './state'
 
 const ce3: Kit = {
   kit: 'CE3',
@@ -42,5 +42,21 @@ describe('mão de obra', () => {
     expect(ehMaoDeObra(71000919)).toBe(true) // SRV
     expect(ehMaoDeObra(30053440)).toBe(false)
     expect(ehMaoDeObra(20012345)).toBe(false) // material com unidade SRV na MaterialServico
+  })
+})
+
+describe('sucata', () => {
+  it('código 9… é sucata; material novo numa operação de retirada pede conferência', () => {
+    expect(ehSucata(90011604)).toBe(true)
+    expect(ehSucata(30053440)).toBe(false)
+    expect(materialNovoEmSucata(30053440, 'retirada')).toBe(true)
+    expect(materialNovoEmSucata(90011604, 'retirada')).toBe(false) // sucata na sucata: certo
+    expect(materialNovoEmSucata(71000919, 'retirada')).toBe(false) // serviço de desativação
+    expect(materialNovoEmSucata(30053440, 'instalacao')).toBe(false)
+    expect(materialNovoEmSucata(30053440, 'outra')).toBe(false)
+  })
+
+  it('primeiroOs sobe os que pedem e mantém a ordem dos demais', () => {
+    expect(primeiroOs([3, 9, 1, 92, 5], (n) => String(n).startsWith('9'))).toEqual([9, 92, 3, 1, 5])
   })
 })

@@ -63,6 +63,24 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
       ? `Mostrando as ${LIMITE} primeiras: escreva mais para refinar`
       : `${resultados.length} ${resultados.length === 1 ? 'estrutura encontrada' : 'estruturas encontradas'}`
 
+  // inventário só de desativação (ordem 19): não existe kit de sucata, então nada de busca nem lista
+  if (!operacoes.length) {
+    return (
+      <div>
+        <Titulo titulo="Estruturas" sub="Kits de instalação. Este inventário não tem operação de instalação." />
+        <Painel className="p-5 md:p-6 max-w-3xl">
+          <p role="note" className="flex gap-3 text-base">
+            <Stack size={28} className="shrink-0 text-accent-text" aria-hidden="true" />
+            <span>
+              <span className="font-semibold">Este inventário é só de desativação (sucata).</span> Não existe estrutura de sucata: lance os itens retirados em
+              Materiais e Mão de obra, um por um.
+            </span>
+          </p>
+        </Painel>
+      </div>
+    )
+  }
+
   return (
     <div>
       <Titulo titulo="Estruturas" sub="Procure o kit pelo nome ou pela descrição. Os materiais dele entram somados na ADS." />
