@@ -7,6 +7,7 @@ import { normalizar } from './lib/busca'
 import { listarTecnicos, type TecnicoSalvo } from './lib/tecnicos'
 import { estadoInicial, materialNovoEmSucata, montarLancamentos, numero, type Estado, type Kit } from './state'
 import { Inicio } from './components/Inicio'
+import { Ceara } from './components/ceara/Ceara'
 import { Marca } from './components/Logo'
 import { Estruturas, type KitIndexado } from './components/Estruturas'
 import { Itens, type CatalogoIndexado, type Previsto } from './components/Itens'
@@ -30,6 +31,8 @@ interface Obra {
 
 export default function App() {
   const [obra, setObra] = useState<Obra | null>(null)
+  // Fechamento Ceará (em teste): contagem pelo CAD, à parte do fluxo da EDP
+  const [ceara, setCeara] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [erroInicio, setErroInicio] = useState<string | null>(null)
   const [estado, setEstado] = useState<Estado>(estadoInicial)
@@ -188,7 +191,8 @@ export default function App() {
     }
   }
 
-  if (!obra) return <Inicio onArquivo={abrir} carregando={carregando} erro={erroInicio} tecnicos={tecnicos.length} />
+  if (!obra && ceara) return <Ceara onVoltar={() => setCeara(false)} />
+  if (!obra) return <Inicio onArquivo={abrir} carregando={carregando} erro={erroInicio} tecnicos={tecnicos.length} onCeara={() => setCeara(true)} />
 
   const etapas = montarEtapas(estado, pendencias)
   const set = (patch: Partial<Estado>) => setEstado((e) => ({ ...e, ...patch }))

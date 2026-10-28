@@ -437,8 +437,42 @@ async function soDesativacao() {
   await ctx.close()
 }
 
+// Fechamento Ceará (em teste): DXF + orçamento feito à mão (fora do git)
+async function ceara() {
+  const dxf = path.join(DADOS, 'ceara.dxf') // obra com MT e trafo (cópia de ceara-teste/mt-trafo)
+  const orc = path.join(DADOS, 'ceara-orcamento.xlsx')
+  if (!fs.existsSync(dxf)) return
+  for (const [largura, altura, movel, tema] of [[1366, 768, false, 'light'], [1366, 768, false, 'dark'], [390, 844, true, 'light']]) {
+    const tag = `ceara ${largura}-${tema}`
+    const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: tema, isMobile: movel, hasTouch: movel })
+    await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
+    const page = await ctx.newPage()
+    const erros = []
+    page.on('pageerror', (e) => erros.push(e.message))
+    await page.goto(URL_SITE)
+    await page.getByRole('tab', { name: /Ceará/ }).click()
+    await axe(page, `${tag} início`)
+    const t0 = Date.now()
+    await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
+    await page.getByText('Etiquetas de poste lidas').waitFor({ timeout: 60000 })
+    const segundos = ((Date.now() - t0) / 1000).toFixed(1)
+    if (fs.existsSync(orc)) await page.locator('input[accept=".xlsx"]').setInputFiles(orc)
+    await page.getByText('Linhas iguais ao orçamento').waitFor({ timeout: 20000 })
+    const iguais = await page.getByText('Linhas iguais ao orçamento').locator('..').locator('dd').innerText()
+    console.log(`[${tag}] DXF lido em ${segundos} s; linhas iguais ao orçamento: ${iguais}`)
+    await axe(page, `${tag} resultado`)
+    await page.screenshot({ path: path.join(PRINTS, `${largura}-${tema}-12-ceara.png`), fullPage: true })
+    placar.telas++
+    for (const e of erros) falhas.push(`[${tag}] erro: ${e}`)
+    const sw = await page.evaluate(() => document.documentElement.scrollWidth)
+    if (sw > largura + 1) falhas.push(`[${tag}] página mais larga que a tela (${sw}px)`)
+    await ctx.close()
+  }
+}
+
 const gerados = []
 try {
+  await ceara()
   await modeloDiferente()
   await operacoesDaObra()
   await soDesativacao()

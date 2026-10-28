@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { FileXls, LockKey, UploadSimple, UsersThree, WarningCircle } from '@phosphor-icons/react'
 import { Marca } from './Logo'
 
-export function Inicio({ onArquivo, carregando, erro, tecnicos = 0 }: { onArquivo: (f: File) => void; carregando: boolean; erro: string | null; tecnicos?: number }) {
+export function Inicio({ onArquivo, carregando, erro, tecnicos = 0, onCeara }: { onArquivo: (f: File) => void; carregando: boolean; erro: string | null; tecnicos?: number; onCeara: () => void }) {
   const input = useRef<HTMLInputElement>(null)
   const [arrastando, setArrastando] = useState(false)
 
@@ -14,6 +14,14 @@ export function Inicio({ onArquivo, carregando, erro, tecnicos = 0 }: { onArquiv
         </div>
       </header>
       <main className="w-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10 py-8 md:py-12 grid content-center gap-8">
+        <div role="tablist" aria-label="Distribuidora" className="entra inline-flex w-fit rounded-ctl border border-line-strong p-1">
+          <button type="button" role="tab" aria-selected="true" className="press h-10 rounded-[calc(var(--radius-ctl)-2px)] bg-text px-4 text-sm font-semibold text-bg">
+            EDP
+          </button>
+          <button type="button" role="tab" aria-selected="false" onClick={onCeara} className="press h-10 rounded-[calc(var(--radius-ctl)-2px)] px-4 text-sm font-semibold text-muted hover:text-text">
+            Ceará <span className="font-medium text-accent-text">· em teste</span>
+          </button>
+        </div>
         <div className="entra">
           <h1 className="text-[1.75rem] md:text-[2rem] leading-tight font-semibold tracking-tight">Fechamento de obra</h1>
           <p className="mt-2 text-base text-muted max-w-[70ch]">Escolha o inventário da obra. Você lança o que foi feito e o site devolve a ADS preenchida, com as fichas e o carimbo.</p>
