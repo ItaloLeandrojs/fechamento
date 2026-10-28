@@ -71,36 +71,27 @@ export function Vazio({ icone, titulo, texto }: { icone: ReactNode; titulo: stri
 
 /** Operações disponíveis no inventário aberto. No celular vira uma faixa rolável de uma linha. */
 export function EscolhaOper({ valor, onChange, operacoes = OPERACOES, compacto = false }: { valor: string; onChange: (o: string) => void; operacoes?: Operacao[]; compacto?: boolean }) {
-  const selecionada = operacoes.find((o) => o.oper === valor)
-
   return (
-    <div className="grid gap-1.5">
-      <div role="radiogroup" aria-label="Operação" className="flex gap-1.5 py-1 -my-1 overflow-x-auto snap-x max-sm:-mx-4 max-sm:px-4 sm:flex-wrap sm:overflow-visible">
-        {operacoes.map((o) => {
-          const ativo = o.oper === valor
-          return (
-            <button
-              key={o.oper}
-              type="button"
-              role="radio"
-              aria-checked={ativo}
-              aria-label={`${o.oper} ${o.nome}`}
-              onClick={() => onChange(o.oper)}
-              className={`press shrink-0 snap-start whitespace-nowrap rounded-ctl border h-12 md:h-11 ${compacto ? 'w-16 px-2 text-sm text-center' : 'px-3 text-base text-left'} ${
-                ativo ? 'border-text bg-text text-bg' : 'border-line-strong bg-surface text-text hover:bg-surface-2'
-              }`}
-            >
-              <span className="num font-semibold">{o.oper}</span>
-              {!compacto && <span className={`ml-1.5 ${ativo ? 'opacity-85' : 'text-muted'}`}>{o.nome}</span>}
-            </button>
-          )
-        })}
-      </div>
-      {compacto && selecionada && (
-        <p aria-live="polite" className="min-w-0 truncate px-0.5 text-xs text-muted">
-          <span className="font-medium text-text">{selecionada.oper}</span> · {selecionada.nome}
-        </p>
-      )}
+    <div role="radiogroup" aria-label="Operação" className="flex gap-1.5 py-1 -my-1 overflow-x-auto snap-x max-sm:-mx-4 max-sm:px-4 sm:flex-wrap sm:overflow-visible">
+      {operacoes.map((o) => {
+        const ativo = o.oper === valor
+        return (
+          <button
+            key={o.oper}
+            type="button"
+            role="radio"
+            aria-checked={ativo}
+            aria-label={`${o.oper} ${o.nome}`}
+            onClick={() => onChange(o.oper)}
+            className={`press shrink-0 snap-start whitespace-nowrap rounded-ctl border h-12 md:h-11 ${compacto ? 'px-2 text-sm' : 'px-3 text-base'} text-left ${
+              ativo ? 'border-text bg-text text-bg' : 'border-line-strong bg-surface text-text hover:bg-surface-2'
+            }`}
+          >
+            <span className="num font-semibold">{o.oper}</span>
+            <span className={`ml-1.5 ${ativo ? 'opacity-85' : 'text-muted'}`}>{o.nome}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
