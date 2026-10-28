@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ehMaoDeObra, estadoInicial, montarLancamentos, operacoesDaAds, temAjuste, type EstruturaLanc, type Kit } from './state'
+import { ehMaoDeObra, estadoInicial, montarLancamentos, temAjuste, type EstruturaLanc, type Kit } from './state'
 
 const ce3: Kit = {
   kit: 'CE3',
@@ -42,28 +42,5 @@ describe('mão de obra', () => {
     expect(ehMaoDeObra(71000919)).toBe(true) // SRV
     expect(ehMaoDeObra(30053440)).toBe(false)
     expect(ehMaoDeObra(20012345)).toBe(false) // material com unidade SRV na MaterialServico
-  })
-})
-
-describe('operações da ADS', () => {
-  const operacoes = operacoesDaAds([
-    { oper: '2000', descricao: 'R-RAMAL LIGAÇÃO - ODI - CT - 40' },
-    { oper: '2010', descricao: 'POSTE - ODI - CT - 40' },
-    { oper: '2020', descricao: 'CONDUTOR (VÃO/RM LIG) - ODI - CT - 40' },
-    { oper: '2030', descricao: 'POSTE - ODD - ET - 40' },
-    { oper: '2040', descricao: 'CONDUTOR (VÃO/RM LIG) - ODD - CT - 40' },
-    { oper: '2050', descricao: 'TRANSF. DISTR. AÉREO - ODD - CT - 40' },
-    { oper: '2060', descricao: 'POSTE - ODD - CT - 40' },
-    { oper: '2070', descricao: 'R-RAMAL LIGAÇÃO - ODD - CT - 40' },
-  ])
-
-  it('usa todas as operações e descrições do inventário, inclusive as novas', () => {
-    expect(operacoes.map((o) => o.oper)).toEqual(['2000', '2010', '2020', '2030', '2040', '2050', '2060', '2070'])
-    expect(operacoes.find((o) => o.oper === '2050')).toMatchObject({ nome: 'TRANSF. DISTR. AÉREO', grupo: 'retirada' })
-  })
-
-  it('separa instalação para estruturas e deixa retirada para lançamento avulso', () => {
-    expect(operacoes.filter((o) => o.grupo === 'instalacao').map((o) => o.oper)).toEqual(['2000', '2010', '2020'])
-    expect(operacoes.filter((o) => o.grupo === 'retirada').map((o) => o.oper)).toEqual(['2030', '2040', '2050', '2060', '2070'])
   })
 })

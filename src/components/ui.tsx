@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
 import { Minus, Plus } from '@phosphor-icons/react'
 import { formatarQtd } from '../lib/busca'
-import { OPERACOES, ehQuilo, type Operacao } from '../state'
+import { OPERACOES, ehQuilo } from '../state'
 
 type Variante = 'primario' | 'secundario' | 'fantasma' | 'perigo'
 
@@ -69,11 +69,11 @@ export function Vazio({ icone, titulo, texto }: { icone: ReactNode; titulo: stri
   )
 }
 
-/** Operações disponíveis no inventário aberto. No celular vira uma faixa rolável de uma linha. */
-export function EscolhaOper({ valor, onChange, operacoes = OPERACOES, compacto = false }: { valor: string; onChange: (o: string) => void; operacoes?: Operacao[]; compacto?: boolean }) {
+/** Escolha da operação (2000, 2020, 2010, 2030, 2040). No celular vira uma faixa rolável de uma linha. */
+export function EscolhaOper({ valor, onChange, compacto = false }: { valor: string; onChange: (o: string) => void; compacto?: boolean }) {
   return (
     <div role="radiogroup" aria-label="Operação" className="flex gap-1.5 py-1 -my-1 overflow-x-auto snap-x max-sm:-mx-4 max-sm:px-4 sm:flex-wrap sm:overflow-visible">
-      {operacoes.map((o) => {
+      {OPERACOES.map((o) => {
         const ativo = o.oper === valor
         return (
           <button

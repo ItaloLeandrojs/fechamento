@@ -5,7 +5,7 @@ import { gerarFechamento } from './core/build'
 import { conferirArquivo } from './core/conferencia'
 import { normalizar } from './lib/busca'
 import { listarTecnicos, type TecnicoSalvo } from './lib/tecnicos'
-import { estadoInicial, montarLancamentos, numero, operacoesDaAds, type Estado, type Kit, type Operacao } from './state'
+import { estadoInicial, montarLancamentos, numero, type Estado, type Kit } from './state'
 import { Inicio } from './components/Inicio'
 import { Marca } from './components/Logo'
 import { Estruturas, type KitIndexado } from './components/Estruturas'
@@ -26,7 +26,6 @@ interface Obra {
   catalogoMap: Map<number, ItemCatalogo>
   previstos: Previsto[]
   codigosPrevistos: Set<number>
-  operacoes: Operacao[]
 }
 
 export default function App() {
@@ -84,7 +83,6 @@ export default function App() {
         catalogoMap,
         previstos: [...previstosMap.values()],
         codigosPrevistos: new Set(previstosMap.keys()),
-        operacoes: operacoesDaAds(resumo.operacoes),
       })
       setEstado((e) => ({ ...estadoInicial, tecnico: e.tecnico }))
       setSecao('estruturas')
@@ -284,9 +282,9 @@ export default function App() {
           )}
           {estado.boletim === null && <PerguntaBoletim onEscolher={(boletim) => set({ boletim })} />}
           <div className="entra">
-            {secao === 'estruturas' && <Estruturas kits={kits} operacoes={obra.operacoes.filter((o) => o.grupo === 'instalacao')} previstos={obra.codigosPrevistos} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}
-            {secao === 'materiais' && <Itens tipo="material" operacoes={obra.operacoes} catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
-            {secao === 'servicos' && <Itens tipo="servico" operacoes={obra.operacoes} catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
+            {secao === 'estruturas' && <Estruturas kits={kits} previstos={obra.codigosPrevistos} estruturas={estado.estruturas} onChange={(fn) => setEstado((e) => ({ ...e, estruturas: fn(e.estruturas) }))} />}
+            {secao === 'materiais' && <Itens tipo="material" catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
+            {secao === 'servicos' && <Itens tipo="servico" catalogo={obra.catalogo} previstos={obra.previstos} itens={estado.itens} onChange={(fn) => setEstado((e) => ({ ...e, itens: fn(e.itens) }))} />}
             {secao === 'aterramento' && <Aterramento pontos={estado.aterramento} onChange={(fn) => setEstado((e) => ({ ...e, aterramento: fn(e.aterramento) }))} />}
             {secao === 'equipamentos' && <Equipamentos equips={estado.equipamentos} onChange={(fn) => setEstado((e) => ({ ...e, equipamentos: fn(e.equipamentos) }))} />}
             {secao === 'dp' && <DP tem={estado.temDP} foto={estado.fotoDP} onChange={(temDP, fotoDP) => set({ temDP, fotoDP })} />}

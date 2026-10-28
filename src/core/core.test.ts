@@ -17,7 +17,6 @@ describe('regras da ADS', () => {
     linha(6, 333, '2010'),
     linha(7, 444, '2030'),
     linha(8, 555, '2010'),
-    linha(9, 666, '2050'),
   ]
 
   it('previsto na operação escolhida vai nela', () => {
@@ -35,7 +34,6 @@ describe('regras da ADS', () => {
 
   it('retirada cai na outra operação de retirada', () => {
     expect(decidirDestinos(rows, [{ code: 444, oper: '2040', qty: 2 }])[0]).toMatchObject({ row: 7, operUsada: '2030' })
-    expect(decidirDestinos(rows, [{ code: 666, oper: '2070', qty: 2 }])[0]).toMatchObject({ row: 9, operUsada: '2050' })
   })
 
   it('retirada nunca cai em operação de instalação', () => {
