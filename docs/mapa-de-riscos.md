@@ -92,7 +92,7 @@ Cada um vira um teste automático que roda antes de toda publicação. Esses arq
 **O que o teste cobre**
 - Entrada: campos e textos, acessibilidade (axe), nome vazio ou só com espaços, cargo vazio (mensagem e foco no campo certo), foto inválida (um .txt) com a mensagem, foto válida (PNG gerado) com miniatura.
 - Painel: saudação com o foco, pessoa e foto reduzida guardadas no navegador, os avisos "O Ceará ainda está em construção." e o do Sergipe (não saem do painel e somem sozinhos), recarregar abre direto no painel.
-- Crachá: em 390 px é o parado, com a foto escolhida desenhada, e nenhum pedido de `.glb` nem do pedaço `Cracha3D`. Em 1366 px confere que o 3D ligou (pediu o `.glb` e o pedaço `Cracha3D`).
+- Crachá: em 390 px é o parado, com a foto escolhida desenhada, e nenhum pedido de `.glb` nem do pedaço `Cracha3D`. Em 1366 px, se o Edge do teste tiver WebGL, confere que o 3D pediu o `.glb` e o pedaço `Cracha3D`; se não tiver WebGL, o teste só imprime AVISO e passa.
 - EDP dentro da plataforma: "← Regiões" com estrutura lançada pergunta "Voltar às regiões? O que foi lançado nesta obra será perdido."; recusar mantém a obra, aceitar volta ao painel e descarta a obra; sem obra aberta não pergunta nada.
 - "Trocar pessoa" volta à entrada, apaga a pessoa guardada, e recarregar não reabre o painel.
 
@@ -101,3 +101,7 @@ Cada um vira um teste automático que roda antes de toda publicação. Esses arq
 - Foto de celular em HEIC (iPhone com formato "alta eficiência"): o teste usa PNG e um .txt. A mensagem "Use JPG ou PNG." existe, mas ninguém testou um HEIC real nem fotos enormes em celular com pouca memória.
 - Armazenamento bloqueado ou cheio (modo privado, política da empresa): só os testes unitários de `pessoa.ts` cobrem. No navegador de verdade, o site deve funcionar na sessão sem lembrar da pessoa, mas isso não é exercitado no e2e.
 - Celular real: o teste emula toque e tela de 390 px no Edge; não substitui abrir no aparelho.
+- Foto no crachá 3D: a foto escolhida só é conferida no crachá parado (390 px). Em 1366 px, com o 3D ligado, o teste só confere que a foto foi guardada no navegador, não que ela aparece no 3D.
+- Canvas do 3D: o teste exige que o `.glb` e o pedaço `Cracha3D` sejam pedidos, mas não exige que o canvas renderize nem desenhe o crachá (a contagem de canvas só vai para o log).
+- Espera do 3D fixa: em 1366 px o teste espera 6 s (`waitForTimeout(6000)`) antes de olhar os pedidos. Em máquina lenta o 3D pode demorar mais e o teste enganar-se para os dois lados.
+- Aviso "em construção" no celular: nos prints de tela cheia ele aparece sobre a linha do Ceará (a captura estica a janela). Não foi conferido na tela real de um celular se ele cobre conteúdo.

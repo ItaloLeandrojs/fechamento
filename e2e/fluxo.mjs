@@ -663,6 +663,7 @@ async function plataforma() {
 
     // região "em breve" não navega: mostra o aviso e ele some sozinho
     for (const [nomeRegiao, texto] of [['Ceará', 'O Ceará ainda está em construção.'], ['Sergipe', 'O Sergipe ainda está em construção.']]) {
+      // force: o botão usa aria-disabled="true" (não navega, só avisa) e o Playwright o trata como desabilitado
       await page.getByRole('button', { name: nomeRegiao, exact: true }).click({ force: true })
       try {
         await page.locator('.pl-aviso.visivel').getByText(texto, { exact: true }).waitFor({ timeout: 3000 })
