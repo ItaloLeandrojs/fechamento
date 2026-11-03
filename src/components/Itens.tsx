@@ -123,7 +123,7 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
       : `${nCasam} ${nCasam === 1 ? `${nomeItem} encontrado` : `${nomeItens} encontrados`}`
 
   const faixa = (texto: string) => (
-    <li className="bg-surface-2 px-4 h-10 flex items-center text-sm font-semibold">
+    <li className="h-11 flex items-end pb-2 text-sm font-semibold text-muted">
       {texto}
     </li>
   )
@@ -131,9 +131,9 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
   const linha = (c: Base, selosExtra?: ReactNode) => {
     const jaLancado = lancadoPorCodigo.get(c.code) ?? 0
     return (
-      <li key={c.code} className="flex items-center gap-3 px-3 md:px-4 py-2 min-h-16">
-        <div className="min-w-0 flex-1 px-2 py-1.5">
-          <p className="text-base font-semibold break-words line-clamp-2" title={c.desc || undefined}>{c.desc || 'Sem descrição'}</p>
+      <li key={c.code} className="flex items-center gap-3 py-2 min-h-16">
+        <div className="min-w-0 flex-1 py-1.5">
+          <p className="text-base font-semibold tracking-[-0.01em] break-words line-clamp-2" title={c.desc || undefined}>{c.desc || 'Sem descrição'}</p>
           <p className="text-sm text-muted">
             <span className="num">{c.code}</span> · <Unidade un={c.un} />
           </p>
@@ -158,8 +158,8 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
     <div>
       <Titulo titulo={titulo} sub={sub} />
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.7fr)] gap-6 items-start">
-        <Painel>
-          <div className="grid gap-4 p-4 md:p-5 xl:p-4 border-b border-line">
+        <section className="min-w-0">
+          <div className="grid gap-4 pb-5 border-b border-line">
             <div className="grid gap-2">
               <span className="text-xs font-medium text-muted">Lançar na operação</span>
               <EscolhaOper compacto operacoes={operacoes} valor={oper} onChange={setOper} />
@@ -171,7 +171,7 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder={servico ? 'Ex.: estr prim, ramal, poste' : 'Ex.: isolador pino, cinta 200, 30058120'}
-                className="h-12 w-full rounded-ctl border border-line-strong bg-surface pl-11 pr-12 text-base placeholder:text-muted/80 focus:border-text focus:outline-none"
+                className="h-12 w-full rounded-ctl border border-line-strong bg-surface pl-11 pr-12 text-base placeholder:text-faint focus:border-text focus:outline-none"
               />
               {busca && (
                 <button
@@ -194,7 +194,7 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
             </div>
           </div>
 
-          <ul className="divide-y divide-line">
+          <ul className="divide-y divide-line border-b border-line empty:border-0">
             {prevFiltrados.length > 0 && faixa(`Previstos nesta obra (${prevCortados ? `${prevFiltrados.length} de ${prevCasam.length}` : prevFiltrados.length})`)}
             {prevFiltrados.map((p) =>
               linha(
@@ -215,13 +215,13 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
             ) : (
               <Vazio icone={servico ? <Wrench size={32} /> : <Package size={32} />} titulo="Nenhum previsto deste tipo" texto="Digite na busca para procurar no cadastro completo do inventário." />
             ))}
-        </Painel>
+        </section>
 
-        <Painel className="p-4 md:p-5 xl:sticky xl:top-[88px] xl:max-h-[calc(100dvh-104px)] xl:overflow-y-auto scroll-mt-24">
+        <Painel className="p-4 md:p-6 xl:sticky xl:top-[88px] xl:max-h-[calc(100dvh-104px)] xl:overflow-y-auto scroll-mt-24">
           <div id="lancadas" className="flex items-end justify-between gap-3 scroll-mt-24">
-            <h2 className="text-lg font-semibold">Lançados</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.02em]">Lançados</h2>
             <p className="flex items-baseline gap-2">
-              <span className="num text-titulo font-semibold leading-none">{meus.length}</span>
+              <span className="num text-titulo font-semibold leading-none tracking-[-0.03em]">{meus.length}</span>
               <span className="text-sm text-muted">{meus.length === 1 ? 'item' : 'itens'}</span>
             </p>
           </div>
@@ -231,8 +231,8 @@ export function Itens({ tipo, catalogo, previstos, operacoes, itens, onChange }:
             operacoesComLancadas(operacoes, meus).map((o) => {
               const doGrupo = meus.filter((i) => i.oper === o.oper)
               return (
-                <div key={o.oper} className="mt-4">
-                  <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface-2 px-3 h-10">
+                <div key={o.oper} className="mt-5">
+                  <div className="flex items-center justify-between gap-3 border-b border-line-strong px-1 h-10">
                     <h3 className="text-sm font-semibold">
                       <span className="num">{o.oper}</span> <span className="font-medium text-muted">{nomeOperacao(o)}</span>
                     </h3>

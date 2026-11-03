@@ -70,7 +70,7 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
         <Titulo titulo="Estruturas" sub="Kits de instalação. Este inventário não tem operação de instalação." />
         <Painel className="p-5 md:p-6 max-w-3xl">
           <p role="note" className="flex gap-3 text-base">
-            <Stack size={28} className="shrink-0 text-accent-text" aria-hidden="true" />
+            <Stack size={28} className="shrink-0 text-muted" aria-hidden="true" />
             <span>
               <span className="font-semibold">Este inventário é só de desativação (sucata).</span> Não existe estrutura de sucata: lance os itens retirados em
               Materiais e Mão de obra, um por um.
@@ -85,8 +85,8 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
     <div>
       <Titulo titulo="Estruturas" sub="Procure o kit pelo nome ou pela descrição. Os materiais dele entram somados na ADS." />
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.7fr)] gap-6 items-start">
-        <Painel>
-          <div className="grid gap-4 p-4 md:p-5 xl:p-4 border-b border-line">
+        <section className="min-w-0">
+          <div className="grid gap-4 pb-5 border-b border-line">
             <div className="grid gap-2">
               <span className="text-xs font-medium text-muted">Lançar na operação</span>
               <EscolhaOper compacto operacoes={operacoes} valor={oper} onChange={setOper} />
@@ -98,7 +98,7 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder="Ex.: CE3, trafo 75, afastador, KP-AF"
-                className="h-12 w-full rounded-ctl border border-line-strong bg-surface pl-11 pr-12 text-base placeholder:text-muted/80 focus:border-text focus:outline-none"
+                className="h-12 w-full rounded-ctl border border-line-strong bg-surface pl-11 pr-12 text-base placeholder:text-faint focus:border-text focus:outline-none"
               />
               {busca && (
                 <button
@@ -121,22 +121,22 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
             </div>
           </div>
 
-          <ul className="divide-y divide-line">
+          <ul className="divide-y divide-line border-b border-line empty:border-0">
             {resultados.map(({ k, nPrev }) => {
               const exp = aberto === k.kit
               const jaLancado = lancadoPorKit.get(k.kit) ?? 0
               return (
                 <li key={k.kit}>
-                  <div className="flex items-center gap-3 px-3 md:px-4 py-2 min-h-16">
+                  <div className="flex items-center gap-3 py-2 min-h-16">
                     <button
                       type="button"
                       onClick={() => setAberto(exp ? null : k.kit)}
-                      className="press flex-1 min-w-0 flex items-center gap-3 text-left rounded-ctl px-2 py-1.5 hover:bg-surface-2"
+                      className="press flex-1 min-w-0 flex items-center gap-3 text-left rounded-ctl -ml-2 px-2 py-1.5 hover:bg-surface"
                       aria-expanded={exp}
                     >
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="text-base font-semibold break-words">{k.kit}</span>
+                          <span className="text-base font-semibold tracking-[-0.01em] break-words">{k.kit}</span>
                           {nPrev > 0 && (
                             <Selo tom="destaque">
                               {nPrev} de {k.itens.length} previstos
@@ -156,7 +156,7 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
                     </Botao>
                   </div>
                   {exp && (
-                    <ul className="entra mx-3 md:mx-4 mb-3 grid gap-2 rounded-ctl bg-surface-2 p-3 md:p-4 text-sm">
+                    <ul className="entra mb-4 grid gap-2 border-l-2 border-line-strong pl-4 py-1 text-sm">
                       {k.itens.map((i) => (
                         <li key={i.code} className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[76px_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5">
                           <span className="num text-muted max-sm:col-span-2 max-sm:text-xs">{i.code}</span>
@@ -165,7 +165,7 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
                             <span className="num whitespace-nowrap font-medium">
                               {formatarQtd(i.qtd)} {i.un}
                             </span>
-                            {previstos.has(i.code) && <span className="text-xs font-medium text-accent-text">previsto</span>}
+                            {previstos.has(i.code) && <span className="text-xs font-medium text-text">previsto</span>}
                           </span>
                         </li>
                       ))}
@@ -176,13 +176,13 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
             })}
           </ul>
           {!resultados.length && <Vazio icone={<MagnifyingGlass size={32} />} titulo="Nenhuma estrutura encontrada" texto="Tente outra parte do nome, por exemplo só o número (CE3) ou uma palavra da descrição." />}
-        </Painel>
+        </section>
 
-        <Painel className="p-4 md:p-5 xl:sticky xl:top-[88px] xl:max-h-[calc(100dvh-104px)] xl:overflow-y-auto scroll-mt-24">
+        <Painel className="p-4 md:p-6 xl:sticky xl:top-[88px] xl:max-h-[calc(100dvh-104px)] xl:overflow-y-auto scroll-mt-24">
           <div id="lancadas" className="flex items-end justify-between gap-3 scroll-mt-24">
-            <h2 className="text-lg font-semibold">Lançadas</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.02em]">Lançadas</h2>
             <p className="flex items-baseline gap-2">
-              <span className="num text-titulo font-semibold leading-none">{formatarQtd(total)}</span>
+              <span className="num text-titulo font-semibold leading-none tracking-[-0.03em]">{formatarQtd(total)}</span>
               <span className="text-sm text-muted">{total === 1 ? 'estrutura' : 'estruturas'}</span>
             </p>
           </div>
@@ -197,8 +197,8 @@ export function Estruturas({ kits, previstos, operacoes, estruturas, onChange }:
             operacoesComLancadas(operacoes, estruturas).map((o) => {
               const doGrupo = estruturas.filter((e) => e.oper === o.oper)
               return (
-                <div key={o.oper} className="mt-4">
-                  <div className="flex items-center justify-between gap-3 rounded-ctl bg-surface-2 px-3 h-10">
+                <div key={o.oper} className="mt-5">
+                  <div className="flex items-center justify-between gap-3 border-b border-line-strong px-1 h-10">
                     <h3 className="text-sm font-semibold">
                       <span className="num">{o.oper}</span> <span className="font-medium text-muted">{nomeOperacao(o)}</span>
                     </h3>

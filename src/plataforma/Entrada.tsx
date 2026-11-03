@@ -1,6 +1,7 @@
 // Entrada da plataforma (rascunho B · Grafite): foto da linha viva ao fundo, "Fechamento" gigante
 // com a linha verde que liga, e o formulário com os dados do crachá. Tudo fica só neste navegador.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { flushSync } from 'react-dom'
 import { Camera } from '@phosphor-icons/react'
 import { Marca } from '../components/Logo'
 import { LOGO_ALTURA, LOGO_LARGURA } from '../components/logoPath'
@@ -54,14 +55,15 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
     e.preventDefault()
     if (preparando) return
     const p: Pessoa = { nome: nome.trim(), cargo: cargo.trim(), matricula: matricula.trim(), foto }
-    // só espaços não vale: o foco vai para o primeiro campo vazio
+    // só espaços não vale: o foco vai para o primeiro campo vazio, já com o erro na tela
+    // (flushSync desenha o erro antes do foco, para o leitor de tela ler o campo com a descrição)
     if (!p.nome) {
-      setInvalido('nome')
+      flushSync(() => setInvalido('nome'))
       refNome.current?.focus()
       return
     }
     if (!p.cargo) {
-      setInvalido('cargo')
+      flushSync(() => setInvalido('cargo'))
       refCargo.current?.focus()
       return
     }
@@ -98,6 +100,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
               autoComplete="name"
               required
               aria-invalid={invalido === 'nome' || undefined}
+              aria-describedby={invalido === 'nome' ? 'entrada-nome-erro' : undefined}
               placeholder="Ex.: Maria Souza"
               value={nome}
               onChange={(e) => {
@@ -106,6 +109,11 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
               }}
             />
           </label>
+          {invalido === 'nome' && (
+            <p id="entrada-nome-erro" className="pl-erro pl-erro-campo">
+              Preencha o nome.
+            </p>
+          )}
           <label>
             Cargo
             <input
@@ -114,6 +122,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
               autoComplete="organization-title"
               required
               aria-invalid={invalido === 'cargo' || undefined}
+              aria-describedby={invalido === 'cargo' ? 'entrada-cargo-erro' : undefined}
               placeholder="Ex.: Analista de fechamento"
               value={cargo}
               onChange={(e) => {
@@ -122,6 +131,11 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
               }}
             />
           </label>
+          {invalido === 'cargo' && (
+            <p id="entrada-cargo-erro" className="pl-erro pl-erro-campo">
+              Preencha o cargo.
+            </p>
+          )}
           <label>
             <span>
               Matrícula <small>(opcional)</small>

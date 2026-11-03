@@ -10,11 +10,11 @@ const OPCOES: { tipo: TipoBoletim; nome: string; texto: string; icone: ReactNode
 /** Pergunta obrigatória, no topo da tela, até a pessoa escolher. */
 export function PerguntaBoletim({ onEscolher }: { onEscolher: (t: TipoBoletim) => void }) {
   return (
-    <section aria-labelledby="pergunta-boletim" className="entra mb-6 rounded-panel border-2 border-accent bg-accent-soft/40 p-4 md:p-5">
-      <h2 id="pergunta-boletim" className="text-lg font-semibold">
+    <section aria-labelledby="pergunta-boletim" className="entra mb-8 rounded-panel border border-accent bg-surface p-4 md:p-6">
+      <h2 id="pergunta-boletim" className="text-xl md:text-2xl font-semibold tracking-[-0.03em] leading-tight">
         Este fechamento é parcial ou final?
       </h2>
-      <p className="mt-1 text-sm text-muted">Obrigatório para baixar. Dá para trocar depois na barra de cima.</p>
+      <p className="mt-1.5 text-sm text-muted">Obrigatório para baixar. Dá para trocar depois na barra de cima.</p>
       <div role="radiogroup" aria-labelledby="pergunta-boletim" className="mt-4 grid gap-3 sm:grid-cols-2">
         {OPCOES.map((o) => (
           <button
@@ -23,7 +23,7 @@ export function PerguntaBoletim({ onEscolher }: { onEscolher: (t: TipoBoletim) =
             role="radio"
             aria-checked={false}
             onClick={() => onEscolher(o.tipo)}
-            className="press flex items-start gap-3 rounded-ctl border border-line-strong bg-surface p-4 text-left hover:border-text"
+            className="press flex items-start gap-3 rounded-ctl border border-line-strong bg-bg p-4 text-left hover:border-accent"
           >
             <span className="mt-0.5 text-accent-text">{o.icone}</span>
             <span>

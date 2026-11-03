@@ -10,6 +10,8 @@
   --line-strong: rgb(255 255 255 / 0.22);
   --text: #f4f4f5;
   --muted: #a1a1aa;
+  /* texto apagado (placeholder, região em breve): 5,5:1 sobre --bg e 5:1 sobre --surface (AA); não usar sobre --surface-2 */
+  --faint: #8b8b94;
   --accent: #5abd79;
   --accent-hover: #6fcb8b;
   --accent-ink: #0b0b0c;
@@ -41,6 +43,7 @@
   --color-line-strong: var(--line-strong);
   --color-text: var(--text);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-ink: var(--accent-ink);

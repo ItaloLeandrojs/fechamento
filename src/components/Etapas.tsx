@@ -20,7 +20,7 @@ const icones: Record<Secao, ReactNode> = {
 function Marcador({ etapa }: { etapa: Etapa }) {
   return (
     <span className="ml-auto flex items-center gap-1.5 pl-2">
-      {etapa.n ? <span className="num text-xs font-medium bg-surface-2 text-text rounded-md px-2 py-0.5 min-w-7 text-center">{formatarQtd(etapa.n)}</span> : null}
+      {etapa.n ? <span className="num text-xs font-semibold text-text min-w-7 text-right">{formatarQtd(etapa.n)}</span> : null}
       {etapa.restam ? (
         <span className="text-xs font-medium text-muted whitespace-nowrap">
           <span aria-hidden>{etapa.restam} pend.</span>
@@ -56,17 +56,20 @@ export function Etapas({ etapas, atual, onIr, rodape }: { etapas: Etapa[]; atual
           const ativa = atual === m.id
           return (
             <li key={m.id} className="shrink-0">
-              {(i === 0 || etapas[i - 1].grupo !== m.grupo) && <p className={`hidden md:block text-xs font-semibold uppercase tracking-wider text-muted px-3 mb-1.5 ${i === 0 ? '' : 'mt-6'}`}>{m.grupo}</p>}
+              {(i === 0 || etapas[i - 1].grupo !== m.grupo) && (
+                <p className={`hidden md:block text-xs font-semibold uppercase tracking-wider text-muted px-3 pb-2 mb-1 border-b border-line ${i === 0 ? '' : 'mt-7'}`}>{m.grupo}</p>
+              )}
               <button
                 type="button"
                 onClick={() => onIr(m.id)}
                 aria-current={ativa ? 'page' : undefined}
                 className={`press relative w-full flex items-center gap-3 h-12 px-3 rounded-ctl text-sm border ${
-                  ativa ? 'bg-surface text-text font-semibold shadow-panel border-line-strong' : 'text-muted hover:text-text hover:bg-surface-2 border-transparent'
+                  ativa ? 'bg-surface text-text font-semibold border-line-strong' : 'text-muted hover:text-text hover:bg-surface-2 border-transparent'
                 }`}
               >
-                {ativa && <span aria-hidden className="absolute left-0 top-2.5 bottom-2.5 w-1 rounded-r-full bg-accent" />}
-                <span className={ativa ? 'text-accent-text' : ''}>{icones[m.id]}</span>
+                {/* a etapa aberta é marcada em branco: o verde fica para ação e para o que está feito */}
+                {ativa && <span aria-hidden className="absolute left-0 top-3 bottom-3 w-0.5 rounded-r-full bg-text" />}
+                <span className={ativa ? 'text-text' : ''}>{icones[m.id]}</span>
                 <span className="whitespace-nowrap">{m.rotulo}</span>
                 <Marcador etapa={m} />
               </button>

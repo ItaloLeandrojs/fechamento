@@ -26,7 +26,7 @@ export function AjusteMateriais({ est, kit, onChange }: Props) {
   const ajustada = temAjuste(est, kit)
 
   return (
-    <div className="entra mt-2 rounded-ctl bg-surface-2 p-3">
+    <div className="entra mt-3 border-l-2 border-line-strong pl-4 py-1">
       <p className="text-sm text-muted">Quantidade por estrutura. Desmarque o que não entra na soma.</p>
       <ul className="mt-2 divide-y divide-line">
         {kit.itens.map((i) => {
@@ -53,7 +53,7 @@ export function AjusteMateriais({ est, kit, onChange }: Props) {
                   <Quantidade valor={q} onChange={(n) => mudar(i.code, n)} rotulo={`Quantidade de ${i.desc} por estrutura`} emQuilo={ehQuilo(i.un)} passo={1} />
                   <span className="text-sm text-muted">
                     {!ehQuilo(i.un) && <>{i.un} </>}
-                    {q !== i.qtd && <span className="text-accent-text font-medium">(kit: {formatarQtd(i.qtd)})</span>}
+                    {q !== i.qtd && <span className="num text-text font-medium">(kit: {formatarQtd(i.qtd)})</span>}
                   </span>
                   {est.qtd !== 1 && (
                     <span className="num text-sm font-medium ml-auto">

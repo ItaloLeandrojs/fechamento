@@ -36,7 +36,7 @@ export function Campo({ rotulo, ajuda, className = '', ...rest }: InputHTMLAttri
       </label>
       <input
         id={id}
-        className="h-12 w-full min-w-0 rounded-ctl border border-line-strong bg-surface px-3.5 text-base text-text placeholder:text-muted/80 focus:border-text focus:outline-none"
+        className="h-12 w-full min-w-0 rounded-ctl border border-line-strong bg-surface px-3.5 text-base text-text placeholder:text-faint focus:border-text focus:outline-none"
         {...rest}
       />
       {ajuda && <p className="text-xs text-muted">{ajuda}</p>}
@@ -48,12 +48,13 @@ export function Painel({ children, className = '' }: { children: ReactNode; clas
   return <section className={`rounded-panel border border-line bg-surface ${className}`}>{children}</section>
 }
 
+/** Título da tela no visual do painel B: grande, com tracking negativo, e o texto de apoio apagado. */
 export function Titulo({ titulo, sub, acao }: { titulo: string; sub?: string; acao?: ReactNode }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-3 mb-6">
+    <header className="flex flex-wrap items-end justify-between gap-3 mb-7 md:mb-8">
       <div>
-        <h1 className="text-titulo font-semibold tracking-tight">{titulo}</h1>
-        {sub && <p className="mt-1.5 text-base text-muted max-w-[70ch]">{sub}</p>}
+        <h1 className="text-[clamp(2rem,3.4vw,2.875rem)] leading-[1.05] font-semibold tracking-[-0.04em]">{titulo}</h1>
+        {sub && <p className="mt-3 text-base leading-relaxed text-muted max-w-[70ch]">{sub}</p>}
       </div>
       {acao}
     </header>
@@ -73,7 +74,7 @@ export function Vazio({ icone, titulo, texto }: { icone: ReactNode; titulo: stri
 /** Operações da ADS desta obra; as de retirada (ODD) levam a marca "sucata". */
 export function EscolhaOper({ operacoes, valor, onChange, compacto = false }: { operacoes: Operacao[]; valor: string; onChange: (o: string) => void; compacto?: boolean }) {
   return (
-    <div role="radiogroup" aria-label="Operação" className="flex gap-1.5 py-1 -my-1 overflow-x-auto snap-x max-sm:-mx-4 max-sm:px-4 sm:flex-wrap sm:overflow-visible">
+    <div role="radiogroup" aria-label="Operação" className="flex gap-1.5 py-1 -my-1 overflow-x-auto snap-x max-sm:-mx-4 max-sm:px-4 max-sm:scroll-px-4 sm:flex-wrap sm:overflow-visible">
       {operacoes.map((o) => {
         const ativo = o.oper === valor
         const nome = nomeOperacao(o)
@@ -102,7 +103,8 @@ export function EscolhaOper({ operacoes, valor, onChange, compacto = false }: { 
 
 /** Unidade de um item; em quilo fica destacada, porque o lançamento é o peso (não o metro). */
 export function Unidade({ un }: { un: string }) {
-  return ehQuilo(un) ? <span className="font-semibold text-accent-text">KG, lance em quilo</span> : <>{un}</>
+  // destaque em branco: o verde fica só para ação e para o que já foi feito
+  return ehQuilo(un) ? <span className="font-semibold text-text">KG, lance em quilo</span> : <>{un}</>
 }
 
 export function Quantidade({
@@ -147,7 +149,7 @@ export function Quantidade({
         onFocus={(e) => e.target.select()}
       />
       {emQuilo && (
-        <span aria-hidden="true" className="rounded-md bg-accent-soft px-1.5 py-0.5 text-sm font-bold text-accent-text">
+        <span aria-hidden="true" className="rounded-md bg-surface-2 px-1.5 py-0.5 text-sm font-bold text-text">
           kg
         </span>
       )}
@@ -161,11 +163,12 @@ export function Quantidade({
 export function Selo({ children, tom = 'neutro' }: { children: ReactNode; tom?: 'neutro' | 'destaque' | 'ok' | 'perigo' }) {
   const t = {
     neutro: 'bg-surface-2 text-muted',
-    destaque: 'bg-accent-soft text-accent-text',
+    // destaque é contorno claro, sem verde: o verde (ok) é só do que já foi lançado
+    destaque: 'ring-1 ring-inset ring-line-strong text-text',
     ok: 'bg-ok-soft text-ok',
     perigo: 'bg-danger-soft text-danger',
   }[tom]
-  return <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${t}`}>{children}</span>
+  return <span className={`num inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${t}`}>{children}</span>
 }
 
 /** Selo verde "N lançado(s)", único para todas as larguras (a lista de busca dá retorno do que já entrou). */

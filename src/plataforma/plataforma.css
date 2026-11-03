@@ -46,7 +46,7 @@
   top: clamp(20px, 5vw, 56px);
   right: var(--pl-gutter);
   margin-top: 40px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
   border: 1px solid var(--line);
@@ -119,7 +119,7 @@
   line-height: 1.25;
 }
 .pl-form input::placeholder {
-  color: #71717a;
+  color: var(--faint);
 }
 .pl-form input:focus {
   outline: none;
@@ -127,6 +127,10 @@
 }
 .pl-form input[aria-invalid='true'] {
   border-color: var(--danger);
+}
+/* campo com erro e com o foco: a borda engrossa, para o foco não sumir na cor do erro */
+.pl-form input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 1px var(--danger);
 }
 
 /* foto: miniatura redonda + botão de escolher (o input fica escondido, mas focável) */
@@ -199,6 +203,10 @@
   line-height: 1.4;
   color: var(--danger);
 }
+/* erro de um campo do formulário: colado ao campo (a grade tem 14 px entre os itens) */
+.pl-form > .pl-erro-campo {
+  margin-top: -8px;
+}
 
 .pl-botao {
   padding: 15px 20px;
@@ -221,7 +229,7 @@
   outline-offset: 2px;
 }
 .pl-nota {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--muted);
 }
@@ -350,7 +358,7 @@
   line-height: 1.5;
 }
 .pl-estado {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   padding: 5px 12px;
   border-radius: 99px;
@@ -372,7 +380,7 @@
   }
 }
 .pl-regiao.em-breve h2 {
-  color: #71717a;
+  color: var(--faint);
 }
 .pl-regiao.em-breve h2 button {
   cursor: default;

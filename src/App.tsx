@@ -227,7 +227,21 @@ export default function App() {
         }}
       />
     )
-  if (!obra) return <Inicio onArquivo={abrir} carregando={carregando} erro={erroInicio} tecnicos={tecnicos.length} onRegioes={() => setRegiao(null)} />
+  if (!obra)
+    return (
+      <Inicio
+        onArquivo={abrir}
+        carregando={carregando}
+        erro={erroInicio}
+        tecnicos={tecnicos.length}
+        onRegioes={() => {
+          // durante a leitura não volta (a obra apareceria depois, já fora da EDP); o erro não fica para a próxima vez
+          if (carregando) return
+          setErroInicio(null)
+          setRegiao(null)
+        }}
+      />
+    )
 
   const etapas = montarEtapas(estado, pendencias)
   const set = (patch: Partial<Estado>) => setEstado((e) => ({ ...e, ...patch }))
@@ -252,7 +266,8 @@ export default function App() {
 
   return (
     <div className="min-h-[100dvh]">
-      <header className="sticky top-0 z-20 h-[72px] border-b border-line bg-surface/95 backdrop-blur">
+      {/* cabeçalho grafite do painel B: logo, a obra e a volta às regiões */}
+      <header className="sticky top-0 z-20 h-[72px] border-b border-line bg-bg/95 backdrop-blur">
         <div className="h-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center gap-5">
           <div className="shrink-0">
             <Marca altura={36} />
@@ -260,11 +275,11 @@ export default function App() {
           <dl className="hidden md:flex items-center gap-8 min-w-0 border-l border-line pl-6">
             <div className="min-w-0">
               <dt className="text-xs text-muted">Nota</dt>
-              <dd className="num text-base font-semibold">{obra.resumo.nota}</dd>
+              <dd className="num text-lg leading-tight font-semibold tracking-[-0.02em]">{obra.resumo.nota}</dd>
             </div>
             <div className="min-w-0 hidden lg:block">
               <dt className="text-xs text-muted">Tipo de obra</dt>
-              <dd className="text-base font-semibold truncate max-w-[320px]">{obra.resumo.tipoObra || '-'}</dd>
+              <dd className="text-lg leading-tight font-semibold tracking-[-0.02em] truncate max-w-[320px]">{obra.resumo.tipoObra || '-'}</dd>
             </div>
             {estado.boletim && (
               <div className="shrink-0">
@@ -315,8 +330,8 @@ export default function App() {
             {estado.boletim && <SeletorBoletim valor={estado.boletim} onEscolher={(boletim) => set({ boletim })} />}
           </div>
           {obra.resumo.avisoJaFechado && (
-            <p role="note" className="mb-6 flex gap-2.5 rounded-panel border border-accent bg-accent-soft p-4 text-sm text-text">
-              <WarningCircle size={22} weight="bold" className="shrink-0 text-accent-text" aria-hidden="true" />
+            <p role="note" className="mb-6 flex gap-2.5 rounded-panel border border-line-strong bg-surface p-4 text-sm text-text">
+              <WarningCircle size={22} weight="bold" className="shrink-0 text-text" aria-hidden="true" />
               <span className="min-w-0 break-words">
                 <span className="font-semibold">Atenção: </span>
                 {obra.resumo.avisoJaFechado}
@@ -324,9 +339,9 @@ export default function App() {
             </p>
           )}
           {obra.resumo.diagnostico.diferencas.length > 0 && (
-            <section aria-labelledby="modelo-diferente" className="mb-6 rounded-panel border border-accent bg-accent-soft p-4 text-sm text-text">
+            <section aria-labelledby="modelo-diferente" className="mb-6 rounded-panel border border-line-strong bg-surface p-4 text-sm text-text">
               <h2 id="modelo-diferente" className="flex gap-2.5 font-semibold">
-                <WarningCircle size={22} weight="bold" className="shrink-0 text-accent-text" aria-hidden="true" />
+                <WarningCircle size={22} weight="bold" className="shrink-0 text-text" aria-hidden="true" />
                 Este inventário é de um modelo diferente dos já testados
               </h2>
               <ul className="mt-2 ml-8 grid gap-1 list-disc pl-4">
