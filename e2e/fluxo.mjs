@@ -647,7 +647,7 @@ async function plataforma() {
         return !!(c.getContext('webgl2') || c.getContext('webgl'))
       })
       const canvas3D = await page.locator('main canvas').count()
-      if (tem3D() && pediu(/\.glb$/)) console.log(`[${tag}] WebGL no Edge headless: ${webgl ? 'sim' : 'não'}; o 3D ligou (pediu o .glb e o pedaço Cracha3D; canvas na tela: ${canvas3D})`)
+      if (tem3D() && pediu(/\.glb$/)) console.log(`[${tag}] WebGL no Edge headless: ${webgl ? 'sim' : 'não'}; pediu o .glb e o Cracha3D (canvas na tela: ${canvas3D})`)
       else {
         console.log(`AVISO [${tag}] o 3D não ligou (WebGL no Edge headless: ${webgl ? 'sim' : 'não'}; pediu .glb: ${pediu(/\.glb$/)}; pediu Cracha3D: ${pediu(/Cracha3D/)}); o crachá parado fica no lugar`)
         if (webgl) falhas.push(`[${tag}] o navegador tem WebGL mas o crachá 3D não ligou no computador`)

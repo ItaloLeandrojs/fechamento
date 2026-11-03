@@ -97,7 +97,8 @@ Cada um vira um teste automático que roda antes de toda publicação. Esses arq
 - "Trocar pessoa" volta à entrada, apaga a pessoa guardada, e recarregar não reabre o painel.
 
 **O que o teste NÃO cobre**
-- WebGL de verdade em placa de vídeo: o Edge do teste roda sem tela e usa renderização por software. Prova que o 3D carrega e liga, não que fica fluido nem bonito num computador fraco. Conferir olhando no computador da equipe.
+- WebGL de verdade em placa de vídeo: o Edge do teste roda sem tela e usa renderização por software. Com WebGL, confere que o computador pede o `.glb` e o pedaço `Cracha3D`, mas não que o 3D fica fluido nem bonito num computador fraco. Conferir olhando no computador da equipe.
+- Sem WebGL no Edge de teste, o 3D não é conferido (só AVISO no log) e o teste passa.
 - Foto de celular em HEIC (iPhone com formato "alta eficiência"): o teste usa PNG e um .txt. A mensagem "Use JPG ou PNG." existe, mas ninguém testou um HEIC real nem fotos enormes em celular com pouca memória.
 - Armazenamento bloqueado ou cheio (modo privado, política da empresa): só os testes unitários de `pessoa.ts` cobrem. No navegador de verdade, o site deve funcionar na sessão sem lembrar da pessoa, mas isso não é exercitado no e2e.
 - Celular real: o teste emula toque e tela de 390 px no Edge; não substitui abrir no aparelho.
