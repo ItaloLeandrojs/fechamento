@@ -98,7 +98,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
               {totais.map((t) => (
                 <div key={t.rotulo} className="flex flex-col-reverse justify-end">
                   <dt className="mt-1.5 text-sm text-muted leading-snug">{t.rotulo}</dt>
-                  <dd className="num text-titulo font-semibold leading-none">{t.valor}</dd>
+                  <dd className="num text-titulo font-semibold leading-none tracking-[-0.03em]">{t.valor}</dd>
                 </div>
               ))}
             </dl>
@@ -110,7 +110,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
                 </h2>
                 <ul className="grid gap-2">
                   {pendencias.map((p) => (
-                    <li key={p} className="flex gap-2.5 text-sm text-danger bg-danger-soft rounded-ctl p-3">
+                    <li key={p} className="flex gap-2.5 text-sm text-danger bg-danger-soft border border-danger rounded-ctl p-3">
                       <WarningCircle size={20} weight="bold" className="shrink-0 mt-0.5" /> <span className="min-w-0 break-words">{p}</span>
                     </li>
                   ))}
@@ -120,13 +120,13 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
 
             {avisos.length > 0 && (
               <section aria-labelledby="rev-avisos" className="grid gap-2">
-                <h2 id="rev-avisos" className="text-sm font-semibold text-accent-text">
+                <h2 id="rev-avisos" className="text-sm font-semibold text-text">
                   Para conferir ({avisos.length})
                 </h2>
                 <ul className="grid gap-2">
                   {avisos.map((p) => (
-                    <li key={p} className="flex gap-2.5 text-sm text-accent-text bg-accent-soft rounded-ctl p-3">
-                      <Info size={20} weight="bold" className="shrink-0 mt-0.5" /> <span className="min-w-0 break-words">{p}</span>
+                    <li key={p} className="flex gap-2.5 text-sm text-text border border-line-strong rounded-ctl p-3">
+                      <Info size={20} weight="bold" className="shrink-0 mt-0.5 text-muted" /> <span className="min-w-0 break-words">{p}</span>
                     </li>
                   ))}
                 </ul>
@@ -146,7 +146,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
               </p>
             )}
             {problemasArquivo && (
-              <section role="alert" aria-labelledby="rev-conf" className="grid gap-2 max-h-[40dvh] overflow-y-auto rounded-ctl bg-danger-soft p-3 text-sm text-danger">
+              <section role="alert" aria-labelledby="rev-conf" className="grid gap-2 max-h-[40dvh] overflow-y-auto rounded-ctl border border-danger bg-danger-soft p-3 text-sm text-danger">
                 <h2 id="rev-conf" className="flex gap-2 font-semibold">
                   <WarningCircle size={20} weight="bold" className="shrink-0" />
                   A conferência do arquivo achou {problemasArquivo.length === 1 ? '1 problema' : `${problemasArquivo.length} problemas`}. Ele ainda não foi baixado.
@@ -159,18 +159,18 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
                   ))}
                 </ul>
                 <p className="text-text">Corrija e gere de novo. Se precisar do arquivo assim mesmo, baixe e confira no Excel antes de enviar.</p>
-                <Botao variante="secundario" className="w-full text-sm" onClick={onBaixarMesmoAssim}>
+                <Botao variante="perigo" className="w-full text-sm border border-danger bg-bg font-semibold" onClick={onBaixarMesmoAssim}>
                   <DownloadSimple size={18} /> Baixar mesmo assim
                 </Botao>
               </section>
             )}
             {erro && (
-              <p role="alert" className="flex gap-2.5 text-sm text-danger bg-danger-soft rounded-ctl p-3">
+              <p role="alert" className="flex gap-2.5 text-sm text-danger bg-danger-soft border border-danger rounded-ctl p-3">
                 <WarningCircle size={20} weight="bold" className="shrink-0 mt-0.5" /> <span className="min-w-0 break-words">{erro}</span>
               </p>
             )}
             {bloqueado && (
-              <p className="text-sm text-danger">
+              <p className="text-sm font-medium text-danger">
                 Resolva {pendencias.length === 1 ? 'a pendência' : `as ${pendencias.length} pendências`} para baixar.
               </p>
             )}
@@ -182,9 +182,9 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
 
         <div className={`grid gap-6 min-w-0 min-[1320px]:order-1`}>
           <Painel className="overflow-clip">
-            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 md:px-5 py-3 border-b border-line">
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 md:px-5 py-4 border-b border-line">
               <div>
-                <h2 className="text-lg font-semibold">Linhas previstas da ADS</h2>
+                <h2 className="text-xl font-semibold tracking-[-0.02em]">Linhas previstas da ADS</h2>
                 <p className="text-sm text-muted">
                   Mostrando <span className="num">{visiveis.length}</span> de <span className="num">{linhas.length}</span>
                 </p>
@@ -222,7 +222,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
                         ['Adicional', 'px-2 text-right'],
                         ['Devolvido', 'pl-2 pr-4 text-right'],
                       ].map(([nome, cls]) => (
-                        <th key={nome} scope="col" className={`sticky top-[72px] z-10 bg-surface-2 py-2.5 font-semibold shadow-[0_1px_0_var(--line)] ${cls}`}>
+                        <th key={nome} scope="col" className={`sticky top-[72px] z-10 bg-surface py-2.5 font-semibold shadow-[0_1px_0_var(--line-strong)] ${cls}`}>
                           {nome}
                         </th>
                       ))}
@@ -280,7 +280,7 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
                             </span>
                           )}
                         </div>
-                        <dl className="grid grid-cols-4 gap-2 rounded-ctl bg-surface-2 px-3 py-2.5 text-center">
+                        <dl className="grid grid-cols-4 gap-2 border-t border-line pt-2.5 text-center">
                           {[
                             ['Planej.', <Numero key="p" valor={l.planejado} />, 'text-muted'],
                             ['Aplic.', <Numero key="a" valor={l.aplicado} />, 'font-semibold'],
@@ -303,8 +303,8 @@ export function Revisao({ ads, catalogo, lancamentos, avisos, pendencias, gerand
 
           {novas.length > 0 && (
             <Painel className="overflow-clip">
-              <div className="px-4 md:px-5 py-3 border-b border-line">
-                <h2 className="text-lg font-semibold">
+              <div className="px-4 md:px-5 py-4 border-b border-line">
+                <h2 className="text-xl font-semibold tracking-[-0.02em]">
                   Linhas novas no fim da ADS (<span className="num">{novas.length}</span>)
                 </h2>
                 <p className="text-sm text-muted mt-0.5 max-w-[80ch]">Itens que não estavam previstos. Entram sem ID e com a operação em branco, para a pessoa preencher.</p>

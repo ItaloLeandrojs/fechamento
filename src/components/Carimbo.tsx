@@ -68,13 +68,13 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
       />
       <input ref={arquivo} type="file" accept=".json,application/json" className="hidden" onChange={(e) => importar(e.target.files?.[0]).finally(() => (e.target.value = ''))} />
 
-      <p className="flex items-start gap-3 mb-5 max-w-[84ch] rounded-ctl bg-surface-2 px-4 py-3 text-sm">
+      <p className="flex items-start gap-3 mb-6 max-w-[84ch] rounded-panel border border-line-strong bg-surface px-4 py-3.5 text-sm text-text">
         <Info size={20} className="shrink-0 mt-0.5 text-muted" aria-hidden="true" />
         <span>O carimbo antigo que vier no inventário é retirado. A lista de técnicos fica guardada só neste navegador e não vai para a internet.</span>
       </p>
 
       {erro && (
-        <p role="alert" className="flex items-start gap-3 mb-5 rounded-ctl bg-danger-soft text-danger px-4 py-3 text-sm font-medium">
+        <p role="alert" className="flex items-start gap-3 mb-6 rounded-panel border border-danger bg-danger-soft text-danger px-4 py-3.5 text-sm font-medium">
           <Warning size={20} weight="bold" className="shrink-0 mt-0.5" aria-hidden="true" />
           <span>{erro}</span>
         </p>
@@ -105,7 +105,7 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
             return (
               <div
                 key={t.registro}
-                className={`entra press relative rounded-panel border p-4 grid gap-4 content-start bg-surface ${ativo ? 'border-text ring-2 ring-accent' : 'border-line hover:border-line-strong'}`}
+                className={`entra press relative rounded-panel border p-4 grid gap-4 content-start bg-surface ${ativo ? 'border-accent ring-1 ring-accent' : 'border-line hover:border-line-strong'}`}
               >
                 <button
                   type="button"
@@ -121,8 +121,8 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
                 </div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-base font-semibold leading-snug break-words">{t.nome}</p>
-                    <p className="text-[0.875rem] leading-5 text-muted mt-0.5">
+                    <p className="text-base font-semibold leading-snug tracking-[-0.01em] break-words">{t.nome}</p>
+                    <p className="text-sm text-muted mt-0.5">
                       Matrícula <span className="num">{t.registro}</span>
                     </p>
                   </div>
@@ -147,7 +147,7 @@ export function Carimbo({ selecionado, onSelecionar, tecnicos, onTecnicos }: Pro
                     <Trash size={18} />
                   </Botao>
                 </div>
-                <p className={`flex items-center gap-2 text-sm min-h-6 ${ativo ? 'font-semibold' : 'text-muted'}`}>
+                <p className={`flex items-center gap-2 text-sm min-h-6 border-t border-line pt-3 ${ativo ? 'font-semibold' : 'text-muted'}`}>
                   {ativo ? (
                     <>
                       <CheckCircle size={20} weight="fill" className="shrink-0 text-ok" aria-hidden="true" /> Usado nas folhas
@@ -176,7 +176,7 @@ function NovoTecnico({ tecnicos, onSalvo, onCancelar }: { tecnicos: TecnicoSalvo
 
   return (
     <Painel className="entra p-4 md:p-6 mb-5">
-      <h2 className="text-lg font-semibold mb-4">Cadastrar técnico</h2>
+      <h2 className="text-xl font-semibold tracking-[-0.02em] mb-5">Cadastrar técnico</h2>
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_12rem] xl:grid-cols-[minmax(0,1fr)_12rem_minmax(0,24rem)] gap-x-4 gap-y-4 items-start">
         <Campo rotulo="Nome completo" value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} placeholder="NOME COMO NO CARIMBO" />
         <Campo rotulo="Matrícula" inputMode="numeric" value={registro} onChange={(e) => setRegistro(e.target.value.replace(/\D/g, ''))} placeholder="1234" />
@@ -212,12 +212,12 @@ function NovoTecnico({ tecnicos, onSalvo, onCancelar }: { tecnicos: TecnicoSalvo
         </div>
       )}
       {erroSalvar && (
-        <p role="alert" className="flex items-start gap-3 mt-4 rounded-ctl bg-danger-soft text-danger px-4 py-3 text-sm font-medium">
+        <p role="alert" className="flex items-start gap-3 mt-4 rounded-panel border border-danger bg-danger-soft text-danger px-4 py-3.5 text-sm font-medium">
           <Warning size={20} weight="bold" className="shrink-0 mt-0.5" aria-hidden="true" />
           <span>{erroSalvar}</span>
         </p>
       )}
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
+      <div className="mt-6 pt-5 border-t border-line flex flex-wrap justify-end gap-2">
         <Botao variante="fantasma" onClick={onCancelar}>
           Cancelar
         </Botao>

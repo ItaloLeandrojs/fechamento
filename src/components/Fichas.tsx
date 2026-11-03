@@ -13,7 +13,7 @@ function CabecaCartao({ titulo, extra, remover, rotuloRemover }: { titulo: React
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 mb-5">
       <div className="flex flex-wrap items-end gap-x-5 gap-y-3 min-w-0">
-        <h2 className="text-lg font-semibold break-words min-w-0 pb-2.5">{titulo}</h2>
+        <h2 className="text-xl font-semibold tracking-[-0.02em] break-words min-w-0 pb-2.5">{titulo}</h2>
         {extra}
       </div>
       <Botao variante="perigo" className="border border-line-strong" aria-label={rotuloRemover} onClick={remover}>
@@ -39,14 +39,14 @@ export function Aterramento({ pontos, onChange }: { pontos: PontoUI[]; onChange:
           </Botao>
         }
       />
-      <p className="flex items-start gap-3 mb-5 max-w-[84ch] rounded-ctl bg-surface-2 px-4 py-3 text-sm">
+      <p className="flex items-start gap-3 mb-6 max-w-[84ch] rounded-panel border border-line-strong bg-surface px-4 py-3.5 text-sm text-text">
         <Info size={20} className="shrink-0 mt-0.5 text-muted" aria-hidden="true" />
         <span>
           As linhas da tabela e os blocos de fotos que não tiverem ponto saem da ficha ao baixar. Sem nenhum ponto, a ficha fica como veio.
         </span>
       </p>
       {passou && (
-        <p role="alert" className="flex items-start gap-3 mb-5 rounded-ctl bg-danger-soft text-danger px-4 py-3 text-sm font-medium">
+        <p role="alert" className="flex items-start gap-3 mb-6 rounded-panel border border-danger bg-danger-soft text-danger px-4 py-3.5 text-sm font-medium">
           <Warning size={20} weight="bold" className="shrink-0 mt-0.5" aria-hidden="true" />
           <span>
             A ficha do inventário tem lugar para {LIMITE_PONTOS} pontos. Por enquanto o site não cria blocos extras: tire {pontos.length - LIMITE_PONTOS} ponto(s) ou complete no Excel.
@@ -141,7 +141,7 @@ export function Equipamentos({ equips, onChange }: { equips: EquipUI[]; onChange
           </Botao>
         }
       />
-      <p className="flex items-start gap-3 mb-5 max-w-[84ch] rounded-ctl bg-surface-2 px-4 py-3 text-sm">
+      <p className="flex items-start gap-3 mb-6 max-w-[84ch] rounded-panel border border-line-strong bg-surface px-4 py-3.5 text-sm text-text">
         <Info size={20} className="shrink-0 mt-0.5 text-muted" aria-hidden="true" />
         <span>Em Fabricação, escreva mês/ano (03/2025) ou só o ano (2025). Na ficha, o valor entra como data do Excel.</span>
       </p>
@@ -164,23 +164,23 @@ export function Equipamentos({ equips, onChange }: { equips: EquipUI[]; onChange
                 remover={() => onChange((l) => l.filter((x) => x.id !== e.id))}
               />
               <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] gap-6 xl:gap-8">
-                <div className="grid gap-5 content-start">
-                  <fieldset className="rounded-ctl border border-line p-4">
-                    <legend className="px-1.5 -ml-1.5 text-base font-semibold">Instalado</legend>
+                <div className="grid gap-7 content-start">
+                  <fieldset className="min-w-0">
+                    <legend className="w-full border-b border-line-strong pb-2 mb-4 text-base font-semibold tracking-[-0.01em]">Instalado</legend>
                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-x-4 gap-y-4 items-end">
                       {CAMPOS_INST.map(([k, r, ph]) => (
                         <Campo key={k} rotulo={r} placeholder={ph} value={e.instalado[k]} onChange={(ev) => muda(e.id, (x) => ({ ...x, instalado: { ...x.instalado, [k]: ev.target.value } }))} />
                       ))}
                     </div>
-                    <p className="text-xs font-medium text-muted mt-5 mb-1.5">Tensões (V)</p>
+                    <p className="text-xs font-medium text-muted mt-6 mb-1.5">Tensões (V)</p>
                     <div className="grid grid-cols-3 md:grid-cols-6 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
                       {(Object.keys(e.tensoes) as (keyof EquipUI['tensoes'])[]).map((k) => (
                         <Campo key={k} rotulo={k} inputMode="numeric" value={e.tensoes[k]} onChange={(ev) => muda(e.id, (x) => ({ ...x, tensoes: { ...x.tensoes, [k]: ev.target.value } }))} />
                       ))}
                     </div>
                   </fieldset>
-                  <fieldset className="rounded-ctl border border-line p-4">
-                    <legend className="px-1.5 -ml-1.5 text-base font-semibold">Retirado</legend>
+                  <fieldset className="min-w-0">
+                    <legend className="w-full border-b border-line-strong pb-2 mb-4 text-base font-semibold tracking-[-0.01em]">Retirado</legend>
                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-x-4 gap-y-4 items-end">
                       {CAMPOS_RET.map(([k, r, ph]) => (
                         <Campo key={k} rotulo={r} placeholder={ph} value={e.retirado[k]} onChange={(ev) => muda(e.id, (x) => ({ ...x, retirado: { ...x.retirado, [k]: ev.target.value } }))} />
@@ -225,7 +225,7 @@ export function DP({ tem, foto, onChange }: { tem: boolean; foto?: Foto; onChang
   return (
     <div>
       <Titulo titulo="Desligamento programado" sub="Sem desligamento, o quadro da aba DP continua escrito LIVRE. Com desligamento, a foto do documento entra inteira no quadro." />
-      <Painel className="entra p-4 md:p-6">
+      <section className="entra border-t border-line pt-6">
         <div className={tem ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] gap-6 lg:gap-8' : ''}>
           <div className="grid gap-5 content-start">
             <div className="grid gap-2">
@@ -268,7 +268,7 @@ export function DP({ tem, foto, onChange }: { tem: boolean; foto?: Foto; onChang
             </div>
           )}
         </div>
-      </Painel>
+      </section>
     </div>
   )
 }

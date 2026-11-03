@@ -58,7 +58,7 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
 
   return (
     <div className="min-h-[100dvh]">
-      <header className="sticky top-0 z-20 h-[72px] border-b border-line bg-surface/95 backdrop-blur">
+      <header className="sticky top-0 z-20 h-[72px] border-b border-line bg-bg/95 backdrop-blur">
         <div className="h-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center gap-4">
           <Marca altura={36} />
           <Selo tom="destaque">
@@ -106,14 +106,14 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
         </div>
 
         {erro && (
-          <p role="alert" className="flex gap-2.5 rounded-ctl bg-danger-soft p-3 text-sm text-danger">
+          <p role="alert" className="flex gap-2.5 rounded-panel border border-danger bg-danger-soft px-4 py-3.5 text-sm text-danger">
             <WarningCircle size={20} weight="bold" className="shrink-0 mt-0.5" /> {erro}
           </p>
         )}
 
         {resultado && (
           <>
-            <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-5">
               <Numero rotulo="Etiquetas de poste lidas" valor={resultado.etiquetas.length} />
               <Numero rotulo="Vãos novos de MT (m)" valor={metros(resultado, 1, /^P\d/)} />
               <Numero rotulo="Vãos novos de BT (m)" valor={metros(resultado, 1, /^AM/)} />
@@ -123,8 +123,8 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
             {resultado.avisos.length > 0 && (
               <ul className="grid gap-2">
                 {resultado.avisos.map((a, i) => (
-                  <li key={i} className="flex gap-2.5 rounded-ctl bg-accent-soft p-3 text-sm text-text">
-                    <Info size={20} weight="bold" className="shrink-0 mt-0.5 text-accent-text" /> {a}
+                  <li key={i} className="flex gap-2.5 rounded-panel border border-line-strong bg-surface px-4 py-3.5 text-sm text-text">
+                    <Info size={20} weight="bold" className="shrink-0 mt-0.5 text-muted" /> {a}
                   </li>
                 ))}
               </ul>
@@ -138,8 +138,10 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
 
             {resultado.naoReconhecidos.length > 0 && (
               <Painel className="p-4 md:p-5">
-                <h2 className="text-lg font-semibold">Itens que o site não reconheceu ({resultado.naoReconhecidos.length})</h2>
-                <p className="text-sm text-muted">Têm prefixo (1) ou (3), mas o site ainda não sabe o que são. Não entraram na contagem.</p>
+                <h2 className="text-xl font-semibold tracking-[-0.02em]">
+                  Itens que o site não reconheceu (<span className="num">{resultado.naoReconhecidos.length}</span>)
+                </h2>
+                <p className="mt-1 text-sm text-muted">Têm prefixo (1) ou (3), mas o site ainda não sabe o que são. Não entraram na contagem.</p>
                 <ul className="mt-3 flex flex-wrap gap-2">
                   {resultado.naoReconhecidos.map((n, i) => (
                     <li key={i} className="rounded-md bg-surface-2 px-2 py-1 text-sm">
@@ -151,7 +153,9 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
             )}
 
             <Painel className="overflow-clip">
-              <h2 className="px-4 md:px-5 py-3 text-lg font-semibold border-b border-line">Etiquetas lidas ({resultado.etiquetas.length})</h2>
+              <h2 className="px-4 md:px-5 py-4 text-xl font-semibold tracking-[-0.02em] border-b border-line">
+                Etiquetas lidas (<span className="num">{resultado.etiquetas.length}</span>)
+              </h2>
               <ul className="divide-y divide-line max-h-[520px] overflow-y-auto" tabIndex={0} aria-label="Etiquetas lidas">
                 {[...resultado.etiquetas]
                   .sort((a, b) => (Number(a.poste) || 999) - (Number(b.poste) || 999))
@@ -184,12 +188,12 @@ function Envio({ titulo, texto, icone, feito, carregando = false, onClick }: { t
       type="button"
       onClick={onClick}
       disabled={carregando}
-      className={`press flex items-center gap-4 rounded-panel border-2 border-dashed p-5 text-left min-h-24 ${feito ? 'border-ok bg-ok-soft/40' : 'border-line-strong bg-surface hover:bg-surface-2'}`}
+      className={`press flex items-center gap-4 rounded-panel border p-5 text-left min-h-24 ${feito ? 'border-ok bg-surface hover:bg-surface-2' : 'border-dashed border-line-strong bg-surface hover:bg-surface-2 hover:border-accent'}`}
     >
-      <span className={feito ? 'text-ok' : 'text-muted'}>{feito ? <CheckCircle size={28} weight="fill" /> : icone}</span>
+      <span className={feito ? 'text-ok' : 'text-accent'}>{feito ? <CheckCircle size={28} weight="fill" /> : icone}</span>
       <span className="min-w-0">
-        <span className="block font-semibold break-words">{carregando ? 'Lendo o desenho…' : titulo}</span>
-        <span className="block text-sm text-muted">{texto}</span>
+        <span className="block text-lg font-semibold leading-snug tracking-[-0.02em] break-words">{carregando ? 'Lendo o desenho…' : titulo}</span>
+        <span className="mt-0.5 block text-sm text-muted">{texto}</span>
       </span>
     </button>
   )
@@ -197,9 +201,9 @@ function Envio({ titulo, texto, icone, feito, carregando = false, onClick }: { t
 
 function Numero({ rotulo, valor }: { rotulo: string; valor: number | string }) {
   return (
-    <div className="flex flex-col-reverse justify-end rounded-panel border border-line bg-surface p-4">
-      <dt className="mt-1.5 text-sm text-muted">{rotulo}</dt>
-      <dd className="num text-titulo font-semibold leading-none">{typeof valor === 'number' ? formatarQtd(valor) : valor}</dd>
+    <div className="flex flex-col-reverse justify-end border-t border-line-strong pt-4">
+      <dt className="mt-2 text-sm text-muted">{rotulo}</dt>
+      <dd className="num text-titulo font-semibold leading-none tracking-[-0.03em]">{typeof valor === 'number' ? formatarQtd(valor) : valor}</dd>
     </div>
   )
 }
@@ -214,7 +218,7 @@ const SITUACAO: Record<LinhaComparada['situacao'], { texto: string; tom: 'ok' | 
 function TabelaBloco({ titulo, linhas, comparando, bloco }: { titulo: string; linhas: LinhaComparada[]; comparando: boolean; bloco: Bloco }) {
   return (
     <Painel className="overflow-clip">
-      <h2 className="px-4 md:px-5 py-3 text-lg font-semibold border-b border-line" id={'bloco-' + bloco}>
+      <h2 className="px-4 md:px-5 py-4 text-xl font-semibold tracking-[-0.02em] border-b border-line" id={'bloco-' + bloco}>
         {titulo} <span className="num text-muted font-medium">({linhas.length})</span>
       </h2>
       {!linhas.length ? (
@@ -222,7 +226,7 @@ function TabelaBloco({ titulo, linhas, comparando, bloco }: { titulo: string; li
       ) : (
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-labelledby={'bloco-' + bloco}>
           <table className="w-full text-sm">
-            <thead className="bg-surface-2 text-left text-xs text-muted">
+            <thead className="border-b border-line-strong text-left text-xs text-muted">
               <tr>
                 <th className="px-4 py-2 font-medium">Código</th>
                 <th className="px-2 py-2 font-medium text-right">Desenho</th>
@@ -237,7 +241,7 @@ function TabelaBloco({ titulo, linhas, comparando, bloco }: { titulo: string; li
                   <td className="px-4 py-2 align-top">
                     <span className="num font-semibold whitespace-nowrap">{l.codigo}</span>
                     {l.descricao && <span className="block text-xs text-muted">{l.descricao}</span>}
-                    {l.palpite && <span className="block text-xs font-medium text-accent-text">regra deduzida, a confirmar</span>}
+                    {l.palpite && <span className="block text-xs font-medium text-text">regra deduzida, a confirmar</span>}
                   </td>
                   <td className="px-2 py-2 align-top text-right num">{l.desenho === null ? '-' : formatarQtd(l.desenho)}</td>
                   {comparando && <td className="px-2 py-2 align-top text-right num">{l.orcamento === null ? '-' : formatarQtd(l.orcamento)}</td>}

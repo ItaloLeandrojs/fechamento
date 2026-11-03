@@ -29,7 +29,7 @@ export function FotoSlot({ rotulo, foto, onChange, alto = false }: { rotulo: str
       <span className="text-xs font-medium text-muted">{rotulo}</span>
       <div
         className={`relative rounded-ctl border overflow-hidden ${alto ? 'aspect-[3/4]' : 'aspect-[4/3]'} ${
-          arrastando ? 'border-accent bg-accent-soft' : foto ? 'border-line' : 'border-dashed border-line-strong bg-surface-2'
+          arrastando ? 'border-accent bg-accent-soft' : foto ? 'border-line-strong' : 'border-dashed border-line-strong bg-bg hover:border-accent'
         }`}
         onDragOver={(e) => {
           e.preventDefault()
@@ -44,7 +44,7 @@ export function FotoSlot({ rotulo, foto, onChange, alto = false }: { rotulo: str
       >
         {foto ? (
           <>
-            <img src={foto.url} alt={rotulo} className="absolute inset-0 w-full h-full object-contain bg-surface-2" />
+            <img src={foto.url} alt={rotulo} className="absolute inset-0 w-full h-full object-contain bg-bg" />
             <button
               type="button"
               aria-label={`Tirar ${rotulo.toLowerCase()}`}
@@ -52,17 +52,17 @@ export function FotoSlot({ rotulo, foto, onChange, alto = false }: { rotulo: str
                 URL.revokeObjectURL(foto.url)
                 onChange(undefined)
               }}
-              className="press absolute top-2 right-2 grid place-items-center size-11 rounded-full bg-surface/90 text-text border border-line hover:bg-surface"
+              className="press absolute top-2 right-2 grid place-items-center size-11 rounded-full bg-bg/90 text-text border border-line-strong hover:bg-surface"
             >
               <X size={18} weight="bold" />
             </button>
-            <button type="button" onClick={() => input.current?.click()} className="press absolute inset-x-0 bottom-0 h-12 md:h-11 text-sm font-medium bg-surface/90 text-text hover:bg-surface">
+            <button type="button" onClick={() => input.current?.click()} className="press absolute inset-x-0 bottom-0 h-12 md:h-11 text-sm font-medium bg-bg/90 text-text border-t border-line-strong hover:bg-surface">
               Trocar foto<span className="sr-only">: {rotulo}</span>
             </button>
           </>
         ) : (
           <button type="button" onClick={() => input.current?.click()} disabled={lendo} className="press absolute inset-0 grid place-items-center content-center gap-2 px-3 text-center text-muted hover:text-text">
-            <Camera size={36} />
+            <Camera size={36} className="text-accent" />
             <span className="text-sm">
               {lendo ? 'Preparando…' : 'Soltar ou escolher'}
               <span className="sr-only">: {rotulo}</span>
