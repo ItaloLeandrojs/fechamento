@@ -2,7 +2,7 @@
 // Faz uma obra inteira com dados reais (pasta e2e/dados, fora do git):
 // sobe o inventário, lança estruturas, material, aterramento com fotos, DP,
 // técnico, revisa e baixa. Em cada tela roda o axe (acessibilidade) no tema
-// claro e no escuro, em 1366 e 390 px (e 1920 px no claro), confere que não há
+// escuro (o único do site), em 1366 e 390 px (e 1920 px), confere que não há
 // rolagem lateral e tira prints para olhar.
 // Uso: npm run build && node e2e/fluxo.mjs
 import { createRequire } from 'node:module'
@@ -152,7 +152,7 @@ async function conferirRevisao(page, largura, altura, tag) {
   await filtro.check()
 }
 
-async function rodada({ largura, altura, tema, movel }) {
+async function rodada({ largura, altura, tema, boletim, movel }) {
   const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: tema, isMobile: !!movel, hasTouch: !!movel, acceptDownloads: true })
   await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
   const page = await ctx.newPage()
@@ -160,7 +160,7 @@ async function rodada({ largura, altura, tema, movel }) {
   page.on('pageerror', (e) => erros.push(e.message))
   page.on('console', (m) => m.type() === 'error' && erros.push(m.text()))
   page.on('requestfailed', (r) => erros.push(`pedido falhou: ${r.url().slice(0, 120)} (${r.failure()?.errorText})`))
-  const tag = `${largura}-${tema}`
+  const tag = `${largura}-${tema}-${boletim.toLowerCase()}`
   const foto = async (nome) => {
     const sw = await page.evaluate(() => document.documentElement.scrollWidth)
     if (sw > largura + 1) falhas.push(`[${tag} ${nome}] página mais larga que a tela (${sw}px): rolagem lateral`)
@@ -182,7 +182,6 @@ async function rodada({ largura, altura, tema, movel }) {
   // o inventário de teste já vem com Aplicado preenchido: o aviso de "já fechado" tem que aparecer
   if (!(await page.getByRole('note').filter({ hasText: 'já vem com Aplicado preenchido' }).count())) falhas.push(`[${tag}] faltou o aviso de inventário já fechado`)
   // parcial ou final: obrigatório; sem escolher, a revisão acusa a pendência
-  const boletim = tema === 'light' ? 'Parcial' : 'Final'
   const pergunta = page.getByRole('region', { name: 'Este fechamento é parcial ou final?' })
   if (!(await pergunta.count())) falhas.push(`[${tag}] a pergunta Parcial ou Final não apareceu ao abrir o inventário`)
   await axe(page, `${tag} pergunta do boletim`)
@@ -354,7 +353,7 @@ async function rodada({ largura, altura, tema, movel }) {
 async function modeloDiferente() {
   const arq = path.join(DADOS, 'inv-diferente.xlsx')
   if (!fs.existsSync(arq)) return
-  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'light' })
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'dark' })
   await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
   const page = await ctx.newPage()
   await page.goto(URL_SITE)
@@ -367,7 +366,7 @@ async function modeloDiferente() {
     for (const esperado of ['coluna M devia ser "Valor Serviço"', 'não tem o rodapé']) if (!t.includes(esperado)) falhas.push(`[modelo diferente] o aviso não fala de: ${esperado}`)
   }
   await axe(page, 'modelo diferente')
-  await page.screenshot({ path: path.join(PRINTS, '1366-light-08-modelo-diferente.png') })
+  await page.screenshot({ path: path.join(PRINTS, '1366-dark-08-modelo-diferente.png') })
   placar.telas++
   await ctx.close()
 }
@@ -377,7 +376,7 @@ async function operacoesDaObra() {
   const arq = path.join(DADOS, 'inv-sucata.xlsx')
   if (!fs.existsSync(arq)) return
   for (const [largura, altura, movel] of [[1366, 768, false], [390, 844, true]]) {
-    const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: 'light', isMobile: movel, hasTouch: movel })
+    const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: 'dark', isMobile: movel, hasTouch: movel })
     await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
     const page = await ctx.newPage()
     await page.goto(URL_SITE)
@@ -388,7 +387,7 @@ async function operacoesDaObra() {
     const nEstr = await grupo.getByRole('radio').count()
     if (nEstr !== 3) falhas.push(`[operações ${largura}] estruturas devia ter 3 operações (2000 a 2020), tem ${nEstr}`)
     await axe(page, `operações ${largura} estruturas`)
-    await page.screenshot({ path: path.join(PRINTS, `${largura}-light-09-operacoes-estruturas.png`) })
+    await page.screenshot({ path: path.join(PRINTS, `${largura}-dark-09-operacoes-estruturas.png`) })
     await page.getByRole('navigation', { name: 'Etapas' }).getByRole('button', { name: /^Materiais/ }).click()
     const nMat = await page.getByRole('radiogroup', { name: 'Operação' }).getByRole('radio').count()
     if (nMat !== 8) falhas.push(`[operações ${largura}] materiais devia ter as 8 operações, tem ${nMat}`)
@@ -411,7 +410,7 @@ async function operacoesDaObra() {
       if (!(await page.getByText('Material novo numa operação de sucata: confira').count())) falhas.push(`[operações ${largura}] faltou o aviso de material novo na sucata`)
     }
     await axe(page, `operações ${largura} materiais`)
-    await page.screenshot({ path: path.join(PRINTS, `${largura}-light-10-operacoes-materiais.png`) })
+    await page.screenshot({ path: path.join(PRINTS, `${largura}-dark-10-operacoes-materiais.png`) })
     placar.telas += 2
     await ctx.close()
   }
@@ -421,7 +420,7 @@ async function operacoesDaObra() {
 async function soDesativacao() {
   const arq = path.join(DADOS, 'inv-desativacao.xlsx')
   if (!fs.existsSync(arq)) return
-  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'light' })
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'dark' })
   await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
   const page = await ctx.newPage()
   await page.goto(URL_SITE)
@@ -432,7 +431,7 @@ async function soDesativacao() {
   const botoes = page.locator('main button[aria-label^="Adicionar"]')
   if ((await botoes.count()) && (await botoes.first().isEnabled())) falhas.push('[só desativação] o Adicionar devia estar desligado')
   await axe(page, 'só desativação')
-  await page.screenshot({ path: path.join(PRINTS, '1366-light-11-so-desativacao.png') })
+  await page.screenshot({ path: path.join(PRINTS, '1366-dark-11-so-desativacao.png') })
   placar.telas++
   await ctx.close()
 }
@@ -442,7 +441,7 @@ async function ceara() {
   const dxf = path.join(DADOS, 'ceara.dxf') // obra com MT e trafo (cópia de ceara-teste/mt-trafo)
   const orc = path.join(DADOS, 'ceara-orcamento.xlsx')
   if (!fs.existsSync(dxf)) return
-  for (const [largura, altura, movel, tema] of [[1366, 768, false, 'light'], [1366, 768, false, 'dark'], [390, 844, true, 'light']]) {
+  for (const [largura, altura, movel, tema] of [[1366, 768, false, 'dark'], [390, 844, true, 'dark']]) {
     const tag = `ceara ${largura}-${tema}`
     const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: tema, isMobile: movel, hasTouch: movel })
     await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
@@ -476,11 +475,13 @@ try {
   await modeloDiferente()
   await operacoesDaObra()
   await soDesativacao()
-  gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'light' }))
-  gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'dark' }))
-  gerados.push(await rodada({ largura: 1920, altura: 1080, tema: 'light' }))
-  gerados.push(await rodada({ largura: 390, altura: 844, tema: 'light', movel: true }))
-  gerados.push(await rodada({ largura: 390, altura: 844, tema: 'dark', movel: true }))
+  // o site não tem mais tema claro: as rodadas que eram claras (que escolhiam Parcial) continuam,
+  // agora no escuro, com o boletim dito de forma explícita para manter a mesma cobertura
+  gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'dark', boletim: 'Parcial' }))
+  gerados.push(await rodada({ largura: 1366, altura: 768, tema: 'dark', boletim: 'Final' }))
+  gerados.push(await rodada({ largura: 1920, altura: 1080, tema: 'dark', boletim: 'Parcial' }))
+  gerados.push(await rodada({ largura: 390, altura: 844, tema: 'dark', boletim: 'Parcial', movel: true }))
+  gerados.push(await rodada({ largura: 390, altura: 844, tema: 'dark', boletim: 'Final', movel: true }))
 } catch (e) {
   falhas.push('FALHOU NO MEIO: ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | '))
 } finally {
