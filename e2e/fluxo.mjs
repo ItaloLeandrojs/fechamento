@@ -9,6 +9,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import zlib from 'node:zlib'
 
 const PROJ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DADOS = path.join(PROJ, 'e2e', 'dados')
@@ -482,9 +483,283 @@ async function ceara() {
   }
 }
 
+// PNG liso gerado aqui mesmo (cor sólida, sem foto de ninguém), para o teste de foto da entrada
+function pngLiso(largura, altura, [r, g, b]) {
+  const bloco = (tipo, dados) => {
+    const corpo = Buffer.concat([Buffer.from(tipo, 'ascii'), dados])
+    const tam = Buffer.alloc(4)
+    tam.writeUInt32BE(dados.length)
+    const crc = Buffer.alloc(4)
+    crc.writeUInt32BE(zlib.crc32(corpo) >>> 0)
+    return Buffer.concat([tam, corpo, crc])
+  }
+  const cab = Buffer.alloc(13)
+  cab.writeUInt32BE(largura, 0)
+  cab.writeUInt32BE(altura, 4)
+  cab[8] = 8 // 8 bits por canal
+  cab[9] = 2 // RGB
+  const linha = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: largura }, () => [r, g, b]).flat())])
+  const cru = Buffer.concat(Array.from({ length: altura }, () => linha))
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), bloco('IHDR', cab), bloco('IDAT', zlib.deflateSync(cru)), bloco('IEND', Buffer.alloc(0))])
+}
+
+// Plataforma: entrada (crachá), painel, avisos "em construção", recarregar, trocar pessoa, crachá parado/3D
+// e a volta às regiões com lançamento (confirmação). Dados fictícios; arquivos de foto gerados em e2e/saida.
+async function plataforma() {
+  const fotoOk = path.join(SAIDA, 'plataforma-foto.png')
+  const fotoRuim = path.join(SAIDA, 'plataforma-nao-e-foto.txt')
+  fs.writeFileSync(fotoOk, pngLiso(120, 160, [255, 0, 255])) // magenta: cor que não existe na arte do crachá
+  fs.writeFileSync(fotoRuim, 'isto é um texto, não uma imagem\n')
+  const NOME = 'Maria Souza'
+  const CARGO = 'Técnica de campo'
+  const CONFIRMA = 'Voltar às regiões? O que foi lançado nesta obra será perdido.'
+
+  for (const [largura, altura, movel] of [[1366, 768, false], [390, 844, true]]) {
+    const tag = `plataforma ${largura}`
+    const arq = (n) => path.join(PRINTS, `plataforma-${largura}-${n}.png`)
+    const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: 'dark', isMobile: movel, hasTouch: movel })
+    await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
+    const page = await ctx.newPage()
+    const erros = []
+    const pedidos = []
+    page.on('pageerror', (e) => erros.push(e.message))
+    page.on('console', (m) => m.type() === 'error' && erros.push(m.text()))
+    page.on('requestfailed', (r) => erros.push(`pedido falhou: ${r.url().slice(0, 120)} (${r.failure()?.errorText})`))
+    page.on('request', (r) => pedidos.push(r.url()))
+    const tira = async (n) => {
+      await page.screenshot({ path: arq(n), fullPage: true })
+      placar.telas++
+    }
+    const pessoaGuardada = () => page.evaluate(() => localStorage.getItem('fechamento-pessoa'))
+    const saudacao = page.getByRole('heading', { level: 1, name: /Maria\./ })
+    const noPainel = async (rotulo) => {
+      try {
+        await saudacao.waitFor({ timeout: 10000 })
+      } catch {
+        falhas.push(`[${tag}] ${rotulo}: não apareceu o painel com a saudação`)
+      }
+    }
+
+    // ---- entrada
+    await page.goto(URL_SITE)
+    const entrada = page.getByRole('heading', { level: 1, name: /Fecha.?mento/ })
+    await entrada.waitFor({ timeout: 10000 })
+    for (const rotulo of ['Nome', 'Cargo', 'Matrícula (opcional)', 'Foto (opcional)']) {
+      if (!(await page.getByLabel(rotulo, { exact: rotulo === 'Nome' || rotulo === 'Cargo' }).count())) falhas.push(`[${tag}] entrada: falta o campo "${rotulo}"`)
+    }
+    if (!(await page.getByRole('button', { name: 'Entrar' }).count())) falhas.push(`[${tag}] entrada: falta o botão Entrar`)
+    if (!(await page.getByText('Seus dados ficam guardados só neste navegador.', { exact: true }).count())) falhas.push(`[${tag}] entrada: falta a nota "Seus dados ficam guardados só neste navegador."`)
+    await axe(page, `${tag} entrada`)
+    await tira('01-entrada')
+
+    // nome vazio não entra (e só espaços também não); o erro aparece e o foco vai para o campo
+    const botaoEntrar = page.getByRole('button', { name: 'Entrar' })
+    await botaoEntrar.click()
+    if (!(await page.getByText('Preencha o nome.', { exact: true }).count())) falhas.push(`[${tag}] nome vazio: faltou "Preencha o nome."`)
+    if ((await page.evaluate(() => document.activeElement?.getAttribute('name'))) !== 'nome') falhas.push(`[${tag}] nome vazio: o foco devia ir para o campo Nome`)
+    await axe(page, `${tag} erro de nome`)
+    await tira('02-erro-nome')
+    await page.getByLabel('Nome', { exact: true }).fill('   ')
+    await botaoEntrar.click()
+    if (!(await page.getByText('Preencha o nome.', { exact: true }).count())) falhas.push(`[${tag}] nome só com espaços: faltou "Preencha o nome."`)
+    await page.getByLabel('Nome', { exact: true }).fill(NOME)
+    if (await page.getByText('Preencha o nome.', { exact: true }).count()) falhas.push(`[${tag}] o erro do nome devia sumir ao digitar`)
+    await botaoEntrar.click()
+    if (!(await page.getByText('Preencha o cargo.', { exact: true }).count())) falhas.push(`[${tag}] cargo vazio: faltou "Preencha o cargo."`)
+    if ((await page.evaluate(() => document.activeElement?.getAttribute('name'))) !== 'cargo') falhas.push(`[${tag}] cargo vazio: o foco devia ir para o campo Cargo`)
+    if (await saudacao.count()) falhas.push(`[${tag}] entrou sem o cargo`)
+    if ((await pessoaGuardada()) !== null) falhas.push(`[${tag}] guardou a pessoa sem passar na validação`)
+    await axe(page, `${tag} erro de cargo`)
+    await tira('03-erro-cargo')
+
+    // foto inválida (um .txt): a mensagem aparece e nenhuma foto fica escolhida
+    const arquivoFoto = page.locator('input[type=file]')
+    await arquivoFoto.setInputFiles(fotoRuim)
+    const msgFoto = page.getByText('Não consegui abrir essa foto. Use JPG ou PNG.', { exact: true })
+    try {
+      await msgFoto.waitFor({ timeout: 10000 })
+    } catch {
+      falhas.push(`[${tag}] foto inválida: faltou "Não consegui abrir essa foto. Use JPG ou PNG."`)
+    }
+    if (await page.locator('.pl-miniatura img').count()) falhas.push(`[${tag}] foto inválida: apareceu miniatura`)
+    await axe(page, `${tag} foto inválida`)
+    await tira('04-foto-invalida')
+
+    // foto válida (PNG gerado aqui): a mensagem some e a miniatura aparece
+    await arquivoFoto.setInputFiles(fotoOk)
+    try {
+      await page.locator('.pl-miniatura img').waitFor({ timeout: 10000 })
+    } catch {
+      falhas.push(`[${tag}] foto válida: a miniatura não apareceu`)
+    }
+    if (await msgFoto.count()) falhas.push(`[${tag}] foto válida: a mensagem de erro devia sumir`)
+    await page.getByLabel('Cargo', { exact: true }).fill(CARGO)
+    await page.getByLabel('Matrícula (opcional)').fill('12345')
+    await axe(page, `${tag} entrada preenchida`)
+    await tira('05-entrada-preenchida')
+
+    // ---- painel
+    await botaoEntrar.click()
+    await noPainel('depois de Entrar')
+    const guardada = JSON.parse((await pessoaGuardada()) || 'null')
+    if (!guardada || guardada.nome !== NOME || guardada.cargo !== CARGO || guardada.matricula !== '12345') falhas.push(`[${tag}] a pessoa não ficou guardada certa: ${JSON.stringify(guardada && { ...guardada, foto: undefined })}`)
+    else if (!/^data:image\/jpeg;base64,/.test(guardada.foto || '')) falhas.push(`[${tag}] a foto não ficou guardada (JPEG reduzido)`)
+    if ((await page.evaluate(() => document.activeElement?.tagName)) !== 'H1') falhas.push(`[${tag}] painel: o foco devia estar na saudação`)
+    if (!(await page.getByText('Escolha a região que você vai fechar hoje.', { exact: true }).count())) falhas.push(`[${tag}] painel: falta "Escolha a região que você vai fechar hoje."`)
+    for (const rotulo of ['Trocar pessoa', 'EDP', 'Ceará', 'Sergipe']) {
+      if (!(await page.getByRole('button', { name: rotulo, exact: true }).count())) falhas.push(`[${tag}] painel: falta o botão "${rotulo}"`)
+    }
+
+    // crachá: 390 px = parado (sem .glb nem pedaço do 3D); 1366 px = 3D se o navegador tiver WebGL
+    const parado = page.getByRole('img', { name: `Crachá de ${NOME}, ${CARGO}` })
+    const fotoNoCracha = () =>
+      page.evaluate(async () => {
+        const img = [...document.querySelectorAll('img')].find((i) => /^Crachá de /.test(i.alt))
+        if (!img) return -1
+        await img.decode()
+        const c = document.createElement('canvas')
+        c.width = Math.round(img.naturalWidth / 4)
+        c.height = Math.round(img.naturalHeight / 4)
+        const g = c.getContext('2d')
+        g.drawImage(img, 0, 0, c.width, c.height)
+        const d = g.getImageData(0, 0, c.width, c.height).data
+        let n = 0
+        for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] < 70 && d[i + 2] > 200) n++
+        return n
+      })
+    const pediu = (re) => pedidos.some((u) => re.test(u.split('?')[0]))
+    const tem3D = () => pediu(/\.glb$/) || pediu(/Cracha3D/)
+    if (movel) {
+      try {
+        await parado.waitFor({ timeout: 10000 })
+      } catch {
+        falhas.push(`[${tag}] crachá parado não apareceu (img com alt "Crachá de ${NOME}, ${CARGO}")`)
+      }
+      await page.waitForTimeout(1500) // tempo para qualquer pedido do 3D aparecer, se houvesse
+      if (tem3D()) falhas.push(`[${tag}] no celular pediu o 3D: ${pedidos.filter((u) => /\.glb|Cracha3D/.test(u)).join(', ')}`)
+      const magenta = await fotoNoCracha()
+      if (magenta < 5000) falhas.push(`[${tag}] a foto escolhida não aparece no crachá parado (${magenta} pixels da cor da foto)`)
+      else console.log(`[${tag}] foto no crachá parado: ${magenta} pixels da cor da foto (reduzido 4x)`)
+    } else {
+      await page.waitForTimeout(6000) // o 3D carrega à parte (pedaço Cracha3D, modelo .glb e física)
+      const webgl = await page.evaluate(() => {
+        const c = document.createElement('canvas')
+        return !!(c.getContext('webgl2') || c.getContext('webgl'))
+      })
+      const canvas3D = await page.locator('main canvas').count()
+      if (tem3D() && pediu(/\.glb$/)) console.log(`[${tag}] WebGL no Edge headless: ${webgl ? 'sim' : 'não'}; o 3D ligou (pediu o .glb e o pedaço Cracha3D; canvas na tela: ${canvas3D})`)
+      else {
+        console.log(`AVISO [${tag}] o 3D não ligou (WebGL no Edge headless: ${webgl ? 'sim' : 'não'}; pediu .glb: ${pediu(/\.glb$/)}; pediu Cracha3D: ${pediu(/Cracha3D/)}); o crachá parado fica no lugar`)
+        if (webgl) falhas.push(`[${tag}] o navegador tem WebGL mas o crachá 3D não ligou no computador`)
+      }
+      // com o 3D ligado não há crachá parado na tela; se houver (3D caiu na reserva), a foto tem que estar nele
+      if (await page.locator('img[alt^="Crachá de"]').count()) {
+        const magenta = await fotoNoCracha()
+        if (magenta < 5000) falhas.push(`[${tag}] a foto escolhida não aparece no crachá parado (${magenta} pixels da cor da foto)`)
+      }
+    }
+    await axe(page, `${tag} painel`)
+    await tira('06-painel')
+
+    // região "em breve" não navega: mostra o aviso e ele some sozinho
+    for (const [nomeRegiao, texto] of [['Ceará', 'O Ceará ainda está em construção.'], ['Sergipe', 'O Sergipe ainda está em construção.']]) {
+      await page.getByRole('button', { name: nomeRegiao, exact: true }).click({ force: true })
+      try {
+        await page.locator('.pl-aviso.visivel').getByText(texto, { exact: true }).waitFor({ timeout: 3000 })
+      } catch {
+        falhas.push(`[${tag}] ${nomeRegiao}: faltou o aviso "${texto}"`)
+      }
+      if (!(await saudacao.count())) falhas.push(`[${tag}] ${nomeRegiao}: saiu do painel (devia só avisar)`)
+      if (nomeRegiao === 'Ceará') {
+        await axe(page, `${tag} aviso em construção`)
+        await tira('07-aviso-ceara')
+      }
+    }
+    await page.waitForFunction(() => !document.querySelector('.pl-aviso.visivel') && !document.querySelector('.pl-aviso')?.textContent, null, { timeout: 5000 }).catch(() => falhas.push(`[${tag}] o aviso "em construção" não sumiu sozinho`))
+
+    // recarregar abre direto no painel (a pessoa fica guardada)
+    await page.reload()
+    await noPainel('depois de recarregar')
+    if (await page.getByRole('button', { name: 'Entrar' }).count()) falhas.push(`[${tag}] recarregar voltou para a entrada`)
+    await tira('08-recarregado')
+
+    // ---- EDP dentro da plataforma: "← Regiões" com lançamento pede confirmação
+    await page.getByRole('button', { name: 'EDP', exact: true }).click()
+    await page.setInputFiles('input[type=file]', path.join(DADOS, 'inv.xlsx'))
+    await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
+    await page.getByRole('region', { name: 'Este fechamento é parcial ou final?' }).getByRole('radio', { name: /^Parcial/ }).click()
+    await page.getByRole('radio', { name: /^2020 / }).click()
+    await page.getByPlaceholder(/Ex.: CE3/).fill('KP-CE1-P23')
+    await page.getByRole('button', { name: 'Adicionar KP-CE1-P23 na operação 2020' }).click()
+    await axe(page, `${tag} EDP com lançamento`)
+    await tira('09-edp-lancada')
+    const voltar = page.getByRole('button', { name: 'Regiões', exact: true })
+    // 1) recusar: continua na obra, com o lançamento
+    let msg = null
+    page.once('dialog', async (d) => {
+      msg = d.message()
+      await d.dismiss()
+    })
+    await voltar.click()
+    await page.waitForTimeout(300)
+    if (msg !== CONFIRMA) falhas.push(`[${tag}] ← Regiões (recusar): texto da confirmação "${msg}"`)
+    if (!(await page.getByRole('textbox', { name: 'Quantidade de KP-CE1-P23' }).count())) falhas.push(`[${tag}] ← Regiões (recusar): o lançamento sumiu ou saiu da obra`)
+    if (await saudacao.count()) falhas.push(`[${tag}] ← Regiões (recusar): voltou ao painel mesmo recusando`)
+    // 2) aceitar: volta ao painel e a obra é descartada
+    msg = null
+    page.once('dialog', async (d) => {
+      msg = d.message()
+      await d.accept()
+    })
+    await voltar.click()
+    await noPainel('depois de aceitar a confirmação')
+    if (msg !== CONFIRMA) falhas.push(`[${tag}] ← Regiões (aceitar): texto da confirmação "${msg}"`)
+    await page.getByRole('button', { name: 'EDP', exact: true }).click()
+    try {
+      await page.getByText('Arraste o inventário aqui').waitFor({ timeout: 10000 })
+    } catch {
+      falhas.push(`[${tag}] depois de aceitar, a EDP devia pedir o inventário de novo`)
+    }
+    if (await page.locator('nav[aria-label=Etapas]').count()) falhas.push(`[${tag}] depois de aceitar, a obra anterior continuou aberta`)
+    // sem obra aberta, "← Regiões" volta sem perguntar nada
+    let perguntou = false
+    page.once('dialog', async (d) => {
+      perguntou = true
+      await d.dismiss()
+    })
+    await page.getByRole('button', { name: /Regiões/ }).first().click()
+    await noPainel('voltando da EDP sem obra')
+    if (perguntou) falhas.push(`[${tag}] ← Regiões sem obra aberta não devia perguntar nada`)
+
+    // ---- trocar pessoa: volta à entrada, esquece a pessoa e o recarregar não reabre o painel
+    await page.getByRole('button', { name: 'Trocar pessoa' }).click()
+    try {
+      await entrada.waitFor({ timeout: 10000 })
+    } catch {
+      falhas.push(`[${tag}] Trocar pessoa não voltou à entrada`)
+    }
+    if ((await pessoaGuardada()) !== null) falhas.push(`[${tag}] Trocar pessoa não apagou a pessoa guardada`)
+    if ((await page.getByLabel('Nome', { exact: true }).inputValue()) !== '') falhas.push(`[${tag}] Trocar pessoa: o campo Nome devia vir vazio`)
+    await axe(page, `${tag} depois de trocar pessoa`)
+    await tira('10-trocar-pessoa')
+    await page.reload()
+    await entrada.waitFor({ timeout: 10000 })
+    if (await saudacao.count()) falhas.push(`[${tag}] depois de trocar pessoa, recarregar abriu o painel`)
+
+    for (const e of erros) {
+      if (e.includes('kaspersky-labs.com') || e === 'Failed to load resource: net::ERR_FAILED') continue
+      falhas.push(`[${tag}] erro no console: ${e}`)
+    }
+    const sw = await page.evaluate(() => document.documentElement.scrollWidth)
+    if (sw > largura + 1) falhas.push(`[${tag}] página mais larga que a tela (${sw}px)`)
+    await ctx.close()
+  }
+}
+
 const gerados = []
 try {
   await ceara()
+  await plataforma()
   await modeloDiferente()
   await operacoesDaObra()
   await soDesativacao()
