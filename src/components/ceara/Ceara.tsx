@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, CheckCircle, FileXls, Flask, Info, UploadSimple, WarningCircle } from '@phosphor-icons/react'
+import { CheckCircle, FileXls, Flask, Info, UploadSimple, WarningCircle } from '@phosphor-icons/react'
 import { Marca } from '../Logo'
 import { Botao, Painel, Selo, Titulo } from '../ui'
 import { formatarQtd } from '../../lib/busca'
@@ -64,8 +64,17 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
           <Selo tom="destaque">
             <Flask size={14} weight="bold" /> Ceará · em teste
           </Selo>
-          <Botao variante="fantasma" className="ml-auto" onClick={onVoltar} aria-label="Voltar para EDP">
-            <ArrowLeft size={20} /> <span className="hidden sm:inline">Voltar para EDP</span>
+          <Botao
+            variante="fantasma"
+            className="ml-auto"
+            onClick={() => {
+              // sai do endereço escondido #ceara-teste sem criar outra entrada no histórico
+              if (window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search)
+              onVoltar()
+            }}
+            aria-label="Regiões"
+          >
+            <span aria-hidden="true">←</span> <span className="hidden sm:inline">Regiões</span>
           </Botao>
         </div>
       </header>

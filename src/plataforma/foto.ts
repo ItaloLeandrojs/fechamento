@@ -2,13 +2,7 @@
 // maior, em JPEG 0.85. Arquivo que o navegador não decodifica (texto, HEIC)
 // rejeita com Error('foto-invalida').
 export async function reduzirFoto(arquivo: File, lado = 480): Promise<string> {
-  let imagem: ImageBitmap
-  try {
-    // imageOrientation corrige a rotação gravada pela câmera do celular
-    imagem = await createImageBitmap(arquivo, { imageOrientation: 'from-image' })
-  } catch {
-    throw new Error('foto-invalida')
-  }
+  const imagem = await decodificar(arquivo)
 
   try {
     const escala = Math.min(1, lado / Math.max(imagem.width, imagem.height))
@@ -19,7 +13,7 @@ export async function reduzirFoto(arquivo: File, lado = 480): Promise<string> {
       const tela = new OffscreenCanvas(largura, altura)
       const ctx = tela.getContext('2d')
       if (!ctx) throw new Error('foto-invalida')
-      ctx.drawImage(imagem, 0, 0, largura, altura)
+      desenhar(ctx, imagem, largura, altura)
       const blob = await tela.convertToBlob({ type: 'image/jpeg', quality: 0.85 })
       return await blobParaDataUrl(blob)
     }
@@ -29,13 +23,37 @@ export async function reduzirFoto(arquivo: File, lado = 480): Promise<string> {
     tela.height = altura
     const ctx = tela.getContext('2d')
     if (!ctx) throw new Error('foto-invalida')
-    ctx.drawImage(imagem, 0, 0, largura, altura)
+    desenhar(ctx, imagem, largura, altura)
     return tela.toDataURL('image/jpeg', 0.85)
   } catch {
     throw new Error('foto-invalida')
   } finally {
     imagem.close()
   }
+}
+
+async function decodificar(arquivo: File): Promise<ImageBitmap> {
+  try {
+    // imageOrientation corrige a rotação gravada pela câmera do celular
+    return await createImageBitmap(arquivo, { imageOrientation: 'from-image' })
+  } catch (e) {
+    // navegador antigo que não conhece a opção lança TypeError: tenta de novo sem ela
+    if (e instanceof TypeError) {
+      try {
+        return await createImageBitmap(arquivo)
+      } catch {
+        // cai no erro abaixo
+      }
+    }
+    throw new Error('foto-invalida')
+  }
+}
+
+// JPEG não tem transparência: sem o fundo branco, o PNG transparente vira fundo preto
+function desenhar(ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D, imagem: ImageBitmap, largura: number, altura: number) {
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, largura, altura)
+  ctx.drawImage(imagem, 0, 0, largura, altura)
 }
 
 function blobParaDataUrl(blob: Blob): Promise<string> {

@@ -18,6 +18,14 @@ import { Etapas } from './components/Etapas'
 import { Botao } from './components/ui'
 import { PerguntaBoletim, SeletorBoletim } from './components/Boletim'
 import { montarEtapas, type Secao } from './etapas'
+import { Entrada } from './plataforma/Entrada'
+import { Painel } from './plataforma/Painel'
+import { apagarPessoa, lerPessoa, type Pessoa } from './plataforma/pessoa'
+import type { RegiaoId } from './plataforma/regioes'
+
+// Ceará em teste: fora da vista da equipe, só por este endereço
+const HASH_CEARA = '#ceara-teste'
+const CONFIRMA_REGIOES = 'Voltar às regiões? O que foi lançado nesta obra será perdido.'
 
 interface Obra {
   nomeArquivo: string
@@ -30,9 +38,12 @@ interface Obra {
 }
 
 export default function App() {
+  // quem entrou (só neste navegador) e a região aberta no painel
+  const [pessoa, setPessoa] = useState<Pessoa | null>(() => lerPessoa())
+  const [regiao, setRegiao] = useState<RegiaoId | null>(null)
   const [obra, setObra] = useState<Obra | null>(null)
   // Fechamento Ceará (em teste): contagem pelo CAD, à parte do fluxo da EDP
-  const [ceara, setCeara] = useState(false)
+  const [ceara, setCeara] = useState(() => window.location.hash === HASH_CEARA)
   const [carregando, setCarregando] = useState(false)
   const [erroInicio, setErroInicio] = useState<string | null>(null)
   const [estado, setEstado] = useState<Estado>(estadoInicial)
@@ -53,6 +64,18 @@ export default function App() {
       if (t.length === 1) setEstado((e) => ({ ...e, tecnico: t[0].registro }))
     })
   }, [])
+
+  useEffect(() => {
+    const aoMudar = () => setCeara(window.location.hash === HASH_CEARA)
+    window.addEventListener('hashchange', aoMudar)
+    return () => window.removeEventListener('hashchange', aoMudar)
+  }, [])
+
+  // troca de tela (entrada, painel, região): começa do topo
+  const semPessoa = pessoa === null
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [semPessoa, regiao, ceara])
 
   const temTrabalho = estado.estruturas.length + estado.itens.length + estado.aterramento.length + estado.equipamentos.length > 0
   useEffect(() => {
@@ -192,10 +215,35 @@ export default function App() {
   }
 
   if (!obra && ceara) return <Ceara onVoltar={() => setCeara(false)} />
-  if (!obra) return <Inicio onArquivo={abrir} carregando={carregando} erro={erroInicio} tecnicos={tecnicos.length} onCeara={() => setCeara(true)} />
+  if (!pessoa) return <Entrada onEntrar={setPessoa} />
+  if (regiao !== 'edp')
+    return (
+      <Painel
+        pessoa={pessoa}
+        onAbrir={setRegiao}
+        onTrocar={() => {
+          apagarPessoa()
+          setPessoa(null)
+        }}
+      />
+    )
+  if (!obra) return <Inicio onArquivo={abrir} carregando={carregando} erro={erroInicio} tecnicos={tecnicos.length} onRegioes={() => setRegiao(null)} />
 
   const etapas = montarEtapas(estado, pendencias)
   const set = (patch: Partial<Estado>) => setEstado((e) => ({ ...e, ...patch }))
+
+  // volta ao painel: com obra lançada, confirma; o que foi lançado vai embora (o técnico escolhido fica)
+  const voltarRegioes = () => {
+    if (temTrabalho && !confirm(CONFIRMA_REGIOES)) return
+    setObra(null)
+    setEstado((e) => ({ ...estadoInicial, tecnico: e.tecnico }))
+    setSecao('estruturas')
+    setResultado(null)
+    setErroGerar(null)
+    setReprovado(null)
+    setErroInicio(null)
+    setRegiao(null)
+  }
 
   const trocar = () => {
     if (temTrabalho && !confirm('Trocar de inventário apaga o que foi lançado nesta obra. Continuar?')) return
@@ -232,6 +280,9 @@ export default function App() {
             </div>
           </dl>
           <div className="ml-auto flex items-center gap-2">
+            <Botao variante="fantasma" aria-label="Regiões" onClick={voltarRegioes}>
+              <span aria-hidden="true">←</span> <span className="hidden sm:inline">Regiões</span>
+            </Botao>
             <Botao variante="fantasma" aria-label="Trocar inventário" onClick={trocar}>
               <ArrowsClockwise size={20} /> <span className="hidden sm:inline">Trocar inventário</span>
             </Botao>

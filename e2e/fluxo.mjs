@@ -43,6 +43,16 @@ const falhas = []
 const placar = { axe: 0, telas: 0 }
 const browser = await chromium.launch({ channel: 'msedge' })
 
+// Entrada da plataforma: preenche o crachá com dados fictícios, entra e abre a EDP no painel
+async function entrar(page) {
+  await page.getByLabel('Nome', { exact: true }).fill('Maria Souza')
+  await page.getByLabel('Cargo', { exact: true }).fill('Técnica de campo')
+  await page.getByRole('button', { name: 'Entrar' }).click()
+  await page.getByRole('heading', { level: 1, name: /Maria\./ }).waitFor({ timeout: 10000 })
+  await page.getByRole('button', { name: 'EDP', exact: true }).click()
+  await page.getByText('Arraste o inventário aqui').waitFor({ timeout: 10000 })
+}
+
 async function axe(page, rotulo, { topo = true } = {}) {
   // por padrão volta ao topo (análise estável); topo:false analisa a página como está, rolada (cabeçalho e barra de baixo sobre o conteúdo)
   if (topo) await page.evaluate(() => window.scrollTo(0, 0))
@@ -169,6 +179,7 @@ async function rodada({ largura, altura, tema, boletim, movel }) {
   }
 
   await page.goto(URL_SITE)
+  await entrar(page)
   await axe(page, `${tag} início`)
   await foto('01-inicio')
 
@@ -357,6 +368,7 @@ async function modeloDiferente() {
   await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
   const page = await ctx.newPage()
   await page.goto(URL_SITE)
+  await entrar(page)
   await page.setInputFiles('input[type=file]', arq)
   await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
   const aviso = page.getByRole('region', { name: 'Este inventário é de um modelo diferente dos já testados' })
@@ -380,6 +392,7 @@ async function operacoesDaObra() {
     await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
     const page = await ctx.newPage()
     await page.goto(URL_SITE)
+    await entrar(page)
     await page.setInputFiles('input[type=file]', arq)
     await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
     await page.getByRole('radio', { name: /^Parcial/ }).first().click()
@@ -424,6 +437,7 @@ async function soDesativacao() {
   await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
   const page = await ctx.newPage()
   await page.goto(URL_SITE)
+  await entrar(page)
   await page.setInputFiles('input[type=file]', arq)
   await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
   await page.getByRole('radio', { name: /^Parcial/ }).first().click()
@@ -448,8 +462,7 @@ async function ceara() {
     const page = await ctx.newPage()
     const erros = []
     page.on('pageerror', (e) => erros.push(e.message))
-    await page.goto(URL_SITE)
-    await page.getByRole('tab', { name: /Ceará/ }).click()
+    await page.goto(URL_SITE + '#ceara-teste')
     await axe(page, `${tag} início`)
     const t0 = Date.now()
     await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
