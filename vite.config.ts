@@ -7,7 +7,9 @@ import tailwindcss from '@tailwindcss/vite'
 // que a pessoa escolhe (blob:). Nada de fora pode ser carregado nem receber dados.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // 'wasm-unsafe-eval': a física do crachá 3D (Rapier) roda em WebAssembly embutido no próprio script.
+  // Libera só compilar WebAssembly; eval de texto continua proibido e nada de fora entra.
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "font-src 'self'",
