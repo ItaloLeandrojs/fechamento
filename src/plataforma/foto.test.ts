@@ -1,23 +1,33 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { reduzirFoto } from './foto'
+import { abrirFoto, recortarFoto, reduzirFoto } from './foto'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
 // No Node não há canvas nem FileReader: um canvas falso que anota cada chamada, na ordem
+// (e os argumentos de cada drawImage, em `desenhos`)
+const desenhos: unknown[][] = []
+let tamanhoDaTela: number[] = []
 function canvasFalso() {
   const chamadas: string[] = []
+  desenhos.length = 0
   const ctx = {
     set fillStyle(v: string) {
       chamadas.push(`fillStyle ${v}`)
     },
     fillRect: () => chamadas.push('fillRect'),
-    drawImage: () => chamadas.push('drawImage'),
+    drawImage: (...a: unknown[]) => {
+      chamadas.push('drawImage')
+      desenhos.push(a)
+    },
   }
   vi.stubGlobal(
     'OffscreenCanvas',
     class {
+      constructor(largura: number, altura: number) {
+        tamanhoDaTela = [largura, altura]
+      }
       getContext() {
         return ctx
       }
@@ -79,5 +89,54 @@ describe('reduzirFoto', () => {
     vi.stubGlobal('createImageBitmap', () => Promise.resolve(bitmap()))
     await reduzirFoto(arquivo())
     expect(chamadas).toEqual(['fillStyle #ffffff', 'fillRect', 'drawImage'])
+  })
+})
+
+describe('recortarFoto', () => {
+  it('desenha só o quadrado escolhido, em 480 x 480, sobre fundo branco', async () => {
+    const chamadas = canvasFalso()
+    const imagem = bitmap() as unknown as ImageBitmap
+    await expect(recortarFoto(imagem, { x: 100, y: 40, lado: 300 })).resolves.toMatch(/^data:image\/jpeg/)
+    expect(tamanhoDaTela).toEqual([480, 480])
+    expect(chamadas).toEqual(['fillStyle #ffffff', 'fillRect', 'drawImage'])
+    expect(desenhos[0]).toEqual([imagem, 100, 40, 300, 300, 0, 0, 480, 480])
+  })
+
+  it('canvas que falha rejeita com foto-invalida', async () => {
+    vi.stubGlobal(
+      'OffscreenCanvas',
+      class {
+        getContext() {
+          return null
+        }
+      },
+    )
+    await expect(recortarFoto(bitmap() as unknown as ImageBitmap, { x: 0, y: 0, lado: 10 })).rejects.toThrow('foto-invalida')
+  })
+})
+
+describe('abrirFoto', () => {
+  it('foto grande de celular é reduzida para 1600 px no lado maior (e a original é fechada)', async () => {
+    const fechou = vi.fn()
+    const grande = { width: 3000, height: 4000, close: fechou }
+    const menor = { width: 1200, height: 1600, close: () => {} }
+    const cib = vi.fn((fonte: unknown) => Promise.resolve(fonte === grande ? menor : grande))
+    vi.stubGlobal('createImageBitmap', cib)
+    await expect(abrirFoto(arquivo())).resolves.toBe(menor)
+    expect(cib.mock.calls[1][1]).toMatchObject({ resizeWidth: 1200, resizeHeight: 1600 })
+    expect(fechou).toHaveBeenCalled()
+  })
+
+  it('foto pequena fica como está', async () => {
+    const b = bitmap()
+    const cib = vi.fn(() => Promise.resolve(b))
+    vi.stubGlobal('createImageBitmap', cib)
+    await expect(abrirFoto(arquivo())).resolves.toBe(b)
+    expect(cib).toHaveBeenCalledTimes(1)
+  })
+
+  it('arquivo que não é imagem rejeita com foto-invalida', async () => {
+    vi.stubGlobal('createImageBitmap', () => Promise.reject(new Error('não decodifica')))
+    await expect(abrirFoto(arquivo())).rejects.toThrow('foto-invalida')
   })
 })

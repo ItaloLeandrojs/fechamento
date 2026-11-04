@@ -1,16 +1,23 @@
 // Entrada da plataforma (rascunho B · Grafite): foto da linha viva ao fundo, "Fechamento" gigante
 // com a linha verde que liga, e o formulário com os dados do crachá. Tudo fica só neste navegador.
+// A foto escolhida passa pelo ajuste (AjusteFoto): o que vai para o crachá é o recorte quadrado.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { Camera } from '@phosphor-icons/react'
 import { Marca } from '../components/Logo'
 import { gravarPessoa, type Pessoa } from './pessoa'
-import { reduzirFoto } from './foto'
+import { abrirFoto, recortarFoto } from './foto'
+import { ajusteInicial, retanguloOrigem, type Ajuste } from './recorte'
+import { AjusteFoto } from './AjusteFoto'
 import './plataforma.css'
 
 const FOTO_FUNDO = `${import.meta.env.BASE_URL}plataforma/entrada.webp`
 const ERRO_FOTO = 'Não consegui abrir essa foto. Use JPG ou PNG.'
 const FOTO_NAO_COUBE = 'A foto não coube neste navegador; o crachá fica com as iniciais.'
+
+// a foto aberta (já reduzida) e o enquadramento; `nova` = ainda não confirmada com "Usar foto"
+type Original = { imagem: ImageBitmap; ajuste: Ajuste }
+type Edicao = Original & { nova: boolean; id: number }
 
 export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
   const [nome, setNome] = useState('')
@@ -25,11 +32,42 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
   const refCargo = useRef<HTMLInputElement>(null)
   // só a última foto escolhida vale (se a pessoa trocar antes da anterior terminar)
   const pedido = useRef(0)
+  // a foto confirmada fica guardada inteira para o "Ajustar" reabrir com o mesmo enquadramento
+  const [confirmada, setConfirmada] = useState<Original | null>(null)
+  const [edicao, setEdicao] = useState<Edicao | null>(null)
+  // cópia das duas para soltar a memória ao sair da tela
+  const abertas = useRef<{ confirmada: Original | null; edicao: Edicao | null }>({ confirmada: null, edicao: null })
+  useEffect(() => {
+    abertas.current = { confirmada, edicao }
+  }, [confirmada, edicao])
+  const refArquivo = useRef<HTMLInputElement>(null)
+  const refAjustar = useRef<HTMLButtonElement>(null)
+  // depois de fechar o ajuste, o foco volta para "Ajustar" (com foto) ou para o botão de escolher
+  const [devolverFoco, setDevolverFoco] = useState(0)
 
   useEffect(() => {
     // no celular o foco automático abriria o teclado por cima da foto
     if (window.matchMedia?.('(pointer: fine)').matches) refNome.current?.focus()
   }, [])
+
+  // ao sair da tela, solta as fotos abertas da memória
+  useEffect(
+    () => () => {
+      const { confirmada: c, edicao: e } = abertas.current
+      c?.imagem.close()
+      if (e?.nova) e.imagem.close()
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (devolverFoco) (refAjustar.current ?? refArquivo.current)?.focus()
+  }, [devolverFoco])
+
+  const esquecerConfirmada = () => {
+    confirmada?.imagem.close()
+    setConfirmada(null)
+  }
 
   const escolherFoto = async (arquivo: File | undefined) => {
     setErroFoto(false)
@@ -38,16 +76,52 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
     const meu = ++pedido.current
     setPreparando(true)
     try {
-      const reduzida = await reduzirFoto(arquivo, 480)
-      if (meu === pedido.current) setFoto(reduzida)
+      const imagem = await abrirFoto(arquivo)
+      if (meu !== pedido.current) {
+        imagem.close()
+        return
+      }
+      // abre o ajuste; a foto anterior (se houver) só sai quando a pessoa clicar em "Usar foto"
+      setEdicao({ imagem, ajuste: ajusteInicial(imagem.width, imagem.height), nova: true, id: meu })
     } catch {
       if (meu === pedido.current) {
+        esquecerConfirmada()
         setFoto(null)
         setErroFoto(true)
       }
     } finally {
       if (meu === pedido.current) setPreparando(false)
     }
+  }
+
+  const usarFoto = async (ajuste: Ajuste) => {
+    const e = edicao
+    if (!e) return
+    setEdicao(null)
+    const meu = ++pedido.current
+    setPreparando(true)
+    try {
+      const recorte = await recortarFoto(e.imagem, retanguloOrigem(e.imagem.width, e.imagem.height, ajuste), 480)
+      if (meu !== pedido.current) {
+        if (e.nova) e.imagem.close()
+        return
+      }
+      if (e.nova && confirmada && confirmada.imagem !== e.imagem) confirmada.imagem.close()
+      setConfirmada({ imagem: e.imagem, ajuste })
+      setFoto(recorte)
+    } catch {
+      if (e.nova) e.imagem.close()
+      if (meu === pedido.current) setErroFoto(true)
+    } finally {
+      if (meu === pedido.current) setPreparando(false)
+      setDevolverFoco((n) => n + 1)
+    }
+  }
+
+  const cancelarAjuste = () => {
+    if (edicao?.nova) edicao.imagem.close()
+    setEdicao(null)
+    setDevolverFoco((n) => n + 1)
   }
 
   const entrar = (e: FormEvent) => {
@@ -70,6 +144,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
     if (!gravouFoto && p.foto !== null) {
       // fica nesta tela para a pessoa ler o aviso; o próximo "Entrar" segue sem a foto
       pedido.current++
+      esquecerConfirmada()
       setFoto(null)
       setNaoCoube(true)
       return
@@ -151,6 +226,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
               <span className={`pl-miniatura${foto ? ' tem' : ''}`}>{foto ? <img src={foto} alt="" /> : <Camera size={22} aria-hidden="true" />}</span>
               <label className="pl-escolher">
                 <input
+                  ref={refArquivo}
                   type="file"
                   accept="image/jpeg,image/png"
                   aria-labelledby="entrada-foto-rotulo entrada-foto-acao"
@@ -163,16 +239,25 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
                 <span id="entrada-foto-acao">{preparando ? 'Preparando a foto…' : foto ? 'Trocar foto' : 'Escolher foto'}</span>
               </label>
               {foto && !preparando && (
-                <button
-                  type="button"
-                  className="pl-tirar"
-                  onClick={() => {
-                    pedido.current++
-                    setFoto(null)
-                  }}
-                >
-                  Remover
-                </button>
+                <span className="pl-foto-acoes">
+                  {confirmada && (
+                    <button ref={refAjustar} type="button" className="pl-tirar" onClick={() => setEdicao({ ...confirmada, nova: false, id: ++pedido.current })}>
+                      Ajustar
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="pl-tirar"
+                    onClick={() => {
+                      pedido.current++
+                      esquecerConfirmada()
+                      setFoto(null)
+                      setDevolverFoco((n) => n + 1)
+                    }}
+                  >
+                    Remover
+                  </button>
+                </span>
               )}
             </div>
             {erroFoto && (
@@ -189,6 +274,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
           <p className="pl-nota">Seus dados ficam guardados só neste navegador.</p>
         </form>
       </div>
+      {edicao && <AjusteFoto key={edicao.id} imagem={edicao.imagem} inicial={edicao.ajuste} onUsar={(a) => void usarFoto(a)} onCancelar={cancelarAjuste} />}
     </main>
   )
 }

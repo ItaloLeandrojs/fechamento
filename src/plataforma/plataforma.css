@@ -32,7 +32,8 @@
     linear-gradient(0deg, rgb(19 19 21 / 0.9), transparent 50%);
   z-index: 0;
 }
-.pl-entrada > * {
+/* o diálogo do ajuste fica de fora: ele mesmo se põe no topo da tela, fixo e centralizado */
+.pl-entrada > :where(:not(dialog)) {
   position: relative;
   z-index: 1;
 }
@@ -141,8 +142,14 @@
 /* foto: miniatura redonda + botão de escolher (o input fica escondido, mas focável) */
 .pl-foto-linha {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 4px 12px;
+}
+/* "Ajustar" e "Remover" juntos: no celular descem juntos para a linha de baixo */
+.pl-foto-acoes {
+  display: inline-flex;
+  gap: 4px;
 }
 .pl-miniatura {
   flex: none;
@@ -248,6 +255,125 @@
   color: var(--text);
   border-left: 3px solid var(--accent);
   padding: 2px 0 2px 10px;
+}
+
+/* AJUSTE DA FOTO: diálogo modal com o círculo de prévia (mesmo formato do círculo do crachá) */
+.pl-ajuste {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 40px 80px -30px rgb(0 0 0 / 0.8);
+}
+.pl-ajuste::backdrop {
+  background: rgb(8 8 9 / 0.78);
+}
+.pl-ajuste h2 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+.pl-ajuste-dica {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.pl-ajuste-area {
+  /* no celular de tela baixa o quadro encolhe para os botões caberem sem rolar */
+  width: min(100%, calc(100dvh - 330px));
+  min-width: 200px;
+  aspect-ratio: 1;
+  margin: 18px auto 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+  /* o dedo arrasta a foto, não a página */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.pl-ajuste-area:active {
+  cursor: grabbing;
+}
+.pl-ajuste-area:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pl-ajuste-area canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pl-ajuste-teclas {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+/* no celular (só toque) a dica do teclado sai da tela; continua como descrição da área para o leitor de tela */
+@media (hover: none) and (pointer: coarse) {
+  .pl-ajuste-teclas {
+    display: none;
+  }
+}
+.pl-ajuste-zoom {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto 3.2em;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.pl-ajuste-zoom label {
+  color: var(--text);
+}
+.pl-ajuste-zoom input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.pl-ajuste-zoom output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.pl-ajuste-botoes {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+.pl-ajuste-cancelar {
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: none;
+  color: var(--text);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color 0.16s var(--pl-ease);
+}
+.pl-ajuste-cancelar:hover {
+  background: var(--surface-2);
+}
+.pl-ajuste-cancelar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pl-ajuste .pl-ajuste-usar {
+  justify-content: center;
 }
 
 /* PAINEL */
@@ -454,7 +580,8 @@
   .pl-botao,
   .pl-regiao,
   .pl-aviso,
-  .pl-escolher {
+  .pl-escolher,
+  .pl-ajuste-cancelar {
     transition: none;
   }
   .pl-botao:active {

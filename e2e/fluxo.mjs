@@ -483,8 +483,9 @@ async function ceara() {
   }
 }
 
-// PNG liso gerado aqui mesmo (cor sólida, sem foto de ninguém), para o teste de foto da entrada
-function pngLiso(largura, altura, [r, g, b]) {
+// PNG gerado aqui mesmo (duas faixas de cor, sem foto de ninguém), para o teste de foto da entrada:
+// as colunas antes de `corte` ficam com a cor `a`, as outras com a cor `b`
+function pngDuasCores(largura, altura, corte, a, b) {
   const bloco = (tipo, dados) => {
     const corpo = Buffer.concat([Buffer.from(tipo, 'ascii'), dados])
     const tam = Buffer.alloc(4)
@@ -498,7 +499,7 @@ function pngLiso(largura, altura, [r, g, b]) {
   cab.writeUInt32BE(altura, 4)
   cab[8] = 8 // 8 bits por canal
   cab[9] = 2 // RGB
-  const linha = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: largura }, () => [r, g, b]).flat())])
+  const linha = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: largura }, (_, x) => (x < corte ? a : b)).flat())])
   const cru = Buffer.concat(Array.from({ length: altura }, () => linha))
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), bloco('IHDR', cab), bloco('IDAT', zlib.deflateSync(cru)), bloco('IEND', Buffer.alloc(0))])
 }
@@ -508,7 +509,9 @@ function pngLiso(largura, altura, [r, g, b]) {
 async function plataforma() {
   const fotoOk = path.join(SAIDA, 'plataforma-foto.png')
   const fotoRuim = path.join(SAIDA, 'plataforma-nao-e-foto.txt')
-  fs.writeFileSync(fotoOk, pngLiso(120, 160, [255, 0, 255])) // magenta: cor que não existe na arte do crachá
+  // 240 x 120: as 96 colunas da esquerda em magenta (cor que não existe na arte do crachá), o resto em ciano.
+  // O ajuste começa no meio (ciano no centro do círculo); arrastando para a direita e com zoom 2, o recorte fica todo magenta.
+  fs.writeFileSync(fotoOk, pngDuasCores(240, 120, 96, [255, 0, 255], [0, 255, 255]))
   fs.writeFileSync(fotoRuim, 'isto é um texto, não uma imagem\n')
   const NOME = 'Maria Souza'
   const CARGO = 'Técnica de campo'
@@ -585,14 +588,115 @@ async function plataforma() {
     await axe(page, `${tag} foto inválida`)
     await tira('04-foto-invalida')
 
-    // foto válida (PNG gerado aqui): a mensagem some e a miniatura aparece
+    // foto válida (PNG gerado aqui): abre o ajuste (círculo de prévia), a mensagem some
     await arquivoFoto.setInputFiles(fotoOk)
+    const ajuste = page.getByRole('dialog', { name: 'Ajustar a foto' })
+    try {
+      await ajuste.waitFor({ timeout: 10000 })
+    } catch {
+      falhas.push(`[${tag}] foto válida: o ajuste da foto não abriu`)
+    }
+    if (await msgFoto.count()) falhas.push(`[${tag}] foto válida: a mensagem de erro devia sumir`)
+    if (await page.locator('.pl-miniatura img').count()) falhas.push(`[${tag}] ajuste aberto: a miniatura só pode aparecer depois de "Usar foto"`)
+    const areaAjuste = ajuste.getByRole('application', { name: 'Posição da foto' })
+    const zoomAjuste = ajuste.getByRole('slider', { name: 'Zoom' })
+    if ((await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) !== 'Posição da foto') falhas.push(`[${tag}] ajuste: o foco devia começar na área da foto`)
+    // cor no centro do círculo de prévia (o canvas do ajuste)
+    const corNoCentro = () =>
+      page.evaluate(() => {
+        const c = document.querySelector('.pl-ajuste-area canvas')
+        const [r, g, b] = c.getContext('2d').getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data
+        return r > 200 && g < 70 && b > 200 ? 'magenta' : r < 70 && g > 200 && b > 200 ? 'ciano' : `rgb(${r},${g},${b})`
+      })
+    const zoomAgora = async () => Number(await zoomAjuste.inputValue())
+    await page.waitForTimeout(200)
+    if ((await corNoCentro()) !== 'ciano') falhas.push(`[${tag}] ajuste: devia começar no meio da foto (ciano no centro), veio ${await corNoCentro()}`)
+    if ((await zoomAgora()) !== 1) falhas.push(`[${tag}] ajuste: o zoom devia começar em 1 (veio ${await zoomAgora()})`)
+    await axe(page, `${tag} ajuste da foto`, { topo: false })
+    await tira('05a-ajuste-foto')
+    // arrastar para a direita: no computador com o mouse, no celular com o dedo (toque de verdade, pelo protocolo do navegador)
+    const caixa = await areaAjuste.boundingBox()
+    const meioX = caixa.x + caixa.width / 2
+    const meioY = caixa.y + caixa.height / 2
+    if (movel) {
+      const cdp = await ctx.newCDPSession(page)
+      const toque = (type, x) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: meioY, id: 1 }] })
+      await toque('touchStart', meioX - 100)
+      for (let i = 1; i <= 8; i++) await toque('touchMove', meioX - 100 + i * 25)
+      await toque('touchEnd')
+      await cdp.detach()
+    } else {
+      await page.mouse.move(meioX - 100, meioY)
+      await page.mouse.down()
+      await page.mouse.move(meioX + 100, meioY, { steps: 8 })
+      await page.mouse.up()
+    }
+    await page.waitForTimeout(150)
+    if ((await corNoCentro()) !== 'magenta') falhas.push(`[${tag}] ajuste: arrastar para a direita devia trazer o magenta para o centro (veio ${await corNoCentro()})`)
+    // zoom: roda do mouse no computador, controle deslizante no celular; depois o teclado (+, - e setas) nos dois
+    if (movel) await zoomAjuste.fill('2')
+    else {
+      await page.mouse.move(meioX, meioY)
+      for (let i = 0; i < 6 && (await zoomAgora()) < 1.9; i++) {
+        await page.mouse.wheel(0, -120)
+        await page.waitForTimeout(80)
+      }
+    }
+    const zoomDepois = await zoomAgora()
+    if (!(zoomDepois >= 1.5 && zoomDepois <= 2.9)) falhas.push(`[${tag}] ajuste: o zoom (${movel ? 'controle' : 'roda do mouse'}) devia ir para perto de 2 (veio ${zoomDepois})`)
+    await areaAjuste.focus()
+    await page.keyboard.press('+')
+    if (!((await zoomAgora()) > zoomDepois)) falhas.push(`[${tag}] ajuste: a tecla + devia aumentar o zoom (${zoomDepois} -> ${await zoomAgora()})`)
+    await page.keyboard.press('-')
+    if (Math.abs((await zoomAgora()) - zoomDepois) > 0.001) falhas.push(`[${tag}] ajuste: + e depois - deviam voltar ao mesmo zoom (${zoomDepois} -> ${await zoomAgora()})`)
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowRight')
+    if ((await corNoCentro()) !== 'magenta') falhas.push(`[${tag}] ajuste: depois do zoom e das setas o centro devia continuar magenta (veio ${await corNoCentro()})`)
+    await tira('05b-ajuste-mexido')
+    await ajuste.getByRole('button', { name: 'Usar foto' }).click()
     try {
       await page.locator('.pl-miniatura img').waitFor({ timeout: 10000 })
     } catch {
-      falhas.push(`[${tag}] foto válida: a miniatura não apareceu`)
+      falhas.push(`[${tag}] "Usar foto": a miniatura não apareceu`)
     }
-    if (await msgFoto.count()) falhas.push(`[${tag}] foto válida: a mensagem de erro devia sumir`)
+    if (await ajuste.count()) falhas.push(`[${tag}] "Usar foto": o ajuste devia fechar`)
+    // a miniatura é o recorte: quadrado de 480 px, todo magenta (sem o ciano da direita da foto original)
+    const recorte = () =>
+      page.evaluate(async () => {
+        const img = document.querySelector('.pl-miniatura img')
+        if (!img) return null
+        await img.decode()
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth
+        c.height = img.naturalHeight
+        const g = c.getContext('2d')
+        g.drawImage(img, 0, 0)
+        const d = g.getImageData(0, 0, c.width, c.height).data
+        let magenta = 0
+        for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] < 70 && d[i + 2] > 200) magenta++
+        return { largura: c.width, altura: c.height, magenta: magenta / (c.width * c.height), src: img.src }
+      })
+    const r1 = await recorte()
+    if (!r1 || r1.largura !== 480 || r1.altura !== 480) falhas.push(`[${tag}] o recorte devia ser um quadrado de 480 px (veio ${r1 && `${r1.largura}x${r1.altura}`})`)
+    else if (r1.magenta < 0.98) falhas.push(`[${tag}] o recorte não seguiu o ajuste: só ${(r1.magenta * 100).toFixed(1)}% magenta`)
+    else console.log(`[${tag}] recorte da foto: 480x480, ${(r1.magenta * 100).toFixed(1)}% magenta`)
+    if ((await page.evaluate(() => document.activeElement?.textContent)) !== 'Ajustar') falhas.push(`[${tag}] depois de "Usar foto" o foco devia ir para "Ajustar"`)
+    // "Ajustar" reabre com o mesmo enquadramento; Esc cancela e a foto continua a mesma
+    await page.getByRole('button', { name: 'Ajustar', exact: true }).click()
+    try {
+      await ajuste.waitFor({ timeout: 5000 })
+    } catch {
+      falhas.push(`[${tag}] "Ajustar" não reabriu o ajuste`)
+    }
+    if (Math.abs((await zoomAgora()) - zoomDepois) > 0.001) falhas.push(`[${tag}] "Ajustar" devia reabrir com o zoom que foi usado (${zoomDepois}, veio ${await zoomAgora()})`)
+    if ((await corNoCentro()) !== 'magenta') falhas.push(`[${tag}] "Ajustar" devia reabrir com o mesmo enquadramento (centro magenta, veio ${await corNoCentro()})`)
+    await page.keyboard.press('Escape')
+    try {
+      await ajuste.waitFor({ state: 'detached', timeout: 5000 })
+    } catch {
+      falhas.push(`[${tag}] Esc não fechou o ajuste`)
+    }
+    if ((await recorte())?.src !== r1?.src) falhas.push(`[${tag}] Esc no ajuste devia manter a foto como estava`)
     await page.getByLabel('Cargo', { exact: true }).fill(CARGO)
     await page.getByLabel('Matrícula (opcional)').fill('12345')
     await axe(page, `${tag} entrada preenchida`)
