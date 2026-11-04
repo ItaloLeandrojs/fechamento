@@ -1,23 +1,20 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle, DownloadSimple, FileXls, Info, UploadSimple, WarningCircle } from '@phosphor-icons/react'
 import { Marca } from '../Logo'
 import { Botao, Campo, Painel, Selo, Titulo } from '../ui'
 import { formatarQtd } from '../../lib/busca'
 import { lerDxf } from '../../ceara/dxf'
-import { contarObra, type Catalogo, type Linha, type ResultadoCeara } from '../../ceara/contagem'
+import { contarObra, type BaseEnel, type Linha, type ResultadoCeara } from '../../ceara/contagem'
 import { BLOCOS, comparar, lerOrcamento, type Bloco, type LinhaComparada, type Orcamento } from '../../ceara/orcamento'
 import { AREAS, gerarExcelCeara, nomeDoExcel, otDoNome, type Area } from '../../ceara/excel'
-
-// base da Enel (material e kits de estrutura): carregada à parte, só quando o Ceará abre
-let catalogo: Promise<Catalogo> | null = null
-const carregarCatalogo = () => (catalogo ??= import('../../data/enel-catalogo.json').then((m) => m.default as unknown as Catalogo))
 
 /**
  * Fechamento Ceará: lê o DXF do asbuilt, conta estruturas e materiais pelas etiquetas dos
  * postes e pelos vãos e baixa o Excel da Solicitação de acréscimos (abas de estrutura e
  * material). Com um orçamento feito à mão, mostra o que bateu. Mão de obra ainda fica de fora.
+ * A base da Enel (material e kits de estrutura) chega pronta, baixada depois do login.
  */
-export function Ceara({ onVoltar }: { onVoltar: () => void }) {
+export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void }) {
   const [nomeDxf, setNomeDxf] = useState('')
   const [resultado, setResultado] = useState<ResultadoCeara | null>(null)
   const [orcamento, setOrcamento] = useState<Orcamento | null>(null)
@@ -31,10 +28,6 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
   const inOrc = useRef<HTMLInputElement>(null)
   const idArea = useId()
 
-  useEffect(() => {
-    carregarCatalogo().catch(() => {})
-  }, [])
-
   const abrirDxf = async (f: File | undefined) => {
     if (!f) return
     setErro(null)
@@ -44,9 +37,7 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
     try {
       // dá tempo de a tela mostrar "lendo" antes do trabalho pesado
       await new Promise((ok) => setTimeout(ok, 30))
-      const base = await carregarCatalogo().catch(() => undefined)
       const r = contarObra(lerDxf(new Uint8Array(await f.arrayBuffer())), base)
-      if (!base) r.avisos.unshift('Não consegui carregar a base da Enel: as descrições e a conferência das estruturas ficaram de fora.')
       setResultado(r)
       setNomeDxf(f.name)
       setOt(otDoNome(f.name))

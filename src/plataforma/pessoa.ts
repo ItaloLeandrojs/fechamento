@@ -1,7 +1,7 @@
 // Pessoa que entrou no site. Os dados vêm do perfil (Supabase); aqui fica só a foto do crachá,
 // guardada por pessoa no localStorage deste navegador.
 // Todo acesso ao storage é protegido: se estiver bloqueado, cheio ou quebrado,
-// o site continua funcionando na sessão, só não lembra da pessoa.
+// o site continua funcionando na sessão, só não lembra da foto.
 import type { Perfil } from '../nuvem/sessao'
 
 export interface Pessoa {
@@ -21,52 +21,6 @@ function storagePadrao(): Storage | null {
     return globalThis.localStorage ?? null
   } catch {
     return null
-  }
-}
-
-// lerPessoa, gravarPessoa e apagarPessoa saem na Tarefa 7
-export function lerPessoa(storage: Storage | null = storagePadrao()): Pessoa | null {
-  try {
-    const bruto = storage?.getItem(CHAVE)
-    if (!bruto) return null
-    const o = JSON.parse(bruto)
-    if (!o || typeof o !== 'object' || typeof o.nome !== 'string') return null
-    return {
-      nome: o.nome,
-      cargo: typeof o.cargo === 'string' ? o.cargo : '',
-      matricula: typeof o.matricula === 'string' ? o.matricula : '',
-      foto: typeof o.foto === 'string' ? o.foto : null,
-    }
-  } catch {
-    return null
-  }
-}
-
-// guardou diz se a pessoa ficou guardada no navegador (false: storage bloqueado, segue só nesta aba).
-// gravouFoto diz se a foto ficou guardada (true também quando não havia foto).
-// Se a foto não couber (cota), grava de novo sem ela e devolve gravouFoto: false.
-export function gravarPessoa(p: Pessoa, storage: Storage | null = storagePadrao()): { gravouFoto: boolean; guardou: boolean } {
-  const semFoto = p.foto === null
-  if (!storage) return { gravouFoto: semFoto, guardou: false }
-  try {
-    storage.setItem(CHAVE, JSON.stringify(p))
-    return { gravouFoto: true, guardou: true }
-  } catch {
-    try {
-      storage.setItem(CHAVE, JSON.stringify({ ...p, foto: null }))
-      return { gravouFoto: semFoto, guardou: true }
-    } catch {
-      // nem sem a foto coube: segue só na sessão
-      return { gravouFoto: semFoto, guardou: false }
-    }
-  }
-}
-
-export function apagarPessoa(storage: Storage | null = storagePadrao()): void {
-  try {
-    storage?.removeItem(CHAVE)
-  } catch {
-    // sem storage, não há o que apagar
   }
 }
 

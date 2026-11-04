@@ -10,19 +10,26 @@ import './plataforma.css'
 // Sergipe vai sem artigo ("Sergipe ainda está em construção.")
 const ARTIGO: Record<RegiaoId, string> = { edp: 'A ', ceara: 'O ', sergipe: '' }
 const TEMPO_AVISO = 2600
-const SEM_GUARDAR = 'Este navegador não guarda seus dados; na próxima vez você terá de preencher de novo.'
+const SEM_GUARDAR = 'Este navegador não guarda o acesso: ao fechar a aba, você terá de entrar de novo.'
 
 export function Painel({
   pessoa,
   semGuardar = false,
+  avisos = [],
   onAbrir,
-  onTrocar,
+  onSair,
+  onTrocarFoto,
+  onTrocarSenha,
 }: {
   pessoa: Pessoa
-  /** o navegador não deixou guardar a pessoa */
+  /** a sessão vale só nesta aba (o navegador não deixa guardar) */
   semGuardar?: boolean
+  /** avisos curtos, como o das bases guardadas usadas sem conexão */
+  avisos?: string[]
   onAbrir: (id: RegiaoId) => void
-  onTrocar: () => void
+  onSair: () => void
+  onTrocarFoto: () => void
+  onTrocarSenha: () => void
 }) {
   // a arte do crachá é redesenhada quando o objeto muda: só muda se algum dado mudar
   const { nome, cargo, matricula, foto } = pessoa
@@ -53,9 +60,17 @@ export function Painel({
     <main className="pl pl-painel">
       <header className="pl-topo">
         <Marca altura={34} />
-        <button type="button" className="pl-link" onClick={onTrocar}>
-          Trocar pessoa
-        </button>
+        <nav className="pl-topo-acoes" aria-label="Conta">
+          <button type="button" className="pl-link" onClick={onTrocarFoto}>
+            Trocar foto
+          </button>
+          <button type="button" className="pl-link" onClick={onTrocarSenha}>
+            Trocar senha
+          </button>
+          <button type="button" className="pl-link" onClick={onSair}>
+            Sair
+          </button>
+        </nav>
       </header>
 
       <div className="pl-suporte">
@@ -67,7 +82,16 @@ export function Painel({
           {saudacao(new Date().getHours())}, {primeiroNome(nome)}.
         </h1>
         <p>Escolha a região que você vai fechar hoje.</p>
-        {semGuardar && <p className="pl-aviso-foto">{SEM_GUARDAR}</p>}
+        {(semGuardar || avisos.length > 0) && (
+          <div className="pl-avisos" role="status">
+            {semGuardar && <p className="pl-aviso-foto">{SEM_GUARDAR}</p>}
+            {avisos.map((a) => (
+              <p key={a} className="pl-aviso-foto">
+                {a}
+              </p>
+            ))}
+          </div>
+        )}
         <ul className="pl-regioes">
           {REGIOES.map((r) => {
             const pronto = r.estado === 'pronto'

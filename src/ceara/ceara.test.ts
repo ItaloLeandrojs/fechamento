@@ -187,7 +187,8 @@ describe('Excel da contagem', () => {
 
 // obras reais (pasta ../ceara-teste, fora do git): DXF salvo pelo ZWCAD + orçamento feito à mão
 const OBRAS = ['mt-trafo', 'bt-8-postes', 'bt-1-poste'].filter((o) => existsSync(`../ceara-teste/${o}/obra.dxf`))
-const catalogoReal = existsSync('src/data/enel-catalogo.json') ? (JSON.parse(readFileSync('src/data/enel-catalogo.json', 'utf8')) as Catalogo) : undefined
+// base da Enel baixada pelo script (pasta ../bases, fora do git)
+const catalogoReal = existsSync('../bases/enel.json') ? (JSON.parse(readFileSync('../bases/enel.json', 'utf8')) as Catalogo) : undefined
 
 describe.skipIf(!OBRAS.length)('obras reais do Ceará contra o orçamento feito à mão', () => {
   it.each(OBRAS)('%s: estruturas batem (menos as diferenças já conhecidas)', async (ot) => {

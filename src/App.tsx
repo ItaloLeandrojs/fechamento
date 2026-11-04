@@ -5,7 +5,7 @@ import { gerarFechamento } from './core/build'
 import { conferirArquivo } from './core/conferencia'
 import { normalizar } from './lib/busca'
 import { listarTecnicos, type TecnicoSalvo } from './lib/tecnicos'
-import { estadoDaPessoa, estadoInicial, materialNovoEmSucata, montarLancamentos, numero, type Estado, type Kit } from './state'
+import { estadoDaPessoa, estadoInicial, materialNovoEmSucata, montarLancamentos, numero, type Estado } from './state'
 import { Inicio } from './components/Inicio'
 import { Ceara } from './components/ceara/Ceara'
 import { Marca } from './components/Logo'
@@ -18,12 +18,11 @@ import { Etapas } from './components/Etapas'
 import { Botao } from './components/ui'
 import { PerguntaBoletim, SeletorBoletim } from './components/Boletim'
 import { montarEtapas, type Secao } from './etapas'
-import { Entrada } from './plataforma/Entrada'
 import { Painel } from './plataforma/Painel'
-import { apagarPessoa, lerPessoa, type Pessoa } from './plataforma/pessoa'
+import { useAcesso } from './plataforma/acesso'
 import type { RegiaoId } from './plataforma/regioes'
 
-// atalho antigo para o Ceará (do tempo em que ficava fora do painel), abre sem passar pela entrada
+// atalho antigo para o Ceará (do tempo em que ficava fora do painel): abre o Ceará assim que as bases chegam
 const HASH_CEARA = '#ceara-teste'
 const CONFIRMA_REGIOES = 'Voltar às regiões? O que foi lançado nesta obra será perdido.'
 
@@ -38,10 +37,7 @@ interface Obra {
 }
 
 export default function App() {
-  // quem entrou (só neste navegador) e a região aberta no painel
-  const [pessoa, setPessoa] = useState<Pessoa | null>(() => lerPessoa())
-  // o navegador não deixou guardar a pessoa: o painel avisa que da próxima vez terá de preencher de novo
-  const [semGuardar, setSemGuardar] = useState(false)
+  // a região aberta no painel
   const [regiao, setRegiao] = useState<RegiaoId | null>(null)
   const [obra, setObra] = useState<Obra | null>(null)
   // Fechamento Ceará pelo atalho #ceara-teste: contagem pelo CAD, à parte do fluxo da EDP
@@ -50,7 +46,6 @@ export default function App() {
   const [erroInicio, setErroInicio] = useState<string | null>(null)
   const [estado, setEstado] = useState<Estado>(estadoInicial)
   const [secao, setSecao] = useState<Secao>('estruturas')
-  const [kits, setKits] = useState<KitIndexado[]>([])
   const [tecnicos, setTecnicos] = useState<TecnicoSalvo[]>([])
   const [gerando, setGerando] = useState(false)
   const [resultado, setResultado] = useState<string | null>(null)
@@ -58,9 +53,8 @@ export default function App() {
   // arquivo gerado que a conferência reprovou: só baixa se a pessoa pedir
   const [reprovado, setReprovado] = useState<{ arquivo: Uint8Array; nome: string; problemas: string[] } | null>(null)
 
-  // kits (carregados à parte para a tela inicial abrir rápido) e técnicos guardados
+  // técnicos guardados neste navegador
   useEffect(() => {
-    import('./data/kits.json').then((m) => setKits((m.default as Kit[]).map((k) => ({ ...k, norm: normalizar(`${k.kit} ${k.descricao}`) }))))
     listarTecnicos().then((t) => {
       setTecnicos(t)
       if (t.length === 1) setEstado((e) => ({ ...e, tecnico: t[0].registro }))
@@ -73,14 +67,32 @@ export default function App() {
     return () => window.removeEventListener('hashchange', aoMudar)
   }, [])
 
-  // troca de tela (entrada, painel, região): começa do topo
-  const semPessoa = pessoa === null
-  useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [semPessoa, regiao, ceara])
-
   // a foto do DP também é trabalho; só ter escolhido parcial ou final não é (Italo, 04/11)
   const temTrabalho = estado.estruturas.length + estado.itens.length + estado.aterramento.length + estado.equipamentos.length > 0 || !!estado.fotoDP
+
+  // login, senha, foto e bases; ao sair, nada da pessoa anterior passa para a próxima, nem o técnico
+  // do carimbo (só vem marcado quando há um único guardado, como no carregamento inicial)
+  const acesso = useAcesso({
+    temTrabalho,
+    aoSair: () => {
+      setObra(null)
+      setEstado(estadoDaPessoa(tecnicos))
+      setSecao('estruturas')
+      setResultado(null)
+      setErroGerar(null)
+      setReprovado(null)
+      setErroInicio(null)
+      setRegiao(null)
+    },
+  })
+
+  // kits da EDP, da base baixada depois do login
+  const kits = useMemo<KitIndexado[]>(() => (acesso.bases?.edp ?? []).map((k) => ({ ...k, norm: normalizar(`${k.kit} ${k.descricao}`) })), [acesso.bases])
+
+  // troca de tela (caminho do login, painel, região): começa do topo
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [acesso.etapa, regiao, ceara])
   useEffect(() => {
     if (!temTrabalho) return
     const aviso = (e: BeforeUnloadEvent) => e.preventDefault()
@@ -217,37 +229,20 @@ export default function App() {
     }
   }
 
-  if (!obra && ceara) return <Ceara onVoltar={() => setCeara(false)} />
-  if (!pessoa)
-    return (
-      <Entrada
-        onEntrar={(p, guardou) => {
-          setSemGuardar(!guardou)
-          setPessoa(p)
-        }}
-      />
-    )
-  if (regiao === 'ceara') return <Ceara onVoltar={() => setRegiao(null)} />
+  const { pessoa, bases } = acesso
+  if (acesso.tela || !pessoa || !bases) return acesso.tela
+  if (!obra && ceara) return <Ceara base={bases.enel} onVoltar={() => setCeara(false)} />
+  if (regiao === 'ceara') return <Ceara base={bases.enel} onVoltar={() => setRegiao(null)} />
   if (regiao !== 'edp')
     return (
       <Painel
         pessoa={pessoa}
-        semGuardar={semGuardar}
+        semGuardar={acesso.semGuardar}
+        avisos={acesso.avisos}
         onAbrir={setRegiao}
-        onTrocar={() => {
-          apagarPessoa()
-          setPessoa(null)
-          // nada da pessoa anterior passa para a próxima, nem o técnico do carimbo
-          // (só vem marcado quando há um único guardado, como no carregamento inicial)
-          setObra(null)
-          setEstado(estadoDaPessoa(tecnicos))
-          setSecao('estruturas')
-          setResultado(null)
-          setErroGerar(null)
-          setReprovado(null)
-          setErroInicio(null)
-          setRegiao(null)
-        }}
+        onSair={acesso.sair}
+        onTrocarFoto={acesso.trocarFoto}
+        onTrocarSenha={acesso.trocarSenha}
       />
     )
   if (!obra)
