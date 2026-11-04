@@ -166,13 +166,14 @@ describe('Excel da contagem', () => {
     const wb = await Workbook.open(bytes)
     expect(wb.sheets.map((s) => s.name)).toEqual(['ADIÇÃO ESTRUTURA', 'DEVOLUÇÃO ESTRUTURA', 'ADIÇÃO MATÉRIAL', 'DEVOLUÇÃO MATÉRIAL'])
     const est = new SheetEditor(await wb.sheetDoc('ADIÇÃO ESTRUTURA'), wb.sharedStrings)
-    expect(est.value('A1')).toBe('SOLICITAÇÃO DE ACRÉSCIMOS DE MATERIAL - ENEL')
-    expect([est.value('A4'), est.value('B4'), est.value('C4'), est.value('D4'), est.value('E4'), est.value('F4')]).toEqual([serialExcel(new Date(2026, 10, 4)), 'LESTE', 'COSAMPA', 1234567, 'S2N_S', 1])
+    // sem título nem TOTAL: o cabeçalho é a linha 1
+    expect(est.value('A1')).toBe('DATA')
+    expect([est.value('A2'), est.value('B2'), est.value('C2'), est.value('D2'), est.value('E2'), est.value('F2')]).toEqual([serialExcel(new Date(2026, 10, 4)), 'LESTE', 'COSAMPA', 1234567, 'S2N_S', 1])
     const mat = new SheetEditor(await wb.sheetDoc('ADIÇÃO MATÉRIAL'), wb.sharedStrings)
-    expect(mat.value('E4')).toBe(231235)
-    expect(mat.value('H3')).toBe('RESPONSÁVEL')
+    expect(mat.value('E2')).toBe(231235)
+    expect(mat.value('H1')).toBe('RESPONSÁVEL')
     // poste sem código: código vazio e o nome na descrição
-    const semCodigo = [4, 5, 6, 7, 8].find((n) => String(mat.value('F' + n) ?? '').startsWith('POSTE 400/9'))
+    const semCodigo = [2, 3, 4, 5, 6].find((n) => String(mat.value('F' + n) ?? '').startsWith('POSTE 400/9'))
     expect(semCodigo).toBeDefined()
     expect(mat.value('E' + semCodigo)).toBeNull()
 
