@@ -2,7 +2,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   SENHA_ERRADA, SEM_INTERNET, SERVIDOR_PARADO, MUITAS_TENTATIVAS, CADASTRO_INCOMPLETO,
-  PRIMEIRA_VEZ_SEM_INTERNET, SENHA_CURTA, SENHAS_DIFERENTES, SENHA_IGUAL,
+  PRIMEIRA_VEZ_SEM_INTERNET, SENHA_CURTA, SENHAS_DIFERENTES, SENHA_IGUAL, SENHA_FRACA, SERVIDOR_REAUTENTICAR,
 } from './mensagens'
 
 export type Perfil = { id: string; nome: string; cargo: string; matricula: string; senhaInicial: boolean }
@@ -11,6 +11,7 @@ const MIN_SENHA = 8
 const CONHECIDAS = new Set([
   SENHA_ERRADA, SEM_INTERNET, SERVIDOR_PARADO, MUITAS_TENTATIVAS, CADASTRO_INCOMPLETO,
   PRIMEIRA_VEZ_SEM_INTERNET, SENHA_CURTA, SENHAS_DIFERENTES, SENHA_IGUAL,
+  SENHA_FRACA, SERVIDOR_REAUTENTICAR,
 ])
 
 function estaOnline(): boolean {
@@ -26,6 +27,8 @@ export function mensagemDeErro(e: unknown, online: boolean = estaOnline()): stri
   if (status === 429 || x.code === 'over_request_rate_limit') return MUITAS_TENTATIVAS
   // o Supabase recusa (422) a senha nova igual à atual, mesmo sem o site saber a senha atual
   if (x.code === 'same_password') return SENHA_IGUAL
+  if (x.code === 'weak_password') return SENHA_FRACA
+  if (x.code === 'reauthentication_needed') return SERVIDOR_REAUTENTICAR
   const rede = e instanceof TypeError || x.name === 'AuthRetryableFetchError' || status === 0
   if (rede) return online ? SERVIDOR_PARADO : SEM_INTERNET
   return SERVIDOR_PARADO

@@ -175,6 +175,7 @@ export function useAcesso({ temTrabalho, aoSair }: { temTrabalho: boolean; aoSai
       <NovaSenha
         obrigatoria
         senhaAtual={senhaDaEntrada}
+        onSair={() => void sair()}
         onPronto={() => {
           const p = { ...perfil, senhaInicial: false }
           setPerfil(p)

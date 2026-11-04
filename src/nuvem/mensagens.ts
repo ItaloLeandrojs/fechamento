@@ -8,4 +8,6 @@ export const CADASTRO_INCOMPLETO = 'Seu cadastro ainda não está completo. Avis
 export const PRIMEIRA_VEZ_SEM_INTERNET = 'Na primeira vez é preciso internet para baixar as bases. Conecte e tente de novo.'
 export const SENHA_CURTA = 'A senha precisa ter pelo menos 8 caracteres.'
 export const SENHAS_DIFERENTES = 'As duas senhas não são iguais.'
+export const SENHA_FRACA = 'A senha não atende às regras do servidor. Use pelo menos 8 caracteres, misturando letras e números.'
+export const SERVIDOR_REAUTENTICAR = 'O servidor pede uma confirmação extra para trocar a senha. É uma configuração do servidor: avise o Italo.'
 export const SENHA_IGUAL = 'Escolha uma senha diferente da inicial.'

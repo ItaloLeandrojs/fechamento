@@ -16,7 +16,7 @@ export const sessaoSoNestaAba = guarda.soNestaAba
 
 /** null quando faltam as variáveis (modo dev sem .env.local). */
 export const nuvem: SupabaseClient | null = URL && CHAVE
-  ? createClient(URL, CHAVE, { auth: { persistSession: true, autoRefreshToken: true, storage: guarda.storage } })
+  ? createClient(URL, CHAVE, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: guarda.storage } })
   : null
 
 export function fonteSupabase(c: SupabaseClient): FonteBases {

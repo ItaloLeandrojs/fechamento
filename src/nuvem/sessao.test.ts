@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { entrar, perfilAtual, trocarSenha, mensagemDeErro, erroDoBanco } from './sessao'
 import { armazenamentoDaSessao } from './armazenamento'
 import {
-  SENHA_ERRADA, MUITAS_TENTATIVAS, SEM_INTERNET, SERVIDOR_PARADO, CADASTRO_INCOMPLETO, SENHA_CURTA, SENHA_IGUAL,
+  SENHA_ERRADA, MUITAS_TENTATIVAS, SEM_INTERNET, SERVIDOR_PARADO, CADASTRO_INCOMPLETO, SENHA_CURTA, SENHA_IGUAL, SENHA_FRACA, SERVIDOR_REAUTENTICAR,
 } from './mensagens'
 
 const SESSAO = { user: { id: 'u1' } }
@@ -85,6 +85,20 @@ describe('sessão', () => {
   it('senha igual recusada pelo servidor (same_password) vira SENHA_IGUAL e não marca a troca', async () => {
     const { c, f } = falso({ update: { data: {}, error: { code: 'same_password', status: 422, message: 'New password should be different from the old password.' } } })
     await expect(trocarSenha(c, 'senhaboa123', 'senhaboa123')).rejects.toThrow(SENHA_IGUAL)
+    expect(f.rpc).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('erros de configuração da senha no servidor', () => {
+  it('weak_password vira SENHA_FRACA', () => {
+    expect(mensagemDeErro({ code: 'weak_password', status: 422 })).toBe(SENHA_FRACA)
+  })
+  it('reauthentication_needed vira SERVIDOR_REAUTENTICAR', () => {
+    expect(mensagemDeErro({ code: 'reauthentication_needed', status: 400 })).toBe(SERVIDOR_REAUTENTICAR)
+  })
+  it('weak_password na troca de senha não marca a troca', async () => {
+    const { c, f } = falso({ update: { data: {}, error: { code: 'weak_password', status: 422, message: 'x' } } })
+    await expect(trocarSenha(c, 'senhaboa123', 'senhaboa123')).rejects.toThrow(SENHA_FRACA)
     expect(f.rpc).toHaveBeenCalledTimes(0)
   })
 })

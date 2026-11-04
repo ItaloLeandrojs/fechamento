@@ -10,12 +10,15 @@ export function NovaSenha({
   senhaAtual,
   onPronto,
   onCancelar,
+  onSair,
 }: {
   obrigatoria: boolean
   /** a senha usada para entrar: a nova não pode ser igual a ela */
   senhaAtual?: string
   onPronto: () => void
   onCancelar?: () => void
+  /** só na troca obrigatória: sair da conta (a pessoa não fica presa nesta tela) */
+  onSair?: () => void
 }) {
   const [nova, setNova] = useState('')
   const [confirma, setConfirma] = useState('')
@@ -97,6 +100,13 @@ export function NovaSenha({
           <div className="pl-botoes">
             <button type="button" className="pl-secundario" onClick={onCancelar}>
               Cancelar
+            </button>
+            {salvar}
+          </div>
+        ) : onSair && obrigatoria ? (
+          <div className="pl-botoes">
+            <button type="button" className="pl-secundario" onClick={onSair}>
+              Sair
             </button>
             {salvar}
           </div>

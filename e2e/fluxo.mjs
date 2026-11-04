@@ -1162,6 +1162,22 @@ async function cenasDoLogin() {
       await c.fechar()
     }
 
+    // troca obrigatória: "Sair" volta para a entrada e a sessão some (recarregar não volta para "Crie a sua senha")
+    {
+      const c = await abrir('senha obrigatória sair', { senhaInicial: true })
+      await preencherLogin(c.page)
+      if (await c.esperar(c.page.getByRole('heading', { name: 'Crie a sua senha' }), 'a tela "Crie a sua senha" não apareceu')) {
+        if (await c.page.getByRole('button', { name: 'Cancelar' }).count()) falhas.push(`[${c.tag}] a senha nova obrigatória não pode ter Cancelar`)
+        await c.page.getByRole('button', { name: 'Sair' }).click()
+        if (await c.esperar(naEntrada(c.page), 'o "Sair" da senha obrigatória não voltou para a entrada')) {
+          await c.page.reload()
+          await c.esperar(naEntrada(c.page), 'depois de recarregar não voltou para a entrada')
+          if (await c.page.getByRole('heading', { name: 'Crie a sua senha' }).count()) falhas.push(`[${c.tag}] a sessão não saiu: recarregar voltou para "Crie a sua senha"`)
+        }
+      }
+      await c.fechar()
+    }
+
     // sem internet na primeira vez: a tabela das bases não responde e o navegador não tem cópia guardada
     {
       const c = await abrir('sem internet')
