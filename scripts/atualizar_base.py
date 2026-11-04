@@ -9,6 +9,7 @@
 # A chave secreta fica em AUTOMACAO KIT MATERIAL\supabase.env (SUPABASE_URL e
 # SUPABASE_SERVICE_ROLE_KEY), fora do repositório.
 import argparse
+import datetime
 import gzip
 import hashlib
 import json
@@ -162,7 +163,7 @@ def ler_env(caminho=None):
                        'SUPABASE_URL=https://seu-projeto.supabase.co\n'
                        'SUPABASE_SERVICE_ROLE_KEY=a chave secreta (service_role)')
     valores = {}
-    for linha in caminho.read_text(encoding='utf-8').splitlines():
+    for linha in caminho.read_text(encoding='utf-8-sig').splitlines():
         linha = linha.strip()
         if linha and not linha.startswith('#') and '=' in linha:
             k, v = linha.split('=', 1)
@@ -274,7 +275,8 @@ def executar(nome, origem, seco=False, sim=False):
         return
     # ordem segura: arquivo novo, depois a linha, e só então apaga o antigo
     subir_arquivo(url, chave, arquivo, gz)
-    gravar_linha(url, chave, {'nome': nome, 'versao': v, 'arquivo': arquivo, 'contagens': novas})
+    gravar_linha(url, chave, {'nome': nome, 'versao': v, 'arquivo': arquivo, 'contagens': novas,
+                                  'atualizado_em': datetime.datetime.now(datetime.timezone.utc).isoformat()})
     if antigo:
         apagar_arquivos(url, chave, [antigo])
     print(f'Base "{nome}" enviada: versão {v}.')

@@ -97,7 +97,7 @@ grant execute on function public.marcar_senha_trocada() to authenticated;
 -- ---------------------------------------------------------------
 insert into storage.buckets (id, name, public)
 values ('bases', 'bases', false)
-on conflict (id) do nothing;
+on conflict (id) do update set public = false;
 
 -- Quem esta logado baixa; nao ha regra de escrita.
 drop policy if exists "bases: baixar logado" on storage.objects;

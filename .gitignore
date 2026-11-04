@@ -36,3 +36,8 @@ docs/amostra/prints/
 # base da Enel Ceará (gerada por scripts/atualizar_base.py; vai para o Supabase)
 src/data/enel-catalogo.json
 src/data/kits.json
+
+# segredos do Supabase (a chave service_role nunca entra no git)
+.env
+supabase.env
+*-teste.env

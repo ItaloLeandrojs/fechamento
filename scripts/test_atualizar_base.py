@@ -46,6 +46,10 @@ def base(n_mat=3, n_est=100, n_linhas=10):
             'kits': {'K': [['1', 1]] * n_linhas}}
 
 
+BOM = bytes([0xEF, 0xBB, 0xBF])
+NL = bytes([10])
+
+
 class LeituraEConferencia(unittest.TestCase):
     def test_le_kits_pela_qtd_do_kit(self):
         with tempfile.TemporaryDirectory() as pasta:
@@ -113,6 +117,12 @@ class SubidaComRedeFalsa(unittest.TestCase):
                 mock.patch('urllib.request.urlopen', self.falso), contextlib.redirect_stdout(io.StringIO()):
             ab.executar('enel', xlsx, **kw)
 
+    def test_linha_leva_atualizado_em_em_utc(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            self.rodar(pasta)
+        linha = json.loads([c for c in self.chamadas if c.full_url.endswith('/rest/v1/bases') and c.get_method() == 'POST'][0].data)
+        self.assertTrue(linha['atualizado_em'].endswith('+00:00'))
+
     def test_sobe_novo_grava_linha_e_apaga_o_antigo(self):
         self.linha_antiga = {'nome': 'enel', 'arquivo': 'enel-antigo.json.gz',
                              'contagens': {'materiais': 3, 'estruturas': 2, 'linhas_kit': 3}}
@@ -155,6 +165,14 @@ class SubidaComRedeFalsa(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()):
                 ab.executar('enel', xlsx, seco=True)
             self.assertTrue((pathlib.Path(pasta) / 'bases' / 'enel.json').exists())
+
+    def test_env_com_bom_do_powershell(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            env = pathlib.Path(pasta) / 'supabase.env'
+            env.write_bytes(BOM + b'SUPABASE_URL=https://abc.supabase.co' + NL + b'SUPABASE_SERVICE_ROLE_KEY=segredo-falso' + NL)
+            url, chave = ab.ler_env(env)
+        self.assertEqual(url, 'https://abc.supabase.co')
+        self.assertEqual(chave, 'segredo-falso')
 
     def test_env_ausente_diz_onde_criar(self):
         with self.assertRaises(ab.ErroBase) as e:

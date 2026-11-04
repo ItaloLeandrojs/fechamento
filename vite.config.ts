@@ -30,9 +30,13 @@ function politicaDeSeguranca(csp: string): Plugin {
 }
 
 export default defineConfig(({ command, mode }) => {
-  const urlSupabase = loadEnv(mode, '.', 'VITE_').VITE_SUPABASE_URL ?? ''
+  const env = loadEnv(mode, '.', 'VITE_')
+  const urlSupabase = env.VITE_SUPABASE_URL ?? ''
   if (command === 'build' && !urlSupabase) {
     throw new Error('Falta VITE_SUPABASE_URL no .env.local (veja docs/supabase-passo-a-passo.md)')
+  }
+  if (command === 'build' && !env.VITE_SUPABASE_ANON_KEY) {
+    throw new Error('Falta VITE_SUPABASE_ANON_KEY no .env.local (veja docs/supabase-passo-a-passo.md)')
   }
   return {
     // caminhos relativos: funciona no GitHub Pages em qualquer subpasta
