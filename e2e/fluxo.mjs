@@ -4,6 +4,8 @@
 // técnico, revisa e baixa. Em cada tela roda o axe (acessibilidade) no tema
 // escuro (o único do site), em 1366 e 390 px (e 1920 px), confere que não há
 // rolagem lateral e tira prints para olhar.
+// O login e as bases vêm de um Supabase de mentira (e2e/supabase-falso.mjs), com a URL do .env.local
+// e as bases locais de ../bases (fora do git).
 // Uso: npm run build && node e2e/fluxo.mjs
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -22,12 +24,19 @@ const reqAxe = createRequire('C:/Users/italo.silva/Desktop/LINKEDIN/cosampa-site
 const { chromium } = reqPw('playwright')
 const { AxeBuilder } = reqAxe('@axe-core/playwright')
 const JSZip = createRequire(path.join(PROJ, 'package.json'))('jszip')
+const { simularSupabase, urlDoSupabase } = await import(pathToFileURL(path.join(PROJ, 'e2e', 'supabase-falso.mjs')).href)
 
 for (const d of [SAIDA, PRINTS]) fs.mkdirSync(d, { recursive: true })
 
 // Kit de nome comprido para o teste da quantidade "2,5": o de nome mais longo cujo primeiro material
 // não aparece em nenhum outro lançamento do teste (assim o aplicado esperado é 2,5 x a quantidade do kit).
-const KITS = JSON.parse(fs.readFileSync(path.join(PROJ, 'src', 'data', 'kits.json'), 'utf8'))
+// bases locais (fora do git): o Supabase de mentira serve as duas e o teste lê os kits daqui
+const BASES = path.join(PROJ, '..', 'bases')
+const BASE_ENEL = path.join(BASES, 'enel.json')
+const BASE_EDP = path.join(BASES, 'kits-edp.json')
+for (const b of [BASE_ENEL, BASE_EDP]) if (!fs.existsSync(b)) throw new Error(`Falta a base local ${b}: o teste precisa dela.`)
+const URL_SUPABASE = urlDoSupabase(PROJ)
+const KITS = JSON.parse(fs.readFileSync(BASE_EDP, 'utf8'))
 const kitDe = (nome) => KITS.find((k) => k.kit === nome)
 const codigosUsados = new Set([...kitDe('KP-CE1-P23').itens, ...kitDe('KP-TRAFO 75KVA M').itens].map((i) => i.code))
 const itemLivre = (k) => k.itens.find((i) => !codigosUsados.has(i.code) && !/^CINTA POSTE/.test(i.desc))
@@ -44,12 +53,46 @@ const falhas = []
 const placar = { axe: 0, telas: 0 }
 const browser = await chromium.launch({ channel: 'msedge' })
 
-// Entrada da plataforma: preenche o crachá com dados fictícios, entra e abre a EDP no painel
-async function entrar(page) {
-  await page.getByLabel('Nome', { exact: true }).fill('Maria Souza')
-  await page.getByLabel('Cargo', { exact: true }).fill('Técnica de campo')
+// Login de teste (dados fictícios: o Supabase é de mentira) e as mensagens fixas da tela (src/nuvem/mensagens.ts)
+const EMAIL = 'maria.souza@exemplo.com.br'
+const SENHA = 'senha-de-teste-1'
+const SENHA_ERRADA = 'E-mail ou senha errados.'
+const PRIMEIRA_VEZ_SEM_INTERNET = 'Na primeira vez é preciso internet para baixar as bases. Conecte e tente de novo.'
+const SENHA_CURTA = 'A senha precisa ter pelo menos 8 caracteres.'
+const AVISO_VENCIDA = 'Sua sessão terminou. Entre de novo.'
+// todos os falsos do teste, para conferir no fim que nenhum pedido ficou sem resposta simulada
+const falsos = []
+
+// Supabase de mentira na página (antes de abrir o site), com as bases locais
+async function simular(page, opcoes = {}) {
+  const falso = await simularSupabase(page, { url: URL_SUPABASE, enel: BASE_ENEL, edp: BASE_EDP, ...opcoes })
+  falsos.push(falso)
+  return falso
+}
+
+// preenche e-mail e senha na entrada e clica em Entrar
+async function preencherLogin(page, senha = SENHA) {
+  await page.getByLabel('E-mail', { exact: true }).fill(EMAIL)
+  await page.getByLabel('Senha', { exact: true }).fill(senha)
   await page.getByRole('button', { name: 'Entrar' }).click()
-  await page.getByRole('heading', { level: 1, name: /Maria\./ }).waitFor({ timeout: 10000 })
+}
+
+const saudacaoDaMaria = (page) => page.getByRole('heading', { level: 1, name: /Maria\./ })
+
+// depois do login: na primeira vez neste navegador vem a tela da foto (segue sem foto), depois as bases e o painel
+async function chegarAoPainel(page) {
+  const telaFoto = page.getByRole('heading', { name: 'Sua foto no crachá' })
+  await telaFoto.or(saudacaoDaMaria(page)).first().waitFor({ timeout: 20000 })
+  if (await telaFoto.count()) await page.getByRole('button', { name: /^Continuar/ }).click()
+  await saudacaoDaMaria(page).waitFor({ timeout: 30000 })
+}
+
+// Entrada da plataforma: Supabase de mentira, login com a Maria, painel e a EDP aberta
+async function entrar(page) {
+  await simular(page)
+  await page.goto(URL_SITE)
+  await preencherLogin(page)
+  await chegarAoPainel(page)
   await page.getByRole('button', { name: 'EDP', exact: true }).click()
   await page.getByText('Arraste o inventário aqui').waitFor({ timeout: 10000 })
 }
@@ -179,7 +222,6 @@ async function rodada({ largura, altura, tema, boletim, movel }) {
     placar.telas++
   }
 
-  await page.goto(URL_SITE)
   await entrar(page)
   await axe(page, `${tag} início`)
   await foto('01-inicio')
@@ -368,7 +410,6 @@ async function modeloDiferente() {
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'dark' })
   await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
   const page = await ctx.newPage()
-  await page.goto(URL_SITE)
   await entrar(page)
   await page.setInputFiles('input[type=file]', arq)
   await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
@@ -392,7 +433,6 @@ async function operacoesDaObra() {
     const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: 'dark', isMobile: movel, hasTouch: movel })
     await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
     const page = await ctx.newPage()
-    await page.goto(URL_SITE)
     await entrar(page)
     await page.setInputFiles('input[type=file]', arq)
     await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
@@ -437,7 +477,6 @@ async function soDesativacao() {
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 }, colorScheme: 'dark' })
   await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
   const page = await ctx.newPage()
-  await page.goto(URL_SITE)
   await entrar(page)
   await page.setInputFiles('input[type=file]', arq)
   await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
@@ -463,7 +502,15 @@ async function ceara() {
     const page = await ctx.newPage()
     const erros = []
     page.on('pageerror', (e) => erros.push(e.message))
+    // o atalho #ceara-teste passa pelo login: depois das bases abre direto a tela do Ceará
+    await simular(page)
     await page.goto(URL_SITE + '#ceara-teste')
+    await preencherLogin(page)
+    const telaFoto = page.getByRole('heading', { name: 'Sua foto no crachá' })
+    const telaCeara = page.getByRole('heading', { name: 'Fechamento Ceará' })
+    await telaFoto.or(telaCeara).first().waitFor({ timeout: 20000 })
+    if (await telaFoto.count()) await page.getByRole('button', { name: /^Continuar/ }).click()
+    await telaCeara.waitFor({ timeout: 30000 })
     await axe(page, `${tag} início`)
     const t0 = Date.now()
     await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
@@ -511,8 +558,9 @@ function pngQuadrantes(largura, altura, corteX, corteY, [ce, cd, be, bd]) {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), bloco('IHDR', cab), bloco('IDAT', zlib.deflateSync(cru)), bloco('IEND', Buffer.alloc(0))])
 }
 
-// Plataforma: entrada (crachá), painel, avisos "em construção", recarregar, trocar pessoa, crachá parado/3D
-// e a volta às regiões com lançamento (confirmação). Dados fictícios; arquivos de foto gerados em e2e/saida.
+// Plataforma: entrada (e-mail e senha), foto da primeira vez, painel, avisos "em construção", recarregar, Sair,
+// crachá parado/3D e a volta às regiões com lançamento (confirmação). Dados fictícios (Supabase de mentira);
+// arquivos de foto gerados em e2e/saida.
 async function plataforma() {
   const fotoOk = path.join(SAIDA, 'plataforma-foto.png')
   const fotoRuim = path.join(SAIDA, 'plataforma-nao-e-foto.txt')
@@ -541,7 +589,8 @@ async function plataforma() {
       await page.screenshot({ path: arq(n), fullPage: true })
       placar.telas++
     }
-    const pessoaGuardada = () => page.evaluate(() => localStorage.getItem('fechamento-pessoa'))
+    // sessão do Supabase guardada neste navegador (chave sb-<projeto>-auth-token)
+    const sessaoGuardada = () => page.evaluate(() => Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k)))
     const saudacao = page.getByRole('heading', { level: 1, name: /Maria\./ })
     const noPainel = async (rotulo) => {
       try {
@@ -551,37 +600,49 @@ async function plataforma() {
       }
     }
 
-    // ---- entrada
+    // ---- entrada: e-mail e senha
+    const falso = await simular(page)
     await page.goto(URL_SITE)
     const entrada = page.getByRole('heading', { level: 1, name: /Fecha.?mento/ })
     await entrada.waitFor({ timeout: 10000 })
-    for (const rotulo of ['Nome', 'Cargo', 'Matrícula (opcional)', 'Foto (opcional)']) {
-      if (!(await page.getByLabel(rotulo, { exact: rotulo === 'Nome' || rotulo === 'Cargo' }).count())) falhas.push(`[${tag}] entrada: falta o campo "${rotulo}"`)
+    for (const rotulo of ['E-mail', 'Senha']) {
+      if (!(await page.getByLabel(rotulo, { exact: true }).count())) falhas.push(`[${tag}] entrada: falta o campo "${rotulo}"`)
     }
     if (!(await page.getByRole('button', { name: 'Entrar' }).count())) falhas.push(`[${tag}] entrada: falta o botão Entrar`)
-    if (!(await page.getByText('Seus dados ficam guardados só neste navegador.', { exact: true }).count())) falhas.push(`[${tag}] entrada: falta a nota "Seus dados ficam guardados só neste navegador."`)
+    if (!(await page.getByText('Esqueceu a senha? Avise o Italo.', { exact: true }).count())) falhas.push(`[${tag}] entrada: falta a nota "Esqueceu a senha? Avise o Italo."`)
     await axe(page, `${tag} entrada`)
     await tira('01-entrada')
 
-    // nome vazio não entra (e só espaços também não); o erro aparece e o foco vai para o campo
+    // e-mail vazio não entra (e só espaços também não); o erro aparece e o foco vai para o campo; depois a senha vazia
     const botaoEntrar = page.getByRole('button', { name: 'Entrar' })
     await botaoEntrar.click()
-    if (!(await page.getByText('Preencha o nome.', { exact: true }).count())) falhas.push(`[${tag}] nome vazio: faltou "Preencha o nome."`)
-    if ((await page.evaluate(() => document.activeElement?.getAttribute('name'))) !== 'nome') falhas.push(`[${tag}] nome vazio: o foco devia ir para o campo Nome`)
-    await axe(page, `${tag} erro de nome`)
-    await tira('02-erro-nome')
-    await page.getByLabel('Nome', { exact: true }).fill('   ')
+    if (!(await page.getByText('Preencha o e-mail.', { exact: true }).count())) falhas.push(`[${tag}] e-mail vazio: faltou "Preencha o e-mail."`)
+    if ((await page.evaluate(() => document.activeElement?.getAttribute('name'))) !== 'email') falhas.push(`[${tag}] e-mail vazio: o foco devia ir para o campo E-mail`)
+    await axe(page, `${tag} erro do e-mail`)
+    await tira('02-erro-email')
+    await page.getByLabel('E-mail', { exact: true }).fill('   ')
     await botaoEntrar.click()
-    if (!(await page.getByText('Preencha o nome.', { exact: true }).count())) falhas.push(`[${tag}] nome só com espaços: faltou "Preencha o nome."`)
-    await page.getByLabel('Nome', { exact: true }).fill(NOME)
-    if (await page.getByText('Preencha o nome.', { exact: true }).count()) falhas.push(`[${tag}] o erro do nome devia sumir ao digitar`)
+    if (!(await page.getByText('Preencha o e-mail.', { exact: true }).count())) falhas.push(`[${tag}] e-mail só com espaços: faltou "Preencha o e-mail."`)
+    await page.getByLabel('E-mail', { exact: true }).fill(EMAIL)
+    if (await page.getByText('Preencha o e-mail.', { exact: true }).count()) falhas.push(`[${tag}] o erro do e-mail devia sumir ao digitar`)
     await botaoEntrar.click()
-    if (!(await page.getByText('Preencha o cargo.', { exact: true }).count())) falhas.push(`[${tag}] cargo vazio: faltou "Preencha o cargo."`)
-    if ((await page.evaluate(() => document.activeElement?.getAttribute('name'))) !== 'cargo') falhas.push(`[${tag}] cargo vazio: o foco devia ir para o campo Cargo`)
-    if (await saudacao.count()) falhas.push(`[${tag}] entrou sem o cargo`)
-    if ((await pessoaGuardada()) !== null) falhas.push(`[${tag}] guardou a pessoa sem passar na validação`)
-    await axe(page, `${tag} erro de cargo`)
-    await tira('03-erro-cargo')
+    if (!(await page.getByText('Preencha a senha.', { exact: true }).count())) falhas.push(`[${tag}] senha vazia: faltou "Preencha a senha."`)
+    if ((await page.evaluate(() => document.activeElement?.getAttribute('name'))) !== 'senha') falhas.push(`[${tag}] senha vazia: o foco devia ir para o campo Senha`)
+    if (await saudacao.count()) falhas.push(`[${tag}] entrou sem a senha`)
+    if (await sessaoGuardada()) falhas.push(`[${tag}] guardou sessão sem passar na validação`)
+    await axe(page, `${tag} erro da senha`)
+    await tira('03-erro-senha')
+
+    // ---- login certo: na primeira vez neste navegador vem a tela da foto do crachá
+    await page.getByLabel('Senha', { exact: true }).fill(SENHA)
+    await botaoEntrar.click()
+    try {
+      await page.getByRole('heading', { name: 'Sua foto no crachá' }).waitFor({ timeout: 20000 })
+    } catch {
+      falhas.push(`[${tag}] primeira entrada neste navegador: a tela da foto não apareceu`)
+    }
+    await axe(page, `${tag} tela da foto`)
+    await tira('03b-tela-da-foto')
 
     // foto inválida (um .txt): a mensagem aparece e nenhuma foto fica escolhida
     const arquivoFoto = page.locator('input[type=file]')
@@ -806,20 +867,18 @@ async function plataforma() {
       falhas.push(`[${tag}] Esc não fechou o ajuste`)
     }
     if ((await page.locator('.pl-miniatura img').getAttribute('src')) !== srcMexida) falhas.push(`[${tag}] Esc no ajuste devia manter a foto como estava`)
-    await page.getByLabel('Cargo', { exact: true }).fill(CARGO)
-    await page.getByLabel('Matrícula (opcional)').fill('12345')
-    await axe(page, `${tag} entrada preenchida`)
-    await tira('05-entrada-preenchida')
+    await axe(page, `${tag} foto escolhida`)
+    await tira('05-foto-escolhida')
 
-    // ---- painel
-    await botaoEntrar.click()
-    await noPainel('depois de Entrar')
-    const guardada = JSON.parse((await pessoaGuardada()) || 'null')
-    if (!guardada || guardada.nome !== NOME || guardada.cargo !== CARGO || guardada.matricula !== '12345') falhas.push(`[${tag}] a pessoa não ficou guardada certa: ${JSON.stringify(guardada && { ...guardada, foto: undefined })}`)
-    else if (!/^data:image\/jpeg;base64,/.test(guardada.foto || '')) falhas.push(`[${tag}] a foto não ficou guardada (JPEG reduzido)`)
+    // ---- painel (as bases vêm do Supabase de mentira)
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click()
+    await noPainel('depois da foto')
+    const fotoGuardada = await page.evaluate(() => Object.entries(localStorage).find(([k]) => k.startsWith('fechamento-foto:'))?.[1] ?? '')
+    if (!/^data:image\/jpeg;base64,/.test(fotoGuardada)) falhas.push(`[${tag}] a foto não ficou guardada (JPEG reduzido)`)
+    if (falso.descargas !== 2) falhas.push(`[${tag}] a primeira entrada devia baixar as 2 bases, baixou ${falso.descargas}`)
     if ((await page.evaluate(() => document.activeElement?.tagName)) !== 'H1') falhas.push(`[${tag}] painel: o foco devia estar na saudação`)
     if (!(await page.getByText('Escolha a região que você vai fechar hoje.', { exact: true }).count())) falhas.push(`[${tag}] painel: falta "Escolha a região que você vai fechar hoje."`)
-    for (const rotulo of ['Trocar pessoa', 'EDP', 'Ceará', 'Sergipe']) {
+    for (const rotulo of ['Trocar foto', 'Trocar senha', 'Sair', 'EDP', 'Ceará', 'Sergipe']) {
       if (!(await page.getByRole('button', { name: rotulo, exact: true }).count())) falhas.push(`[${tag}] painel: falta o botão "${rotulo}"`)
     }
 
@@ -901,10 +960,11 @@ async function plataforma() {
     }
     await page.waitForFunction(() => !document.querySelector('.pl-aviso.visivel') && !document.querySelector('.pl-aviso')?.textContent, null, { timeout: 5000 }).catch(() => falhas.push(`[${tag}] o aviso "em construção" não sumiu sozinho`))
 
-    // recarregar abre direto no painel (a pessoa fica guardada)
+    // recarregar abre direto no painel (a sessão fica guardada) e não baixa as bases de novo
     await page.reload()
     await noPainel('depois de recarregar')
     if (await page.getByRole('button', { name: 'Entrar' }).count()) falhas.push(`[${tag}] recarregar voltou para a entrada`)
+    if (falso.descargas !== 2) falhas.push(`[${tag}] recarregar baixou as bases de novo (${falso.descargas} descargas no total)`)
     await tira('08-recarregado')
 
     // ---- EDP dentro da plataforma: "← Regiões" com lançamento pede confirmação
@@ -955,8 +1015,8 @@ async function plataforma() {
     await noPainel('voltando da EDP sem obra')
     if (perguntou) falhas.push(`[${tag}] ← Regiões sem obra aberta não devia perguntar nada`)
 
-    // ---- o técnico do carimbo não passa de uma pessoa para a outra
-    // (a lista de técnicos tem vários: ao trocar de pessoa nada vem marcado e a revisão pede o técnico)
+    // ---- o técnico do carimbo não passa de uma entrada para a outra
+    // (a lista de técnicos tem vários: depois de Sair e entrar de novo nada vem marcado e a revisão pede o técnico)
     const PENDENCIA_TECNICO = 'Escolha o técnico do carimbo.'
     const etapa = (nome) => page.getByRole('navigation', { name: 'Etapas' }).getByRole('button', { name: new RegExp('^' + nome) })
     const abrirEdpComInventario = async () => {
@@ -977,37 +1037,35 @@ async function plataforma() {
     if (await page.getByText(PENDENCIA_TECNICO, { exact: true }).count()) falhas.push(`[${tag}] técnico marcado: a pendência "${PENDENCIA_TECNICO}" não devia aparecer`)
     await page.getByRole('button', { name: /Regiões/ }).first().click()
     await noPainel('voltando da EDP com técnico marcado')
-    await page.getByRole('button', { name: 'Trocar pessoa' }).click()
+    await page.getByRole('button', { name: 'Sair', exact: true }).click()
     await entrada.waitFor({ timeout: 10000 })
-    await page.getByLabel('Nome', { exact: true }).fill(NOME)
-    await page.getByLabel('Cargo', { exact: true }).fill(CARGO)
-    await botaoEntrar.click()
-    await noPainel('segunda pessoa')
+    await preencherLogin(page)
+    await noPainel('entrando de novo')
     await abrirEdpComInventario()
     await etapa('Carimbo').click()
-    if ((await radiosTecnico.count()) < 2) falhas.push(`[${tag}] técnico (segunda pessoa): a lista de técnicos sumiu`)
+    if ((await radiosTecnico.count()) < 2) falhas.push(`[${tag}] técnico (entrando de novo): a lista de técnicos sumiu`)
     for (let i = 0; i < (await radiosTecnico.count()); i++) {
-      if (await radiosTecnico.nth(i).isChecked()) falhas.push(`[${tag}] o técnico da pessoa anterior continuou marcado para a seguinte`)
+      if (await radiosTecnico.nth(i).isChecked()) falhas.push(`[${tag}] o técnico da entrada anterior continuou marcado depois de Sair`)
     }
     await etapa('Revisar e baixar').click()
-    if (!(await page.getByText(PENDENCIA_TECNICO, { exact: true }).count())) falhas.push(`[${tag}] segunda pessoa: faltou a pendência "${PENDENCIA_TECNICO}"`)
+    if (!(await page.getByText(PENDENCIA_TECNICO, { exact: true }).count())) falhas.push(`[${tag}] entrando de novo: faltou a pendência "${PENDENCIA_TECNICO}"`)
     await page.getByRole('button', { name: /Regiões/ }).first().click()
-    await noPainel('voltando da EDP da segunda pessoa')
+    await noPainel('voltando da EDP depois de entrar de novo')
 
-    // ---- trocar pessoa: volta à entrada, esquece a pessoa e o recarregar não reabre o painel
-    await page.getByRole('button', { name: 'Trocar pessoa' }).click()
+    // ---- Sair: volta à entrada, a sessão sai do navegador e o recarregar não reabre o painel
+    await page.getByRole('button', { name: 'Sair', exact: true }).click()
     try {
       await entrada.waitFor({ timeout: 10000 })
     } catch {
-      falhas.push(`[${tag}] Trocar pessoa não voltou à entrada`)
+      falhas.push(`[${tag}] Sair não voltou à entrada`)
     }
-    if ((await pessoaGuardada()) !== null) falhas.push(`[${tag}] Trocar pessoa não apagou a pessoa guardada`)
-    if ((await page.getByLabel('Nome', { exact: true }).inputValue()) !== '') falhas.push(`[${tag}] Trocar pessoa: o campo Nome devia vir vazio`)
-    await axe(page, `${tag} depois de trocar pessoa`)
-    await tira('10-trocar-pessoa')
+    if (await sessaoGuardada()) falhas.push(`[${tag}] Sair não apagou a sessão guardada`)
+    if ((await page.getByLabel('E-mail', { exact: true }).inputValue()) !== '') falhas.push(`[${tag}] Sair: o campo E-mail devia vir vazio`)
+    await axe(page, `${tag} depois de sair`)
+    await tira('10-sair')
     await page.reload()
     await entrada.waitFor({ timeout: 10000 })
-    if (await saudacao.count()) falhas.push(`[${tag}] depois de trocar pessoa, recarregar abriu o painel`)
+    if (await saudacao.count()) falhas.push(`[${tag}] depois de Sair, recarregar abriu o painel`)
 
     // ruído conhecido: o antivírus Kaspersky injeta um script externo (bloqueado aqui); só então o ERR_FAILED sem endereço vale como ruído
     const kaspersky = erros.some((e) => e.includes('kaspersky-labs.com'))
@@ -1021,10 +1079,164 @@ async function plataforma() {
   }
 }
 
+// Telas novas do login, cada cena num navegador vazio, com o axe e print a 1366 e 390 px:
+// senha errada, primeiro login (senha nova obrigatória), sem internet na primeira vez, sessão vencida e Sair.
+async function cenasDoLogin() {
+  for (const [largura, altura, movel] of [[1366, 768, false], [390, 844, true]]) {
+    const abrir = async (cena, opcoes) => {
+      const tag = `login ${largura} ${cena}`
+      const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: 'dark', isMobile: movel, hasTouch: movel })
+      await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
+      const page = await ctx.newPage()
+      const erros = []
+      page.on('pageerror', (e) => erros.push(e.message))
+      page.on('console', (m) => m.type() === 'error' && erros.push(m.text()))
+      const falso = await simular(page, opcoes)
+      await page.goto(URL_SITE)
+      const tira = async (n) => {
+        await page.screenshot({ path: path.join(PRINTS, `login-${largura}-${n}.png`), fullPage: true })
+        placar.telas++
+      }
+      // as recusas do falso (400, 401, pedido abortado) aparecem no console como "Failed to load resource": são da cena
+      const fechar = async () => {
+        for (const e of erros) if (!e.startsWith('Failed to load resource')) falhas.push(`[${tag}] erro no console: ${e}`)
+        const sw = await page.evaluate(() => document.documentElement.scrollWidth)
+        if (sw > largura + 1) falhas.push(`[${tag}] página mais larga que a tela (${sw}px)`)
+        await ctx.close()
+      }
+      // espera o elemento; se não vier, registra a falha e segue
+      const esperar = async (loc, oQue, timeout = 20000) => {
+        try {
+          await loc.waitFor({ timeout })
+          return true
+        } catch {
+          falhas.push(`[${tag}] ${oQue}`)
+          return false
+        }
+      }
+      return { page, falso, tag, tira, fechar, esperar }
+    }
+    const alerta = (page, texto) => page.getByRole('alert').filter({ hasText: texto })
+    const naEntrada = (page) => page.getByLabel('E-mail', { exact: true })
+
+    // senha errada: o servidor responde 400 invalid_credentials
+    {
+      const c = await abrir('senha errada')
+      c.falso.senhaErrada = true
+      await preencherLogin(c.page, 'senha-que-nao-vale')
+      await c.esperar(alerta(c.page, SENHA_ERRADA), `faltou "${SENHA_ERRADA}"`)
+      if (await saudacaoDaMaria(c.page).count()) falhas.push(`[${c.tag}] entrou com a senha errada`)
+      await axe(c.page, c.tag)
+      await c.tira('01-senha-errada')
+      await c.fechar()
+    }
+
+    // primeiro login: a senha inicial tem de ser trocada; senha curta é recusada; a boa abre a foto e depois o painel
+    {
+      const c = await abrir('primeiro login', { senhaInicial: true })
+      await preencherLogin(c.page)
+      if (await c.esperar(c.page.getByRole('heading', { name: 'Crie a sua senha' }), 'a tela "Crie a sua senha" não apareceu')) {
+        if (await c.page.getByRole('button', { name: 'Cancelar' }).count()) falhas.push(`[${c.tag}] a senha nova obrigatória não pode ter Cancelar`)
+        await axe(c.page, `${c.tag} crie a sua senha`)
+        await c.tira('02-crie-a-sua-senha')
+        const salvar = async (senha) => {
+          await c.page.getByLabel('Senha nova', { exact: true }).fill(senha)
+          await c.page.getByLabel('Repita a senha nova', { exact: true }).fill(senha)
+          await c.page.getByRole('button', { name: 'Salvar senha' }).click()
+        }
+        await salvar('curta')
+        await c.esperar(alerta(c.page, SENHA_CURTA), `faltou "${SENHA_CURTA}"`)
+        if (c.falso.senhaTrocada) falhas.push(`[${c.tag}] a senha curta chegou ao servidor`)
+        await axe(c.page, `${c.tag} senha curta`)
+        await c.tira('03-senha-curta')
+        await salvar('outra-senha-de-teste')
+        if (await c.esperar(c.page.getByRole('heading', { name: 'Sua foto no crachá' }), 'depois da senha nova não veio a tela da foto')) {
+          if (!c.falso.senhaTrocada) falhas.push(`[${c.tag}] a senha nova não foi marcada como trocada no servidor`)
+          await c.page.getByRole('button', { name: 'Continuar sem foto' }).click()
+          if (await c.esperar(saudacaoDaMaria(c.page), 'depois da foto não veio o painel', 30000)) {
+            await axe(c.page, `${c.tag} painel`)
+            await c.tira('04-painel-depois-da-senha')
+          }
+        }
+      }
+      await c.fechar()
+    }
+
+    // sem internet na primeira vez: a tabela das bases não responde e o navegador não tem cópia guardada
+    {
+      const c = await abrir('sem internet')
+      c.falso.abortarBases = true
+      await preencherLogin(c.page)
+      await c.page.getByRole('heading', { name: 'Sua foto no crachá' }).waitFor({ timeout: 20000 })
+      await c.page.getByRole('button', { name: 'Continuar sem foto' }).click()
+      await c.esperar(alerta(c.page, PRIMEIRA_VEZ_SEM_INTERNET), `faltou "${PRIMEIRA_VEZ_SEM_INTERNET}"`)
+      const tentar = c.page.getByRole('button', { name: 'Tentar de novo' })
+      if (await c.esperar(tentar, 'faltou o botão "Tentar de novo"')) {
+        if (c.falso.descargas) falhas.push(`[${c.tag}] sem a tabela das bases não devia baixar nada (${c.falso.descargas} descargas)`)
+        await axe(c.page, c.tag)
+        await c.tira('05-sem-internet')
+        // a internet volta: "Tentar de novo" baixa as duas bases e abre o painel
+        c.falso.abortarBases = false
+        await tentar.click()
+        if (await c.esperar(saudacaoDaMaria(c.page), '"Tentar de novo" com internet não abriu o painel', 30000)) {
+          if (c.falso.descargas !== 2) falhas.push(`[${c.tag}] "Tentar de novo" devia baixar as 2 bases, baixou ${c.falso.descargas}`)
+        }
+      }
+      await c.fechar()
+    }
+
+    // sessão vencida: o token venceu (como depois do computador dormir) e o servidor recusa a renovação.
+    // O próprio Supabase confere a sessão quando a aba volta a ficar visível (visibilitychange) e avisa SIGNED_OUT.
+    {
+      const c = await abrir('sessão vencida')
+      await preencherLogin(c.page)
+      await chegarAoPainel(c.page)
+      c.falso.negarToken = true
+      await c.page.evaluate(() => {
+        const chave = Object.keys(localStorage).find((k) => /^sb-.*-auth-token$/.test(k))
+        const sessao = JSON.parse(localStorage.getItem(chave))
+        sessao.expires_at = Math.floor(Date.now() / 1000) - 60
+        localStorage.setItem(chave, JSON.stringify(sessao))
+        document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
+      })
+      if (await c.esperar(c.page.getByText(AVISO_VENCIDA, { exact: true }), `não voltou para a entrada com "${AVISO_VENCIDA}"`)) {
+        if (!(await naEntrada(c.page).count())) falhas.push(`[${c.tag}] o aviso apareceu fora da entrada`)
+        if (await saudacaoDaMaria(c.page).count()) falhas.push(`[${c.tag}] o painel continuou na tela`)
+        await axe(c.page, c.tag)
+        await c.tira('06-sessao-vencida')
+      }
+      await c.fechar()
+    }
+
+    // Sair: volta para a entrada; entrar de novo usa as bases guardadas neste navegador (nenhuma descarga)
+    {
+      const c = await abrir('sair')
+      await preencherLogin(c.page)
+      await chegarAoPainel(c.page)
+      const antes = c.falso.descargas
+      await c.page.getByRole('button', { name: 'Sair', exact: true }).click()
+      if (await c.esperar(naEntrada(c.page), 'Sair não voltou para a entrada')) {
+        await axe(c.page, `${c.tag} entrada`)
+        await c.tira('07-depois-de-sair')
+        await preencherLogin(c.page)
+        if (await c.esperar(saudacaoDaMaria(c.page), 'entrar de novo não abriu o painel', 30000)) {
+          const novas = c.falso.descargas - antes
+          if (novas !== 0) falhas.push(`[${c.tag}] entrar de novo baixou as bases (${novas} descargas)`)
+          else console.log(`[${c.tag}] entrou de novo sem baixar as bases (0 descargas; ${antes} na primeira entrada)`)
+          await axe(c.page, `${c.tag} entrou de novo`)
+          await c.tira('08-entrou-de-novo')
+        }
+      }
+      await c.fechar()
+    }
+  }
+}
+
 const gerados = []
 try {
   await ceara()
   await plataforma()
+  await cenasDoLogin()
   await modeloDiferente()
   await operacoesDaObra()
   await soDesativacao()
@@ -1041,6 +1253,7 @@ try {
   await browser.close()
   srv.close()
 }
+for (const f of falsos) for (const r of f.naoSimuladas) falhas.push(`pedido ao Supabase sem resposta simulada: ${r}`)
 
 console.log(`axe: ${placar.axe} telas analisadas | prints: ${placar.telas} | arquivos gerados: ${gerados.length}`)
 console.log(gerados.join('\n'))
