@@ -1,6 +1,6 @@
 // Técnicos (nome, matrícula e carimbo) ficam só no navegador deste computador,
 // no IndexedDB. Os carimbos têm CPF e assinatura: nunca vão no site publicado.
-import { abrirBanco, LOJA_TECNICOS } from './banco'
+import { comBanco, LOJA_TECNICOS } from './banco'
 import { base64ParaBytes, bytesParaBase64 } from './imagem'
 
 export interface TecnicoSalvo {
@@ -19,12 +19,11 @@ const STORE = LOJA_TECNICOS
 
 export async function listarTecnicos(): Promise<TecnicoSalvo[]> {
   try {
-    const db = await abrirBanco()
-    return await new Promise((ok, erro) => {
+    return await comBanco<TecnicoSalvo[]>((db) => new Promise((ok, erro) => {
       const req = db.transaction(STORE).objectStore(STORE).getAll()
       req.onsuccess = () => ok((req.result as TecnicoSalvo[]).sort((a, b) => a.nome.localeCompare(b.nome)))
       req.onerror = () => erro(req.error)
-    })
+    }))
   } catch {
     return [] // navegador sem IndexedDB (janela anônima, por exemplo)
   }
@@ -35,14 +34,13 @@ const MSG_GUARDAR = 'Não foi possível guardar a lista de técnicos neste naveg
 /** Roda uma escrita no IndexedDB e devolve uma mensagem clara, em português, se qualquer passo falhar. */
 async function escrever(fazer: (st: IDBObjectStore) => void): Promise<void> {
   try {
-    const db = await abrirBanco()
-    await new Promise<void>((ok, erro) => {
+    await comBanco((db) => new Promise<void>((ok, erro) => {
       const tx = db.transaction(STORE, 'readwrite')
       fazer(tx.objectStore(STORE))
       tx.oncomplete = () => ok()
       tx.onerror = () => erro(tx.error)
       tx.onabort = () => erro(tx.error)
-    })
+    }))
   } catch {
     throw new Error(MSG_GUARDAR)
   }

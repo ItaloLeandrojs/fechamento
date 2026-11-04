@@ -53,4 +53,18 @@ describe('banco do navegador', () => {
     expect(await lerBase('enel')).toBeNull()
     await expect(gravarBase({ nome: 'enel', versao: 'a', dados: 1 })).resolves.toBeUndefined()
   })
+
+  it('aba antiga com a versão 1 aberta: não fica pendente', async () => {
+    const v1 = await new Promise<IDBDatabase>((ok, erro) => {
+      const req = indexedDB.open('fechamento', 1)
+      req.onupgradeneeded = () => req.result.createObjectStore('tecnicos', { keyPath: 'registro' })
+      req.onsuccess = () => ok(req.result)
+      req.onerror = () => erro(req.error)
+    })
+    // v1 fica aberta de propósito, sem fechar
+    expect(await lerBase('enel')).toBeNull()
+    await expect(gravarBase({ nome: 'enel', versao: 'a', dados: 1 })).resolves.toBeUndefined()
+    expect(await listarTecnicos()).toEqual([])
+    v1.close()
+  })
 })
