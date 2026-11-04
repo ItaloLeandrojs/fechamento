@@ -2,7 +2,6 @@
 // numerada de regiões. Região "em breve" não navega: mostra o aviso por 2,6 s.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Marca } from '../components/Logo'
-import { LOGO_ALTURA, LOGO_LARGURA } from '../components/logoPath'
 import { Cracha } from './cracha/Cracha'
 import { primeiroNome, saudacao, type Pessoa } from './pessoa'
 import { REGIOES, type RegiaoId } from './regioes'
@@ -41,7 +40,7 @@ export function Painel({ pessoa, onAbrir, onTrocar }: { pessoa: Pessoa; onAbrir:
   return (
     <main className="pl pl-painel">
       <header className="pl-topo">
-        <Marca altura={(140 * LOGO_ALTURA) / LOGO_LARGURA} />
+        <Marca altura={34} />
         <button type="button" className="pl-link" onClick={onTrocar}>
           Trocar pessoa
         </button>

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { flushSync } from 'react-dom'
 import { Camera } from '@phosphor-icons/react'
 import { Marca } from '../components/Logo'
-import { LOGO_ALTURA, LOGO_LARGURA } from '../components/logoPath'
 import { gravarPessoa, type Pessoa } from './pessoa'
 import { reduzirFoto } from './foto'
 import './plataforma.css'
@@ -82,7 +81,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
     <main className="pl pl-entrada">
       <img className="pl-foto" src={FOTO_FUNDO} alt="" width={1920} height={1080} decoding="async" fetchPriority="high" />
       <div className="pl-logo">
-        <Marca altura={(170 * LOGO_ALTURA) / LOGO_LARGURA} />
+        <Marca altura={40} />
       </div>
       <span className="pl-selo">Foto provisória</span>
       <div className="pl-bloco">

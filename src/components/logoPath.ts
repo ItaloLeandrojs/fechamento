@@ -1,5 +1,5 @@
 // Desenho do logo do Grupo Cosampa (o mesmo path de public/plataforma/logo-cosampa.svg).
-// Usado pelo <Marca> e pela arte do crachá em canvas (Path2D), que pinta com a cor que precisar.
+// Usado pela arte do crachá em canvas (Path2D), que pinta com a cor que precisar. O resto do site usa a <Marca> FECHAMENTO (logoLetras.ts).
 export const LOGO_VIEWBOX = '0 0 6813 1310'
 export const LOGO_LARGURA = 6813
 export const LOGO_ALTURA = 1310

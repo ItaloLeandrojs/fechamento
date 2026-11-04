@@ -1,5 +1,3 @@
-# OBSOLETO: o site agora usa o logo do Grupo Cosampa (public/plataforma, src/components/logoPath.ts) no favicon e na imagem og.png.
-# Rodar este script recriaria o logo antigo (COSAMPA / FECHAMENTO) e sobrescreveria public/favicon.svg. Não rode.
 # Gera a logo "COSAMPA / FECHAMENTO" no mesmo desenho da marca Cosampa (v2).
 # Uso: python scripts/gerar-logo.py   (a partir da raiz do projeto)
 #
@@ -8,8 +6,10 @@
 # desenhados na mesma espessura de haste (234,7) e altura (433,6 a 1295,4).
 # A linha de cima é a palavra COSAMPA com os glifos originais da marca, em escala 0,32.
 #
-# Saídas: src/components/logoLetras.ts, public/logo-fechamento.svg, public/favicon.svg
-# e docs/amostra/logo-v2.html (prévia de aprovação, fora do public/).
+# Saídas: src/components/logoLetras.ts (a <Marca> do site), public/favicon.svg (o A verde
+# #5abd79 sobre grafite) e docs/amostra/logo-v2.html (prévia de aprovação, fora do public/).
+# O crachá não usa esta logo: ele fica com a do Grupo Cosampa (src/components/logoPath.ts).
+# Depois de rodar, gere a prévia do link de novo: node scripts/gerar-og.mjs
 import json, math, os, re, sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -70,7 +70,7 @@ def palavra(texto, gap=130):
     return partes, x
 
 partes, largura = palavra('FECHAMENTO')
-partes[4]['a'] = True            # o A de FECHAMENTO é amarelo
+partes[4]['a'] = True            # o A de FECHAMENTO leva a cor de destaque (verde, var(--accent))
 assert partes[4]['d'] == GLIFO['A']
 
 # --- COSAMPA com os glifos originais -----------------------------------------
@@ -94,7 +94,7 @@ ts = ('// Gerado por scripts/gerar-logo.py: COSAMPA / FECHAMENTO no desenho da m
       + json.dumps(COSAMPA, ensure_ascii=False) + '\n')
 open(os.path.join(RAIZ, 'src', 'components', 'logoLetras.ts'), 'w', encoding='utf8').write(ts)
 
-# --- SVGs estáticos (fundo claro: grafite e amarelo mais escuro) ---------------
+# --- SVG estático (usado só na prévia de aprovação abaixo) ----------------------
 def caminhos(cor, cor_a):
     out = [f'<path fill="{cor}" fill-rule="evenodd" transform="{c["t"]}" d="{c["d"]}"/>' for c in COSAMPA]
     for p in partes:
@@ -106,11 +106,9 @@ def svg(cor='#282829', cor_a='#E8A400', extra=''):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{VIEWBOX}" role="img" aria-label="Cosampa Fechamento"{extra}>'
             + caminhos(cor, cor_a) + '</svg>')
 
-open(os.path.join(RAIZ, 'public', 'logo-fechamento.svg'), 'w', encoding='utf8').write(svg())
-
 A = GLIFO['A']
 FAVICON = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#282829"/>'
-           f'<g transform="translate(9 9) scale(0.0515) translate(-2903.8 -433.6)"><path fill="#F2B705" d="{A}"/></g></svg>')
+           f'<g transform="translate(9 9) scale(0.0515) translate(-2903.8 -433.6)"><path fill="#5abd79" d="{A}"/></g></svg>')
 open(os.path.join(RAIZ, 'public', 'favicon.svg'), 'w', encoding='utf8').write(FAVICON)
 
 # --- prévia de aprovação (docs/amostra) -------------------------------------
