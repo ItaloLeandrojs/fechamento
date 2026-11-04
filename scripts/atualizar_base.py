@@ -195,7 +195,9 @@ def ler_linha(url, chave, nome):
 
 
 def subir_arquivo(url, chave, arquivo, gz):
-    _chamar(f'{url}/storage/v1/object/bases/{arquivo}', chave, 'POST', gz, 'application/gzip')
+    # x-upsert: se uma rodada anterior subiu o arquivo mas falhou na linha, a nova tentativa não trava em 409
+    _chamar(f'{url}/storage/v1/object/bases/{arquivo}', chave, 'POST', gz, 'application/gzip',
+            {'x-upsert': 'true'})
 
 
 def gravar_linha(url, chave, linha):

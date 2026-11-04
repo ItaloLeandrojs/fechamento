@@ -129,6 +129,7 @@ class SubidaComRedeFalsa(unittest.TestCase):
             self.assertEqual(c.get_header('Apikey'), 'segredo-falso')
             self.assertEqual(c.get_header('Authorization'), 'Bearer segredo-falso')
         self.assertEqual(up.get_header('Content-type'), 'application/gzip')
+        self.assertEqual(up.get_header('X-upsert'), 'true')
         self.assertEqual(linha.get_header('Prefer'), 'resolution=merge-duplicates')
         corpo = json.loads(linha.data)
         self.assertEqual(corpo['nome'], 'enel')
