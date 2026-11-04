@@ -147,6 +147,14 @@ export const estadoInicial: Estado = {
   boletim: null,
 }
 
+/**
+ * Estado de quem acabou de entrar: tudo vazio. O técnico do carimbo só vem marcado
+ * quando há um único guardado (como no carregamento inicial); nada da pessoa anterior fica.
+ */
+export function estadoDaPessoa(tecnicos: readonly { registro: number }[]): Estado {
+  return { ...estadoInicial, tecnico: tecnicos.length === 1 ? tecnicos[0].registro : null }
+}
+
 let seq = 0
 export function novoId(): string {
   seq += 1

@@ -5,7 +5,7 @@ import { gerarFechamento } from './core/build'
 import { conferirArquivo } from './core/conferencia'
 import { normalizar } from './lib/busca'
 import { listarTecnicos, type TecnicoSalvo } from './lib/tecnicos'
-import { estadoInicial, materialNovoEmSucata, montarLancamentos, numero, type Estado, type Kit } from './state'
+import { estadoDaPessoa, estadoInicial, materialNovoEmSucata, montarLancamentos, numero, type Estado, type Kit } from './state'
 import { Inicio } from './components/Inicio'
 import { Ceara } from './components/ceara/Ceara'
 import { Marca } from './components/Logo'
@@ -224,6 +224,16 @@ export default function App() {
         onTrocar={() => {
           apagarPessoa()
           setPessoa(null)
+          // nada da pessoa anterior passa para a próxima, nem o técnico do carimbo
+          // (só vem marcado quando há um único guardado, como no carregamento inicial)
+          setObra(null)
+          setEstado(estadoDaPessoa(tecnicos))
+          setSecao('estruturas')
+          setResultado(null)
+          setErroGerar(null)
+          setReprovado(null)
+          setErroInicio(null)
+          setRegiao(null)
         }}
       />
     )

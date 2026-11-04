@@ -8,7 +8,8 @@ import { primeiroNome, saudacao, type Pessoa } from './pessoa'
 import { REGIOES, type RegiaoId } from './regioes'
 import './plataforma.css'
 
-const ARTIGO: Record<RegiaoId, string> = { edp: 'A', ceara: 'O', sergipe: 'O' }
+// Sergipe vai sem artigo ("Sergipe ainda está em construção.")
+const ARTIGO: Record<RegiaoId, string> = { edp: 'A ', ceara: 'O ', sergipe: '' }
 const TEMPO_AVISO = 2600
 
 export function Painel({ pessoa, onAbrir, onTrocar }: { pessoa: Pessoa; onAbrir: (id: RegiaoId) => void; onTrocar: () => void }) {
@@ -30,7 +31,7 @@ export function Painel({ pessoa, onAbrir, onTrocar }: { pessoa: Pessoa; onAbrir:
 
   const emBreve = (id: RegiaoId, nomeRegiao: string) => {
     limpar()
-    setAviso(`${ARTIGO[id]} ${nomeRegiao} ainda está em construção.`)
+    setAviso(`${ARTIGO[id]}${nomeRegiao} ainda está em construção.`)
     setVisivel(true)
     // some depois de 2,6 s; o texto sai quando a transição termina (não fica lido escondido)
     timers.current.push(window.setTimeout(() => setVisivel(false), TEMPO_AVISO))

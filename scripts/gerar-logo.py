@@ -1,3 +1,5 @@
+# OBSOLETO: o site agora usa o logo do Grupo Cosampa (public/plataforma, src/components/logoPath.ts) no favicon e na imagem og.png.
+# Rodar este script recriaria o logo antigo (COSAMPA / FECHAMENTO) e sobrescreveria public/favicon.svg. Não rode.
 # Gera a logo "COSAMPA / FECHAMENTO" no mesmo desenho da marca Cosampa (v2).
 # Uso: python scripts/gerar-logo.py   (a partir da raiz do projeto)
 #

@@ -212,3 +212,58 @@ export async function cordao(): Promise<string> {
   g.fill()
   return c.toDataURL('image/png')
 }
+
+// ---- arte já desenhada, guardada em memória --------------------------------------------------
+// O painel pode pedir a mesma arte mais de uma vez (o parado de reserva enquanto o 3D carrega, e o 3D):
+// a de uma pessoa é desenhada uma vez só. A chave é nome | cargo | matrícula | resumo da foto.
+
+/** Resumo curto de um texto (FNV-1a de 32 bits em hexadecimal): distingue fotos sem guardar a foto na chave. */
+function resumo(txt: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < txt.length; i++) {
+    h ^= txt.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return `${(h >>> 0).toString(16)}:${txt.length}`
+}
+
+/** Chave da arte de uma pessoa: o que for igual aqui desenha igual. */
+export function chaveDaPessoa(p: Pessoa): string {
+  return [p.nome, p.cargo, p.matricula, p.foto ? resumo(p.foto) : ''].join('|')
+}
+
+const MAX_GUARDADAS = 4 // as últimas pessoas; mais que isso só gastaria memória (cada arte são alguns MB)
+const guardadas = new Map<string, Promise<{ f: string; v: string }>>()
+let cordaoPronto: Promise<string> | null = null
+
+/** Frente e verso da pessoa, desenhados uma vez só enquanto os dados forem os mesmos. */
+export function arteGuardada(p: Pessoa): Promise<{ f: string; v: string }> {
+  const chave = chaveDaPessoa(p)
+  const ja = guardadas.get(chave)
+  if (ja) return ja
+  const nova = Promise.all([frente(p), verso(p)]).then(([f, v]) => ({ f, v }))
+  guardadas.set(chave, nova)
+  // quem falhou não fica guardado (a próxima tentativa desenha de novo)
+  nova.catch(() => {
+    if (guardadas.get(chave) === nova) guardadas.delete(chave)
+  })
+  while (guardadas.size > MAX_GUARDADAS) guardadas.delete(guardadas.keys().next().value as string)
+  return nova
+}
+
+/** Cordão (igual para todos), desenhado uma vez só. */
+export function cordaoGuardado(): Promise<string> {
+  if (cordaoPronto) return cordaoPronto
+  const novo = cordao()
+  cordaoPronto = novo
+  novo.catch(() => {
+    if (cordaoPronto === novo) cordaoPronto = null
+  })
+  return novo
+}
+
+/** Esvazia a memória da arte (para testes). */
+export function esquecerArte(): void {
+  guardadas.clear()
+  cordaoPronto = null
+}

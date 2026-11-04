@@ -124,6 +124,11 @@
 .pl-form input:focus {
   outline: none;
   border-color: var(--accent);
+  /* com o foco só a borda fica verde: o fundo continua escuro e a dica (--faint) mantém 5,5:1 sobre ele */
+  background: var(--bg);
+}
+.pl-form input:focus::placeholder {
+  color: var(--faint);
 }
 .pl-form input[aria-invalid='true'] {
   border-color: var(--danger);

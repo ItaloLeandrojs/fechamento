@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ehMaoDeObra, ehSucata, materialNovoEmSucata, primeiroOs, estadoInicial, montarLancamentos, temAjuste, type EstruturaLanc, type Kit } from './state'
+import { estadoDaPessoa, ehMaoDeObra, ehSucata, materialNovoEmSucata, primeiroOs, estadoInicial, montarLancamentos, temAjuste, type EstruturaLanc, type Kit } from './state'
 
 const ce3: Kit = {
   kit: 'CE3',
@@ -58,5 +58,19 @@ describe('sucata', () => {
 
   it('primeiroOs sobe os que pedem e mantém a ordem dos demais', () => {
     expect(primeiroOs([3, 9, 1, 92, 5], (n) => String(n).startsWith('9'))).toEqual([9, 92, 3, 1, 5])
+  })
+})
+
+describe('estado de quem acabou de entrar (troca de pessoa)', () => {
+  const tec = (registro: number) => ({ registro })
+  it('com vários técnicos guardados, o do carimbo vem sem marcar (a pendência aparece)', () => {
+    expect(estadoDaPessoa([tec(1), tec(2)]).tecnico).toBeNull()
+  })
+  it('com um único técnico guardado, ele vem marcado; sem nenhum, fica sem marcar', () => {
+    expect(estadoDaPessoa([tec(7)]).tecnico).toBe(7)
+    expect(estadoDaPessoa([]).tecnico).toBeNull()
+  })
+  it('o resto volta ao estado inicial', () => {
+    expect({ ...estadoDaPessoa([]) }).toEqual(estadoInicial)
   })
 })

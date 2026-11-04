@@ -3,7 +3,7 @@
 // e como reserva enquanto o 3D carrega ou se ele falhar.
 import { useEffect, useState } from 'react'
 import type { Pessoa } from '../pessoa'
-import { frente, verso } from './arte'
+import { arteGuardada } from './arte'
 
 export function CrachaParado({ pessoa }: { pessoa: Pessoa }) {
   const [arte, setArte] = useState<{ f: string; v: string } | null>(null)
@@ -11,8 +11,8 @@ export function CrachaParado({ pessoa }: { pessoa: Pessoa }) {
 
   useEffect(() => {
     let vivo = true
-    Promise.all([frente(pessoa), verso(pessoa)])
-      .then(([f, v]) => { if (vivo) setArte({ f, v }) })
+    arteGuardada(pessoa)
+      .then((a) => { if (vivo) setArte(a) })
       .catch(() => { /* sem canvas: fica o espaço reservado */ })
     return () => { vivo = false }
   }, [pessoa])

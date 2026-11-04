@@ -662,7 +662,7 @@ async function plataforma() {
     await tira('06-painel')
 
     // região "em breve" não navega: mostra o aviso e ele some sozinho
-    for (const [nomeRegiao, texto] of [['Ceará', 'O Ceará ainda está em construção.'], ['Sergipe', 'O Sergipe ainda está em construção.']]) {
+    for (const [nomeRegiao, texto] of [['Ceará', 'O Ceará ainda está em construção.'], ['Sergipe', 'Sergipe ainda está em construção.']]) {
       // force: o botão usa aria-disabled="true" (não navega, só avisa) e o Playwright o trata como desabilitado
       await page.getByRole('button', { name: nomeRegiao, exact: true }).click({ force: true })
       try {
@@ -732,6 +732,45 @@ async function plataforma() {
     await noPainel('voltando da EDP sem obra')
     if (perguntou) falhas.push(`[${tag}] ← Regiões sem obra aberta não devia perguntar nada`)
 
+    // ---- o técnico do carimbo não passa de uma pessoa para a outra
+    // (a lista de técnicos tem vários: ao trocar de pessoa nada vem marcado e a revisão pede o técnico)
+    const PENDENCIA_TECNICO = 'Escolha o técnico do carimbo.'
+    const etapa = (nome) => page.getByRole('navigation', { name: 'Etapas' }).getByRole('button', { name: new RegExp('^' + nome) })
+    const abrirEdpComInventario = async () => {
+      await page.getByRole('button', { name: 'EDP', exact: true }).click()
+      await page.setInputFiles('input[type=file]', path.join(DADOS, 'inv.xlsx'))
+      await page.waitForSelector('nav[aria-label=Etapas]', { timeout: 20000 })
+      await page.getByRole('region', { name: 'Este fechamento é parcial ou final?' }).getByRole('radio', { name: /^Parcial/ }).click()
+    }
+    await abrirEdpComInventario()
+    await etapa('Carimbo').click()
+    const radiosTecnico = page.getByRole('radiogroup', { name: 'Técnico do carimbo' }).getByRole('radio')
+    await page.locator('main input[accept^=".json"]').setInputFiles(path.join(DADOS, 'tec.json'))
+    await radiosTecnico.first().waitFor({ timeout: 10000 })
+    if ((await radiosTecnico.count()) < 2) falhas.push(`[${tag}] técnico: o teste precisa de mais de um técnico na lista`)
+    await radiosTecnico.first().click()
+    if (!(await radiosTecnico.first().isChecked())) falhas.push(`[${tag}] técnico: não ficou marcado`)
+    await etapa('Revisar e baixar').click()
+    if (await page.getByText(PENDENCIA_TECNICO, { exact: true }).count()) falhas.push(`[${tag}] técnico marcado: a pendência "${PENDENCIA_TECNICO}" não devia aparecer`)
+    await page.getByRole('button', { name: /Regiões/ }).first().click()
+    await noPainel('voltando da EDP com técnico marcado')
+    await page.getByRole('button', { name: 'Trocar pessoa' }).click()
+    await entrada.waitFor({ timeout: 10000 })
+    await page.getByLabel('Nome', { exact: true }).fill(NOME)
+    await page.getByLabel('Cargo', { exact: true }).fill(CARGO)
+    await botaoEntrar.click()
+    await noPainel('segunda pessoa')
+    await abrirEdpComInventario()
+    await etapa('Carimbo').click()
+    if ((await radiosTecnico.count()) < 2) falhas.push(`[${tag}] técnico (segunda pessoa): a lista de técnicos sumiu`)
+    for (let i = 0; i < (await radiosTecnico.count()); i++) {
+      if (await radiosTecnico.nth(i).isChecked()) falhas.push(`[${tag}] o técnico da pessoa anterior continuou marcado para a seguinte`)
+    }
+    await etapa('Revisar e baixar').click()
+    if (!(await page.getByText(PENDENCIA_TECNICO, { exact: true }).count())) falhas.push(`[${tag}] segunda pessoa: faltou a pendência "${PENDENCIA_TECNICO}"`)
+    await page.getByRole('button', { name: /Regiões/ }).first().click()
+    await noPainel('voltando da EDP da segunda pessoa')
+
     // ---- trocar pessoa: volta à entrada, esquece a pessoa e o recarregar não reabre o painel
     await page.getByRole('button', { name: 'Trocar pessoa' }).click()
     try {
@@ -747,8 +786,10 @@ async function plataforma() {
     await entrada.waitFor({ timeout: 10000 })
     if (await saudacao.count()) falhas.push(`[${tag}] depois de trocar pessoa, recarregar abriu o painel`)
 
+    // ruído conhecido: o antivírus Kaspersky injeta um script externo (bloqueado aqui); só então o ERR_FAILED sem endereço vale como ruído
+    const kaspersky = erros.some((e) => e.includes('kaspersky-labs.com'))
     for (const e of erros) {
-      if (e.includes('kaspersky-labs.com') || e === 'Failed to load resource: net::ERR_FAILED') continue
+      if (e.includes('kaspersky-labs.com') || (kaspersky && e === 'Failed to load resource: net::ERR_FAILED')) continue
       falhas.push(`[${tag}] erro no console: ${e}`)
     }
     const sw = await page.evaluate(() => document.documentElement.scrollWidth)

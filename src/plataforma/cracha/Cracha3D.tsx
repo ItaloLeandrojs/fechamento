@@ -2,7 +2,7 @@
 // Carregado sob demanda (lazy) pelo Cracha.tsx: three, drei e rapier ficam fora do pacote inicial.
 import { useEffect, useState } from 'react'
 import type { Pessoa } from '../pessoa'
-import { cordao, frente, verso } from './arte'
+import { arteGuardada, cordaoGuardado } from './arte'
 import Lanyard from './Lanyard'
 
 export default function Cracha3D({ pessoa, altura = 640 }: { pessoa: Pessoa; altura?: number }) {
@@ -11,8 +11,9 @@ export default function Cracha3D({ pessoa, altura = 640 }: { pessoa: Pessoa; alt
 
   useEffect(() => {
     let vivo = true
-    Promise.all([frente(pessoa), verso(pessoa), cordao()])
-      .then(([f, v, c]) => { if (vivo) setArte({ f, v, c }) })
+    // arte guardada: se o parado de reserva já desenhou esta pessoa, aqui não desenha de novo
+    Promise.all([arteGuardada(pessoa), cordaoGuardado()])
+      .then(([{ f, v }, c]) => { if (vivo) setArte({ f, v, c }) })
       .catch((e) => { if (vivo) setErro(e ?? new Error('Falha ao desenhar o crachá')) })
     return () => { vivo = false }
   }, [pessoa])

@@ -80,7 +80,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
 
   return (
     <main className="pl pl-entrada">
-      <img className="pl-foto" src={FOTO_FUNDO} alt="" width={1920} height={1280} decoding="async" fetchPriority="high" />
+      <img className="pl-foto" src={FOTO_FUNDO} alt="" width={1920} height={1080} decoding="async" fetchPriority="high" />
       <div className="pl-logo">
         <Marca altura={(170 * LOGO_ALTURA) / LOGO_LARGURA} />
       </div>
@@ -97,6 +97,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
             <input
               ref={refNome}
               name="nome"
+              maxLength={60}
               autoComplete="name"
               required
               aria-invalid={invalido === 'nome' || undefined}
@@ -119,6 +120,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
             <input
               ref={refCargo}
               name="cargo"
+              maxLength={60}
               autoComplete="organization-title"
               required
               aria-invalid={invalido === 'cargo' || undefined}
@@ -140,7 +142,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
             <span>
               Matrícula <small>(opcional)</small>
             </span>
-            <input name="matricula" autoComplete="off" placeholder="Ex.: 0000" value={matricula} onChange={(e) => setMatricula(e.target.value)} />
+            <input name="matricula" maxLength={20} autoComplete="off" placeholder="Ex.: 0000" value={matricula} onChange={(e) => setMatricula(e.target.value)} />
           </label>
           <div className="pl-campo-foto">
             <span id="entrada-foto-rotulo">
