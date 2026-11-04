@@ -29,9 +29,14 @@ export function mensagemDeErro(e: unknown, online: boolean = estaOnline()): stri
   return SERVIDOR_PARADO
 }
 
+/** Erro de uma chamada ao banco. O postgrest-js não lança na falha de rede: devolve status 0 fora do `error`. */
+export function erroDoBanco(error: unknown, status: number | undefined, online: boolean = estaOnline()): Error {
+  return new Error(mensagemDeErro(status === 0 ? { ...(error as object), status: 0 } : error, online))
+}
+
 async function lerPerfil(c: SupabaseClient, userId: string): Promise<Perfil> {
-  const { data, error } = await c.from('perfis').select('id,nome,cargo,matricula,senha_inicial').eq('id', userId).maybeSingle()
-  if (error) throw new Error(mensagemDeErro(error))
+  const { data, error, status } = await c.from('perfis').select('id,nome,cargo,matricula,senha_inicial').eq('id', userId).maybeSingle()
+  if (error) throw erroDoBanco(error, status)
   if (!data || !String(data.nome ?? '').trim()) throw new Error(CADASTRO_INCOMPLETO)
   return { id: data.id, nome: data.nome, cargo: data.cargo ?? '', matricula: data.matricula ?? '', senhaInicial: !!data.senha_inicial }
 }
@@ -68,7 +73,7 @@ export async function trocarSenha(c: SupabaseClient, nova: string, confirma: str
     const { error } = await c.auth.updateUser({ password: nova })
     if (error) throw error
     const r = await c.rpc('marcar_senha_trocada')
-    if (r.error) throw r.error
+    if (r.error) throw erroDoBanco(r.error, r.status)
   } catch (e) {
     throw new Error(mensagemDeErro(e))
   }

@@ -2,6 +2,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { FonteBases } from './bases'
 import { armazenamentoDaSessao } from './armazenamento'
+import { erroDoBanco } from './sessao'
 
 export { armazenamentoDaSessao }
 
@@ -21,8 +22,8 @@ export const nuvem: SupabaseClient | null = URL && CHAVE
 export function fonteSupabase(c: SupabaseClient): FonteBases {
   return {
     async versoes() {
-      const { data, error } = await c.from('bases').select('nome,versao,arquivo')
-      if (error) throw error
+      const { data, error, status } = await c.from('bases').select('nome,versao,arquivo')
+      if (error) throw erroDoBanco(error, status)
       const linhas = (data ?? []) as { nome: string; versao: string; arquivo: string }[]
       const achar = (nome: 'enel' | 'edp') => {
         const l = linhas.find((x) => x.nome === nome)

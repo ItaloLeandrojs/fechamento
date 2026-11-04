@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { entrar, perfilAtual, trocarSenha, mensagemDeErro } from './sessao'
+import { entrar, perfilAtual, trocarSenha, mensagemDeErro, erroDoBanco } from './sessao'
 import { armazenamentoDaSessao } from './armazenamento'
 import {
   SENHA_ERRADA, MUITAS_TENTATIVAS, SEM_INTERNET, SERVIDOR_PARADO, CADASTRO_INCOMPLETO, SENHA_CURTA,
@@ -10,14 +10,14 @@ const SESSAO = { user: { id: 'u1' } }
 const LINHA = { id: 'u1', nome: 'Maria', cargo: 'Planejadora', matricula: '123', senha_inicial: false }
 
 /** Cliente falso: só o que sessao.ts usa. */
-function falso(o: { signIn?: unknown; sessao?: unknown; linha?: unknown; update?: unknown } = {}) {
+function falso(o: { signIn?: unknown; sessao?: unknown; linha?: unknown; update?: unknown; respLinha?: unknown; respRpc?: unknown } = {}) {
   const f = {
     signInWithPassword: vi.fn(async () => o.signIn ?? { data: { session: SESSAO, user: SESSAO.user }, error: null }),
     getSession: vi.fn(async () => ({ data: { session: 'sessao' in o ? o.sessao : SESSAO }, error: null })),
     updateUser: vi.fn(async () => o.update ?? { data: {}, error: null }),
     signOut: vi.fn(async () => ({ error: null })),
-    maybeSingle: vi.fn(async () => ({ data: 'linha' in o ? o.linha : LINHA, error: null })),
-    rpc: vi.fn(async () => ({ data: null, error: null })),
+    maybeSingle: vi.fn(async () => o.respLinha ?? { data: 'linha' in o ? o.linha : LINHA, error: null }),
+    rpc: vi.fn(async () => o.respRpc ?? { data: null, error: null }),
   }
   const c = {
     auth: { signInWithPassword: f.signInWithPassword, getSession: f.getSession, updateUser: f.updateUser, signOut: f.signOut },
@@ -80,6 +80,34 @@ describe('sessão', () => {
     expect(f.updateUser).toHaveBeenCalledWith({ password: 'senhaboa123' })
     expect(f.rpc).toHaveBeenCalledTimes(1)
     expect(f.rpc).toHaveBeenCalledWith('marcar_senha_trocada')
+  })
+})
+
+describe('falha de rede do banco (status 0 fora do error)', () => {
+  const REDE = { data: null, error: { message: 'TypeError: Failed to fetch', code: '' }, status: 0 }
+
+  it('perfil offline vira SEM_INTERNET e online vira SERVIDOR_PARADO', async () => {
+    const { c } = falso({ respLinha: REDE })
+    vi.stubGlobal('navigator', { onLine: false })
+    await expect(perfilAtual(c)).rejects.toThrow(SEM_INTERNET)
+    vi.stubGlobal('navigator', { onLine: true })
+    await expect(perfilAtual(c)).rejects.toThrow(SERVIDOR_PARADO)
+    vi.unstubAllGlobals()
+  })
+
+  it('rpc offline vira SEM_INTERNET e online vira SERVIDOR_PARADO', async () => {
+    const { c } = falso({ respRpc: REDE })
+    vi.stubGlobal('navigator', { onLine: false })
+    await expect(trocarSenha(c, 'senhaboa123', 'senhaboa123')).rejects.toThrow(SEM_INTERNET)
+    vi.stubGlobal('navigator', { onLine: true })
+    await expect(trocarSenha(c, 'senhaboa123', 'senhaboa123')).rejects.toThrow(SERVIDOR_PARADO)
+    vi.unstubAllGlobals()
+  })
+
+  it('erroDoBanco: status 0 respeita online; erro comum não vira rede', () => {
+    expect(erroDoBanco(REDE.error, 0, false).message).toBe(SEM_INTERNET)
+    expect(erroDoBanco(REDE.error, 0, true).message).toBe(SERVIDOR_PARADO)
+    expect(erroDoBanco({ message: 'x', code: 'PGRST301' }, 401, false).message).toBe(SERVIDOR_PARADO)
   })
 })
 
