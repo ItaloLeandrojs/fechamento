@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { entrar, perfilAtual, trocarSenha, mensagemDeErro, erroDoBanco } from './sessao'
 import { armazenamentoDaSessao } from './armazenamento'
 import {
-  SENHA_ERRADA, MUITAS_TENTATIVAS, SEM_INTERNET, SERVIDOR_PARADO, CADASTRO_INCOMPLETO, SENHA_CURTA,
+  SENHA_ERRADA, MUITAS_TENTATIVAS, SEM_INTERNET, SERVIDOR_PARADO, CADASTRO_INCOMPLETO, SENHA_CURTA, SENHA_IGUAL,
 } from './mensagens'
 
 const SESSAO = { user: { id: 'u1' } }
@@ -80,6 +80,12 @@ describe('sessão', () => {
     expect(f.updateUser).toHaveBeenCalledWith({ password: 'senhaboa123' })
     expect(f.rpc).toHaveBeenCalledTimes(1)
     expect(f.rpc).toHaveBeenCalledWith('marcar_senha_trocada')
+  })
+
+  it('senha igual recusada pelo servidor (same_password) vira SENHA_IGUAL e não marca a troca', async () => {
+    const { c, f } = falso({ update: { data: {}, error: { code: 'same_password', status: 422, message: 'New password should be different from the old password.' } } })
+    await expect(trocarSenha(c, 'senhaboa123', 'senhaboa123')).rejects.toThrow(SENHA_IGUAL)
+    expect(f.rpc).toHaveBeenCalledTimes(0)
   })
 })
 

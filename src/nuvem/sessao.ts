@@ -24,6 +24,8 @@ export function mensagemDeErro(e: unknown, online: boolean = estaOnline()): stri
   const status = typeof x.status === 'number' ? x.status : undefined
   if (x.code === 'invalid_credentials' || ((status === 400 || status === 401) && !x.code)) return SENHA_ERRADA
   if (status === 429 || x.code === 'over_request_rate_limit') return MUITAS_TENTATIVAS
+  // o Supabase recusa (422) a senha nova igual à atual, mesmo sem o site saber a senha atual
+  if (x.code === 'same_password') return SENHA_IGUAL
   const rede = e instanceof TypeError || x.name === 'AuthRetryableFetchError' || status === 0
   if (rede) return online ? SERVIDOR_PARADO : SEM_INTERNET
   return SERVIDOR_PARADO
