@@ -72,6 +72,11 @@ export interface Catalogo {
   estruturas: Record<string, string>
 }
 
+/** Base completa da Enel: o catálogo mais os kits de estrutura. A chave de 'kits' é o CODIGO_KIT (sem _E), como em 'estruturas'. */
+export interface BaseEnel extends Catalogo {
+  kits: Record<string, [codigo: string, qtd: number][]>
+}
+
 // ---------------- leitura das etiquetas ----------------
 
 // esforço de 100 a 9999 daN ("01/05" é número de folha, não poste)
