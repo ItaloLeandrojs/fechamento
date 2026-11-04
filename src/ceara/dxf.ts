@@ -9,6 +9,8 @@ export interface TextoDxf {
   camada: string
   x: number
   y: number
+  /** Altura da letra (TEXT, código 40; no MTEXT, a altura padrão). */
+  altura: number
 }
 
 export interface CotaDxf {
@@ -44,11 +46,11 @@ export function lerDxf(bytes: Uint8Array): Dxf {
   const estilos = new Map<string, string>()
 
   let secao = ''
-  let ent: { tipo: string; bruto: string; camada: string; x: number; y: number; papel: boolean; estilo: string; medida: number; sub: string } | null = null
+  let ent: { tipo: string; bruto: string; camada: string; x: number; y: number; altura: number; papel: boolean; estilo: string; medida: number; sub: string } | null = null
   let dimstyle: { nome: string; post: string } | null = null
   const fechar = () => {
     if (ent && !ent.papel) {
-      if (ent.tipo === 'TEXT' || ent.tipo === 'MTEXT') textos.push({ tipo: ent.tipo, bruto: ent.bruto, camada: ent.camada, x: ent.x, y: ent.y })
+      if (ent.tipo === 'TEXT' || ent.tipo === 'MTEXT') textos.push({ tipo: ent.tipo, bruto: ent.bruto, camada: ent.camada, x: ent.x, y: ent.y, altura: ent.altura })
       else if (ent.tipo === 'DIMENSION') cotasCruas.push({ estilo: ent.estilo, medida: ent.medida, substituto: ent.sub, camada: ent.camada })
     }
     if (dimstyle?.nome) estilos.set(dimstyle.nome, dimstyle.post)
@@ -67,7 +69,7 @@ export function lerDxf(bytes: Uint8Array): Dxf {
       }
       if (secao === 'TABLES' && valor === 'DIMSTYLE') dimstyle = { nome: '', post: '' }
       // só o espaço do modelo (ENTITIES); blocos não inseridos e folhas de impressão ficam de fora
-      else if (secao === 'ENTITIES' && ['TEXT', 'MTEXT', 'DIMENSION'].includes(valor)) ent = { tipo: valor, bruto: '', camada: '', x: 0, y: 0, papel: false, estilo: '', medida: 0, sub: '' }
+      else if (secao === 'ENTITIES' && ['TEXT', 'MTEXT', 'DIMENSION'].includes(valor)) ent = { tipo: valor, bruto: '', camada: '', x: 0, y: 0, altura: 0, papel: false, estilo: '', medida: 0, sub: '' }
       continue
     }
     if (dimstyle) {
@@ -93,6 +95,9 @@ export function lerDxf(bytes: Uint8Array): Dxf {
         break
       case '20':
         ent.y = Number(valor)
+        break
+      case '40':
+        ent.altura = Number(valor)
         break
       case '42':
         ent.medida = Number(valor)

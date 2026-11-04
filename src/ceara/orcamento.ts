@@ -63,6 +63,9 @@ export interface LinhaComparada {
   situacao: 'igual' | 'diferente' | 'so-desenho' | 'so-orcamento'
   origem: string[]
   palpite: boolean
+  semCodigo?: boolean
+  foraDaBase?: boolean
+  conta?: string
 }
 
 export function comparar(r: ResultadoCeara, orc: Orcamento): Record<Bloco, LinhaComparada[]> {
@@ -76,7 +79,7 @@ export function comparar(r: ResultadoCeara, orc: Orcamento): Record<Bloco, Linha
       const dq = d ? Math.round(d.quantidade * 100) / 100 : null
       const oq = o ? Math.round(o.quantidade * 100) / 100 : null
       const situacao = dq === null ? 'so-orcamento' : oq === null ? 'so-desenho' : Math.abs(dq - oq) < 0.011 ? 'igual' : 'diferente'
-      return { codigo, descricao: d?.descricao || o?.descricao || '', desenho: dq, orcamento: oq, situacao, origem: d?.origem ?? [], palpite: !!d?.palpite }
+      return { codigo, descricao: d?.descricao || o?.descricao || '', desenho: dq, orcamento: oq, situacao, origem: d?.origem ?? [], palpite: !!d?.palpite, semCodigo: d?.semCodigo, foraDaBase: d?.foraDaBase, conta: d?.conta }
     })
   }
   return out

@@ -1,16 +1,21 @@
-import { useRef, useState, type ReactNode } from 'react'
-import { CheckCircle, FileXls, Flask, Info, UploadSimple, WarningCircle } from '@phosphor-icons/react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { CheckCircle, DownloadSimple, FileXls, Info, UploadSimple, WarningCircle } from '@phosphor-icons/react'
 import { Marca } from '../Logo'
-import { Botao, Painel, Selo, Titulo } from '../ui'
+import { Botao, Campo, Painel, Selo, Titulo } from '../ui'
 import { formatarQtd } from '../../lib/busca'
 import { lerDxf } from '../../ceara/dxf'
-import { contarObra, type Linha, type ResultadoCeara } from '../../ceara/contagem'
+import { contarObra, type Catalogo, type Linha, type ResultadoCeara } from '../../ceara/contagem'
 import { BLOCOS, comparar, lerOrcamento, type Bloco, type LinhaComparada, type Orcamento } from '../../ceara/orcamento'
+import { AREAS, gerarExcelCeara, nomeDoExcel, otDoNome, type Area } from '../../ceara/excel'
+
+// base da Enel (material e kits de estrutura): carregada à parte, só quando o Ceará abre
+let catalogo: Promise<Catalogo> | null = null
+const carregarCatalogo = () => (catalogo ??= import('../../data/enel-catalogo.json').then((m) => m.default as unknown as Catalogo))
 
 /**
- * Fechamento Ceará (em teste): lê o DXF do asbuilt e conta estruturas e materiais pelas
- * etiquetas dos postes e pelos vãos. Com o orçamento feito à mão, mostra o que bateu.
- * Mão de obra ainda fica de fora.
+ * Fechamento Ceará: lê o DXF do asbuilt, conta estruturas e materiais pelas etiquetas dos
+ * postes e pelos vãos e baixa o Excel da Solicitação de acréscimos (abas de estrutura e
+ * material). Com um orçamento feito à mão, mostra o que bateu. Mão de obra ainda fica de fora.
  */
 export function Ceara({ onVoltar }: { onVoltar: () => void }) {
   const [nomeDxf, setNomeDxf] = useState('')
@@ -19,20 +24,32 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
   const [nomeOrc, setNomeOrc] = useState('')
   const [lendo, setLendo] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [ot, setOt] = useState('')
+  const [area, setArea] = useState<Area>('SUL')
+  const [baixado, setBaixado] = useState('')
   const inDxf = useRef<HTMLInputElement>(null)
   const inOrc = useRef<HTMLInputElement>(null)
+  const idArea = useId()
+
+  useEffect(() => {
+    carregarCatalogo().catch(() => {})
+  }, [])
 
   const abrirDxf = async (f: File | undefined) => {
     if (!f) return
     setErro(null)
-    if (!/\.dxf$/i.test(f.name)) return setErro(/\.dwg$/i.test(f.name) ? 'Por enquanto o site lê DXF. No ZWCAD ou AutoCAD: Salvar como > DXF, e suba o arquivo .dxf.' : 'Escolha o arquivo .dxf do desenho.')
+    setBaixado('')
+    if (!/\.dxf$/i.test(f.name)) return setErro(/\.dwg$/i.test(f.name) ? 'O site lê DXF. No ZWCAD ou AutoCAD: Salvar como > DXF, e suba o arquivo .dxf.' : 'Escolha o arquivo .dxf do desenho.')
     setLendo(true)
     try {
       // dá tempo de a tela mostrar "lendo" antes do trabalho pesado
       await new Promise((ok) => setTimeout(ok, 30))
-      const r = contarObra(lerDxf(new Uint8Array(await f.arrayBuffer())))
+      const base = await carregarCatalogo().catch(() => undefined)
+      const r = contarObra(lerDxf(new Uint8Array(await f.arrayBuffer())), base)
+      if (!base) r.avisos.unshift('Não consegui carregar a base da Enel: as descrições e a conferência das estruturas ficaram de fora.')
       setResultado(r)
       setNomeDxf(f.name)
+      setOt(otDoNome(f.name))
       if (!r.etiquetas.length) setErro('Não achei nenhuma etiqueta de poste nesse desenho. Confira se é o asbuilt da obra.')
     } catch (e) {
       setErro('Não consegui ler esse DXF: ' + ((e as Error).message || 'arquivo diferente do esperado.'))
@@ -52,23 +69,35 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
     }
   }
 
+  const baixar = async () => {
+    if (!resultado) return
+    const nome = nomeDoExcel(ot)
+    const bytes = await gerarExcelCeara(resultado, { ot: ot.trim(), area, data: new Date() })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+    a.download = nome
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    setBaixado(nome)
+  }
+
   const cmp = resultado && orcamento ? comparar(resultado, orcamento) : null
   const total = cmp ? BLOCOS.flatMap((b) => cmp[b.id]) : []
   const iguais = total.filter((l) => l.situacao === 'igual').length
+  const vermelhas = resultado ? BLOCOS.flatMap((b) => resultado[b.id]).filter((l) => l.semCodigo || l.foraDaBase).length : 0
+  const otValida = /^\d{7}$|^\d{11}$/.test(ot.trim())
 
   return (
     <div className="min-h-[100dvh]">
       <header className="sticky top-0 z-20 h-[72px] border-b border-line bg-bg/95 backdrop-blur">
         <div className="h-full max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10 flex items-center gap-4">
           <Marca altura={36} />
-          <Selo tom="destaque">
-            <Flask size={14} weight="bold" /> Ceará · em teste
-          </Selo>
+          <Selo tom="destaque">Ceará</Selo>
           <Botao
             variante="fantasma"
             className="ml-auto"
             onClick={() => {
-              // sai do endereço escondido #ceara-teste sem criar outra entrada no histórico
+              // sai do endereço #ceara-teste (atalho antigo) sem criar outra entrada no histórico
               if (window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search)
               onVoltar()
             }}
@@ -81,8 +110,8 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
 
       <main className="max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-10 py-6 md:py-8 grid gap-6 [&>*]:min-w-0">
         <Titulo
-          titulo="Fechamento Ceará (em teste)"
-          sub="Suba o DXF do asbuilt (no ZWCAD ou AutoCAD: Salvar como > DXF). O site lê a etiqueta de cada poste e os vãos e conta estruturas e materiais. Com o orçamento feito à mão, mostra o que bateu. Mão de obra ainda não entra."
+          titulo="Fechamento Ceará"
+          sub="Suba o DXF do asbuilt (no ZWCAD ou AutoCAD: Salvar como > DXF). O site lê a etiqueta de cada poste e os vãos, conta estrutura e material e monta o Excel da Solicitação de acréscimos. Mão de obra ainda não entra."
         />
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -96,7 +125,7 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
           />
           <Envio
             titulo={nomeOrc || 'Orçamento feito à mão (.xlsx)'}
-            texto={nomeOrc ? 'Clique para trocar o orçamento' : 'Opcional. Para comparar com a contagem.'}
+            texto={nomeOrc ? 'Clique para trocar o orçamento' : 'Opcional. Para conferir a contagem com uma feita à mão.'}
             icone={<FileXls size={28} />}
             feito={!!nomeOrc}
             onClick={() => inOrc.current?.click()}
@@ -113,6 +142,52 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
 
         {resultado && (
           <>
+            <Painel className="p-4 md:p-5">
+              <h2 className="text-xl font-semibold tracking-[-0.02em]">Excel da obra</h2>
+              <p className="mt-1 text-sm text-muted">
+                4 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel. Data de hoje e empresa COSAMPA.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,220px)_minmax(0,220px)_auto] sm:items-start">
+                <Campo
+                  rotulo="OT"
+                  inputMode="numeric"
+                  value={ot}
+                  onChange={(e) => setOt(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                  ajuda={ot && !otValida ? 'A OT tem 7 dígitos (ou 11, começando com 1722).' : 'Tirada do nome do arquivo. Confira.'}
+                />
+                <div className="grid gap-1.5">
+                  <label htmlFor={idArea} className="text-xs font-medium text-muted">
+                    Área
+                  </label>
+                  <select
+                    id={idArea}
+                    value={area}
+                    onChange={(e) => setArea(e.target.value as Area)}
+                    className="h-12 w-full rounded-ctl border border-line-strong bg-surface px-3 text-base text-text focus:border-text focus:outline-none"
+                  >
+                    {AREAS.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Botao variante="primario" className="sm:mt-[22px] sm:justify-self-start" onClick={baixar} disabled={!otValida}>
+                  <DownloadSimple size={20} weight="bold" /> Baixar Excel
+                </Botao>
+              </div>
+              {vermelhas > 0 && (
+                <p className="mt-3 text-sm text-text">
+                  <span className="num font-semibold">{vermelhas}</span> {vermelhas === 1 ? 'linha sai' : 'linhas saem'} em vermelho no Excel (sem código ou fora da base da Enel): preencha ou corrija à mão.
+                </p>
+              )}
+              {baixado && (
+                <p role="status" className="mt-3 flex items-center gap-2 text-sm text-ok">
+                  <CheckCircle size={18} weight="fill" /> Baixado: {baixado}
+                </p>
+              )}
+            </Painel>
+
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-5">
               <Numero rotulo="Etiquetas de poste lidas" valor={resultado.etiquetas.length} />
               <Numero rotulo="Vãos novos de MT (m)" valor={metros(resultado, 1, /^P\d/)} />
@@ -137,19 +212,14 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
             </div>
 
             {resultado.naoReconhecidos.length > 0 && (
-              <Painel className="p-4 md:p-5">
-                <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                  Itens que o site não reconheceu (<span className="num">{resultado.naoReconhecidos.length}</span>)
-                </h2>
-                <p className="mt-1 text-sm text-muted">Têm prefixo (1) ou (3), mas o site ainda não sabe o que são. Não entraram na contagem.</p>
-                <ul className="mt-3 flex flex-wrap gap-2">
-                  {resultado.naoReconhecidos.map((n, i) => (
-                    <li key={i} className="rounded-md bg-surface-2 px-2 py-1 text-sm">
-                      <span className="text-muted">{n.poste}</span> <span className="num font-medium">{n.texto}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Painel>
+              <ListaPedacos
+                titulo="Itens que o site não reconheceu"
+                texto="Têm prefixo (1) ou (3), mas o site ainda não sabe o que são. Não entraram na contagem."
+                itens={resultado.naoReconhecidos}
+              />
+            )}
+            {resultado.ignorados.length > 0 && (
+              <ListaPedacos titulo="Fora da contagem de propósito" texto="A CAVA KLC só marca que teve cava no poste: entra na mão de obra, não no material." itens={resultado.ignorados} />
             )}
 
             <Painel className="overflow-clip">
@@ -162,7 +232,7 @@ export function Ceara({ onVoltar }: { onVoltar: () => void }) {
                   .map((e, i) => (
                     <li key={i} className="grid gap-1 px-4 md:px-5 py-2.5 sm:grid-cols-[72px_minmax(0,1fr)]">
                       <span className="num font-semibold">{e.poste ? 'P' + e.poste : 'sem nº'}</span>
-                      <span className="text-sm break-words">{e.linhas.filter((l) => !/^\(?\d{5,}/.test(l)).join(' · ')}</span>
+                      <span className="text-sm break-words">{e.linhas.filter((l) => !/^\(?\d{5,}/.test(l) && l !== e.poste).join(' · ')}</span>
                     </li>
                   ))}
               </ul>
@@ -178,8 +248,10 @@ function metros(r: ResultadoCeara, sit: 1 | 3, cabo: RegExp): number {
   return r.vaos.filter((v) => v.situacao === sit && cabo.test(v.cabo)).reduce((s, v) => s + v.metros, 0)
 }
 
-function semComparar(l: Linha): LinhaComparada {
-  return { codigo: l.codigo, descricao: l.descricao, desenho: l.quantidade, orcamento: null, situacao: 'so-desenho', origem: l.origem, palpite: !!l.palpite }
+type LinhaTela = LinhaComparada & Pick<Linha, 'semCodigo' | 'foraDaBase' | 'conta'>
+
+function semComparar(l: Linha): LinhaTela {
+  return { codigo: l.codigo, descricao: l.descricao, desenho: l.quantidade, orcamento: null, situacao: 'so-desenho', origem: l.origem, palpite: !!l.palpite, semCodigo: l.semCodigo, foraDaBase: l.foraDaBase, conta: l.conta }
 }
 
 function Envio({ titulo, texto, icone, feito, carregando = false, onClick }: { titulo: string; texto: string; icone: ReactNode; feito: boolean; carregando?: boolean; onClick: () => void }) {
@@ -208,6 +280,24 @@ function Numero({ rotulo, valor }: { rotulo: string; valor: number | string }) {
   )
 }
 
+function ListaPedacos({ titulo, texto, itens }: { titulo: string; texto: string; itens: { poste: string; texto: string }[] }) {
+  return (
+    <Painel className="p-4 md:p-5">
+      <h2 className="text-xl font-semibold tracking-[-0.02em]">
+        {titulo} (<span className="num">{itens.length}</span>)
+      </h2>
+      <p className="mt-1 text-sm text-muted">{texto}</p>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {itens.map((n, i) => (
+          <li key={i} className="rounded-md bg-surface-2 px-2 py-1 text-sm">
+            <span className="text-muted">{n.poste}</span> <span className="num font-medium">{n.texto}</span>
+          </li>
+        ))}
+      </ul>
+    </Painel>
+  )
+}
+
 const SITUACAO: Record<LinhaComparada['situacao'], { texto: string; tom: 'ok' | 'perigo' | 'neutro' | 'destaque' }> = {
   igual: { texto: 'igual', tom: 'ok' },
   diferente: { texto: 'diferente', tom: 'perigo' },
@@ -215,7 +305,7 @@ const SITUACAO: Record<LinhaComparada['situacao'], { texto: string; tom: 'ok' | 
   'so-orcamento': { texto: 'só no orçamento', tom: 'perigo' },
 }
 
-function TabelaBloco({ titulo, linhas, comparando, bloco }: { titulo: string; linhas: LinhaComparada[]; comparando: boolean; bloco: Bloco }) {
+function TabelaBloco({ titulo, linhas, comparando, bloco }: { titulo: string; linhas: LinhaTela[]; comparando: boolean; bloco: Bloco }) {
   return (
     <Painel className="overflow-clip">
       <h2 className="px-4 md:px-5 py-4 text-xl font-semibold tracking-[-0.02em] border-b border-line" id={'bloco-' + bloco}>
@@ -239,8 +329,11 @@ function TabelaBloco({ titulo, linhas, comparando, bloco }: { titulo: string; li
               {linhas.map((l) => (
                 <tr key={l.codigo}>
                   <td className="px-4 py-2 align-top">
-                    <span className="num font-semibold whitespace-nowrap">{l.codigo}</span>
+                    <span className={`num font-semibold whitespace-nowrap ${l.semCodigo || l.foraDaBase ? 'text-danger' : ''}`}>{l.codigo}</span>
                     {l.descricao && <span className="block text-xs text-muted">{l.descricao}</span>}
+                    {l.conta && <span className="block text-xs text-muted num">{l.conta}</span>}
+                    {l.semCodigo && <span className="block text-xs font-medium text-danger">sem código: preencher no Excel</span>}
+                    {l.foraDaBase && <span className="block text-xs font-medium text-danger">não existe na base da Enel</span>}
                     {l.palpite && <span className="block text-xs font-medium text-text">regra deduzida, a confirmar</span>}
                   </td>
                   <td className="px-2 py-2 align-top text-right num">{l.desenho === null ? '-' : formatarQtd(l.desenho)}</td>

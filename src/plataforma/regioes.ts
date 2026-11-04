@@ -1,5 +1,4 @@
-// Regiões do painel. Só a EDP está pronta para a equipe; o Ceará em teste
-// fica fora da vista, atrás do endereço #ceara-teste.
+// Regiões do painel. EDP e Ceará (estrutura e material pelo CAD) prontas; Sergipe em breve.
 export type RegiaoId = 'edp' | 'ceara' | 'sergipe'
 
 export interface Regiao {
@@ -22,8 +21,8 @@ export const REGIOES: Regiao[] = [
     id: 'ceara',
     numero: '02',
     nome: 'Ceará',
-    descricao: 'Contagem de estrutura e material pelo CAD, com o orçamento pronto em Excel.',
-    estado: 'em-breve',
+    descricao: 'Contagem de estrutura e material pelo CAD, pronta em Excel.',
+    estado: 'pronto',
   },
   {
     id: 'sergipe',

@@ -44,6 +44,17 @@ Feito com a instalação do projeto cosampa-site (nada entra neste): `createRequ
 - Técnicos: erro do IndexedDB ao salvar ou apagar aparece na tela; matrícula repetida pede confirmação antes de trocar o nome e o carimbo de outra pessoa.
 - Materiais e mão de obra: quando a lista de previstos ou o cadastro é cortado no limite, o texto diz quantos aparecem de quantos; um previsto que só casa pelo texto do cadastro não some mais. Descrições cortadas em 2 linhas ganharam `title` com o texto inteiro.
 
+## Ceará: estrutura e material pelo CAD (04/11/2026)
+- Região "Ceará" pronta no painel (o atalho `#ceara-teste` continua abrindo a mesma tela). Lê o DXF do asbuilt e baixa "<OT> - ESTRUTURA E MATERIAL.xlsx" com 4 abas (adição e devolução de estrutura e de material), no modelo da Solicitação de acréscimos da Enel: DATA (hoje), ÁREA (SUL, LESTE ou CENTRO SUL), EMPRESA (COSAMPA), OT (do nome do arquivo, editável). RESPONSÁVEL em branco. Mão de obra fica de fora ("orçamento", para o Italo, é a mão de obra).
+- Etiqueta em TEXTs soltos (obra de Limoeiro): as linhas empilhadas na mesma coluna (mesmo x até uma altura de letra, até 2,2 alturas de distância, mesma camada) viram uma etiqueta; linhas sem item de etiqueta (nome de rua, nota) saem.
+- Alça e laço (SPALÇA50, SPLAÇO50) são estruturas. CAVA KLC não entra (aparece em "Fora da contagem de propósito").
+- Cabo: MT novo em kg = metros × fases × 1,05 × coeficiente (CAA 4 0,085; 1/0 0,216; 266,8 0,546); MT retirado sem os 5% e com as fases do código do vão (confirmado pelo Italo em 04/11). BT pré-reunido novo por bitola (AM035T 330993, AM050T 330994, AM025T 330757, AM025M 330786), metros + 5% arredondado ao mais perto. BT nu retirado em kg = metros × condutores do código (2AN004 = 2; sem número = 1, confirmado em 04/11) × 0,058. Tensionado (2) não é material.
+- Trafo retirado (trifásico 13,8 kV): até 30 kVA volta como SUCATA (10 = 111734, 15 = 111736, 30 = 111738), acima como SALVADO (45 = 111739, 75 = 111741, 112,5 = 111743, 150 = 111745, 225 = 111747, 300 = 111749). O de 500 kVA só tem sucata na base (111751), e o Italo mandou usar esse. Os trafos RECUP da base não entram. Potência fora da lista sai em vermelho. Nome do arquivo baixado confirmado.
+- Elo: para o Italo, "o elo vem sempre dentro das estruturas do transformador" (TR15, TR75, TR150...). O site não soma mais o elo 171089 sozinho (nem no trafo novo, nem na chave fusível); só entra o elo escrito no desenho (ex.: 3xELO6K). Feito em 04/11; na obra de Limoeiro os 3 elos da contagem do Italo ficam dentro da TR15CAA4.
+- Chave fusível: suporte 251841 e conector cunha por chave; trafo novo sem chave escrita = 3 chaves. Fitas 860342/860344 só com cabo BT novo. Conector perfurante só o que está escrito no desenho.
+- Códigos e descrições vêm da base DE-PARA da Enel (`scripts/gerar-catalogo-enel.py` gera `src/data/enel-catalogo.json`, FORA do git: a base é da Enel e o repositório é público; vai para o Supabase antes de publicar). Estrutura que não existe na base e material sem código saem em vermelho no Excel.
+- Conferido: 3 obras com orçamento real (estruturas iguais, menos a MB4 da mt-trafo, em que vale o desenho) e a de Limoeiro (igual à contagem do Italo). O Excel gerado abre no Excel sem reparo.
+
 ## Pendências
 1. Ficha de aterramento com mais de 8 pontos: hoje o site avisa e bloqueia; falta criar os blocos extras.
 2. Ficha de equipamento: lugar fixo para os equipamentos da ficha; acima disso o site dá erro claro.

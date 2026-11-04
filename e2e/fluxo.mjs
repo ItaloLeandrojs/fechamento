@@ -451,14 +451,14 @@ async function soDesativacao() {
   await ctx.close()
 }
 
-// Fechamento Ceará (em teste): DXF + orçamento feito à mão (fora do git)
+// Fechamento Ceará: DXF + orçamento feito à mão (fora do git), Excel da obra
 async function ceara() {
   const dxf = path.join(DADOS, 'ceara.dxf') // obra com MT e trafo (cópia de ceara-teste/mt-trafo)
   const orc = path.join(DADOS, 'ceara-orcamento.xlsx')
   if (!fs.existsSync(dxf)) return
   for (const [largura, altura, movel, tema] of [[1366, 768, false, 'dark'], [390, 844, true, 'dark']]) {
     const tag = `ceara ${largura}-${tema}`
-    const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: tema, isMobile: movel, hasTouch: movel })
+    const ctx = await browser.newContext({ viewport: { width: largura, height: altura }, colorScheme: tema, isMobile: movel, hasTouch: movel, acceptDownloads: true })
     await ctx.route('**/*', (r) => (/^(http:\/\/localhost|data:|blob:)/.test(r.request().url()) ? r.continue() : r.abort()))
     const page = await ctx.newPage()
     const erros = []
@@ -469,6 +469,11 @@ async function ceara() {
     await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
     await page.getByText('Etiquetas de poste lidas').waitFor({ timeout: 60000 })
     const segundos = ((Date.now() - t0) / 1000).toFixed(1)
+    // Excel da obra: OT tirada do nome do arquivo (o ceara.dxf não tem OT no nome: digita) e o nome do arquivo baixado
+    await page.getByLabel('OT', { exact: true }).fill('1234567')
+    await page.getByLabel('Área').selectOption('LESTE')
+    const [baixa] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.getByRole('button', { name: 'Baixar Excel' }).click()])
+    if (baixa.suggestedFilename() !== '1234567 - ESTRUTURA E MATERIAL.xlsx') falhas.push(`[${tag}] Excel baixado com o nome errado: ${baixa.suggestedFilename()}`)
     if (fs.existsSync(orc)) await page.locator('input[accept=".xlsx"]').setInputFiles(orc)
     await page.getByText('Linhas iguais ao orçamento').waitFor({ timeout: 20000 })
     const iguais = await page.getByText('Linhas iguais ao orçamento').locator('..').locator('dd').innerText()
@@ -869,8 +874,20 @@ async function plataforma() {
     await axe(page, `${tag} painel`)
     await tira('06-painel')
 
+    // Ceará pronto: abre a tela da contagem pelo CAD e o "← Regiões" volta ao painel
+    await page.getByRole('button', { name: 'Ceará', exact: true }).click()
+    try {
+      await page.getByRole('heading', { name: 'Fechamento Ceará' }).waitFor({ timeout: 5000 })
+      await axe(page, `${tag} Ceará pelo painel`)
+      await tira('07-ceara-pelo-painel')
+      await page.getByRole('button', { name: 'Regiões' }).click()
+      await noPainel('depois de voltar do Ceará')
+    } catch {
+      falhas.push(`[${tag}] Ceará: o botão do painel não abriu a tela do Ceará`)
+    }
+
     // região "em breve" não navega: mostra o aviso e ele some sozinho
-    for (const [nomeRegiao, texto] of [['Ceará', 'O Ceará ainda está em construção.'], ['Sergipe', 'Sergipe ainda está em construção.']]) {
+    for (const [nomeRegiao, texto] of [['Sergipe', 'Sergipe ainda está em construção.']]) {
       // force: o botão usa aria-disabled="true" (não navega, só avisa) e o Playwright o trata como desabilitado
       await page.getByRole('button', { name: nomeRegiao, exact: true }).click({ force: true })
       try {
@@ -879,10 +896,8 @@ async function plataforma() {
         falhas.push(`[${tag}] ${nomeRegiao}: faltou o aviso "${texto}"`)
       }
       if (!(await saudacao.count())) falhas.push(`[${tag}] ${nomeRegiao}: saiu do painel (devia só avisar)`)
-      if (nomeRegiao === 'Ceará') {
-        await axe(page, `${tag} aviso em construção`)
-        await tira('07-aviso-ceara')
-      }
+      await axe(page, `${tag} aviso em construção`)
+      await tira('07-aviso-sergipe')
     }
     await page.waitForFunction(() => !document.querySelector('.pl-aviso.visivel') && !document.querySelector('.pl-aviso')?.textContent, null, { timeout: 5000 }).catch(() => falhas.push(`[${tag}] o aviso "em construção" não sumiu sozinho`))
 

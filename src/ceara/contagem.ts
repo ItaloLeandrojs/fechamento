@@ -1,8 +1,9 @@
 // Contagem de estruturas e materiais de uma obra do Ceará (Enel) a partir do DXF do asbuilt.
-// Regras: base de conhecimento (Documents\TESTE\APRENDIZADO_CAD\BASE_PARA_CONTAGEM_MATERIAL_E_MAO_DE_OBRA.md)
-// e os 3 orçamentos reais conferidos (pasta ../ceara-teste). Mão de obra fica de fora
-// por enquanto: o Italo vai explicar obra por obra.
-import type { Dxf } from './dxf'
+// Regras: base de conhecimento (Documents\TESTE\APRENDIZADO_CAD\BASE_PARA_CONTAGEM_MATERIAL_E_MAO_DE_OBRA.md),
+// os 3 orçamentos reais conferidos (pasta ../ceara-teste), as regras de cabo da planilha
+// "CONVERSÃO DE CABOS 5%" e as respostas do Italo (28/10 e 04/11/2026). Mão de obra fica
+// de fora por enquanto: o Italo vai explicar obra por obra.
+import type { Dxf, TextoDxf } from './dxf'
 import { linhasDoTexto } from './mtext'
 
 /** (1) novo, (2) realocar/tensionar, (3) retirar; sem prefixo = existente (não conta). */
@@ -18,7 +19,7 @@ export interface ItemEtiqueta {
   codigo: string
 }
 
-export type TipoItem = 'poste' | 'estrutura' | 'trafo' | 'chave' | 'conector' | 'outro-material' | 'nao-reconhecido'
+export type TipoItem = 'poste' | 'estrutura' | 'trafo' | 'chave' | 'elo' | 'conector' | 'outro-material' | 'ignorado' | 'nao-reconhecido'
 
 export interface Etiqueta {
   poste: string // número do poste (vazio se a etiqueta não tiver)
@@ -35,6 +36,7 @@ export interface Vao {
 }
 
 export interface Linha {
+  /** Código da Enel; sem código conhecido, o nome do item (ex. "POSTE 600/8") e semCodigo. */
   codigo: string
   descricao: string
   quantidade: number
@@ -42,6 +44,12 @@ export interface Linha {
   origem: string[]
   /** Regra deduzida dos exemplos, ainda a confirmar com o Italo. */
   palpite?: boolean
+  /** O site não sabe o código: vai em vermelho no Excel, para preencher à mão. */
+  semCodigo?: boolean
+  /** Estrutura que não existe na base de kits da Enel (grafia errada ou estrutura nova). */
+  foraDaBase?: boolean
+  /** Conta que deu a quantidade (cabos), para mostrar na tela; não vai para o Excel. */
+  conta?: string
 }
 
 export interface ResultadoCeara {
@@ -53,7 +61,15 @@ export interface ResultadoCeara {
   devolucaoMaterial: Linha[]
   /** Pedaços de etiqueta com prefixo que o site não soube classificar. */
   naoReconhecidos: { poste: string; texto: string }[]
+  /** Pedaços com prefixo que não entram de propósito (ex. CAVA KLC: só marca a cava, vai na mão de obra). */
+  ignorados: { poste: string; texto: string }[]
   avisos: string[]
+}
+
+/** Base DE-PARA da Enel Ceará: material (código → [descrição, unidade]) e kits de estrutura (nome → descrição). */
+export interface Catalogo {
+  materiais: Record<string, [string, string]>
+  estruturas: Record<string, string>
 }
 
 // ---------------- leitura das etiquetas ----------------
@@ -88,6 +104,30 @@ function pedacosDaLinha(linha: string): { sit: Situacao | null; texto: string }[
   return out
 }
 
+/**
+ * Etiqueta escrita em TEXTs soltos, uma linha por TEXT (ex. obra de Limoeiro, camada 0):
+ * junta as linhas empilhadas na mesma coluna. Duas linhas são da mesma etiqueta quando
+ * começam no mesmo x (até uma altura de letra) e estão a no máximo 2,2 alturas uma da outra.
+ */
+export function agruparTextos(textos: TextoDxf[]): { linhas: string[]; camada: string }[] {
+  const t = textos.map((x) => ({ ...x, h: x.altura > 0 ? x.altura : 2.5 })).sort((a, b) => a.x - b.x)
+  const pai = t.map((_, i) => i)
+  const raiz = (i: number): number => (pai[i] === i ? i : (pai[i] = raiz(pai[i])))
+  for (let i = 0; i < t.length; i++) {
+    for (let j = i + 1; j < t.length; j++) {
+      const h = Math.max(t[i].h, t[j].h)
+      if (t[j].x - t[i].x > h) break
+      if (t[i].camada === t[j].camada && Math.abs(t[i].y - t[j].y) <= 2.2 * h) pai[raiz(j)] = raiz(i)
+    }
+  }
+  const grupos = new Map<number, typeof t>()
+  t.forEach((x, i) => grupos.set(raiz(i), [...(grupos.get(raiz(i)) ?? []), x]))
+  return [...grupos.values()].map((g) => ({
+    camada: g[0].camada,
+    linhas: g.sort((a, b) => b.y - a.y).flatMap((x) => linhasDoTexto(x.bruto)),
+  }))
+}
+
 // ---------------- classificação de cada pedaço ----------------
 
 interface Classe {
@@ -102,6 +142,8 @@ function normalizarGrafia(t: string): string {
     .toUpperCase()
     .replace(/^SB(\d)/, 'S$1') // SB2 = S2B (erro de escrita conhecido)
     .replace(/CAA10\b/, 'CAA1/0')
+    .replace(/^SPALCA/, 'SPALÇA')
+    .replace(/^SPLACO/, 'SPLAÇO')
     .replace(/SPALÇ(\d)/, 'SPALÇA$1')
     .replace(/_[ES]$/, '')
 }
@@ -110,14 +152,17 @@ function classificar(t0: string): Classe {
   const t = normalizarGrafia(t0)
   if (POSTE.test(t)) return { tipo: 'poste', base: t.replace('.', ',') }
   if (/^T[TM]\d+KVA$/.test(t)) return { tipo: 'trafo', base: t }
-  if (/^(CF|CS|PR|TP)$/.test(t) || /^ELO\d+K$/.test(t)) return { tipo: 'chave', base: t }
+  if (/^(CF|CS|PR|TP)$/.test(t)) return { tipo: 'chave', base: t }
+  if (/^ELO\d+[KH]$/.test(t)) return { tipo: 'elo', base: t }
   if (/^CONEC/.test(t)) return { tipo: 'conector', base: t }
   if (/^ATER-?S?P?$/.test(t)) return { tipo: 'estrutura', base: 'ATER-SP' }
   if (/^SPCXD[TM]-?P12P[NAB]$/.test(t)) return { tipo: 'estrutura', base: t.replace(/^SPCXD([TM])-?/, 'SPCXD$1-') }
   if (/^SPTRM?\d+P?$/.test(t)) return { tipo: 'estrutura', base: t }
   if (/^S[1-5][NABC]?$/.test(t)) return { tipo: 'estrutura', base: t }
-  if (/^SP(ALÇA|LAÇO)\d+$/.test(t)) return { tipo: 'outro-material', base: t }
-  if (/^CAVA_KLC$/.test(t)) return { tipo: 'outro-material', base: 'CAVA KLC' }
+  // alça e laço do cabo pré-reunido são estruturas (SPALÇA50, SPLAÇO50), confirmado pelo Italo em 04/11
+  if (/^SP(ALÇA|LAÇO)\d+(CU)?$/.test(t)) return { tipo: 'estrutura', base: t }
+  // a cava só marca que teve cava no poste: entra na mão de obra, não no material
+  if (/^CAVA_KLC$/.test(t)) return { tipo: 'ignorado', base: 'CAVA KLC' }
   // transformação na MT: TR15 → TR15CAA4 (com o cabo da obra)
   const tr = /^TR(U?\d+)(CAA[\d/]+)?$/.exec(t)
   if (tr) return { tipo: 'estrutura', base: 'TR' + tr[1] + (tr[2] ?? ''), precisaCabo: tr[2] ? undefined : 'tr' }
@@ -133,52 +178,119 @@ function classificar(t0: string): Classe {
   return { tipo: 'nao-reconhecido', base: t }
 }
 
-// ---------------- cabo de MT da obra ----------------
+/** Itens de uma linha de etiqueta, já classificados. */
+function itensDaLinha(l: string): ItemEtiqueta[] {
+  return pedacosDaLinha(l).map((p) => {
+    const mult = /^(\d+)[xX](.+)$/.exec(p.texto)
+    const nome = mult ? mult[2] : p.texto
+    const c = classificar(nome)
+    return { situacao: p.sit, texto: p.texto, quantidade: mult ? Number(mult[1]) : 1, tipo: c.tipo, codigo: c.base + (c.precisaCabo ? '§' + c.precisaCabo : '') }
+  })
+}
 
-/** Bitola do cabo de MT da obra, pelos vãos: AN004 → 4, AN010 → 1/0, AN266 → 266. */
+// ---------------- cabos ----------------
+
+type Cabo =
+  | { grupo: 'mt'; fases: number | null; bitola: string }
+  | { grupo: 'bt-nu'; condutores: number | null; bitola: string }
+  | { grupo: 'bt-multi'; bitola: string; fases: 'M' | 'T' | '' }
+  | { grupo: 'outro' }
+
+/** P3AN004 (MT, 3 fases, CAA 4); 2AN004 (BT nu, 2 condutores); AM050T (BT multiplexado 50 mm², trifásico). */
+function lerCabo(c: string): Cabo {
+  const mt = /^P(\d)?(?:AN|CA)(\d{3})$/.exec(c)
+  if (mt) return { grupo: 'mt', fases: mt[1] ? Number(mt[1]) : null, bitola: mt[2] }
+  const nu = /^(\d)?AN(\d{3})$/.exec(c)
+  if (nu) return { grupo: 'bt-nu', condutores: nu[1] ? Number(nu[1]) : null, bitola: nu[2] }
+  const multi = /^AM(\d{3})([MT]?)$/.exec(c)
+  if (multi) return { grupo: 'bt-multi', bitola: multi[1], fases: multi[2] as 'M' | 'T' | '' }
+  return { grupo: 'outro' }
+}
+
+/** Bitola do código do vão escrita como no nome da estrutura: 004 → 4, 010 → 1/0, 266 → 266. */
+const bitolaNome = (b: string) => (b === '004' ? '4' : b === '010' ? '1/0' : String(Number(b)))
+
+/** Bitola do cabo de MT da obra, pelos vãos (a de mais metros). */
 function bitolaMT(vaos: Vao[]): string | null {
   const conta = new Map<string, number>()
   for (const v of vaos) {
-    const m = /^P\d(?:AN|CA)(\d{3})/.exec(v.cabo)
-    if (!m) continue
-    const b = m[1] === '004' ? '4' : m[1] === '010' ? '1/0' : String(Number(m[1]))
-    conta.set(b, (conta.get(b) ?? 0) + v.metros)
+    const c = lerCabo(v.cabo)
+    if (c.grupo === 'mt') conta.set(c.bitola, (conta.get(c.bitola) ?? 0) + v.metros)
   }
-  return [...conta].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  const b = [...conta].sort((a, b) => b[1] - a[1])[0]?.[0]
+  return b ? bitolaNome(b) : null
 }
+
+// Planilha "CONVERSÃO DE CABOS-16-05-5%", aba "Conversão de Cabos 5%"
+/** Cabo de MT novo, kg = metros × fases × 1,05 × coeficiente. */
+const MT_NOVO: Record<string, [string, number]> = { '004': ['310604', 0.085], '010': ['310605', 0.216], '266': ['310652', 0.546] }
+/** Cabo de MT retirado (sucata), kg = metros × fases × coeficiente, sem os 5%. */
+const MT_SUCATA: Record<string, [string, number]> = { '004': ['310838', 0.085], '010': ['330943', 0.216], '266': ['330944', 0.546] }
+/** Cabo de BT nu retirado, kg = metros × condutores × coeficiente. */
+const BT_NU_SUCATA: Record<string, [string, number]> = { '004': ['310836', 0.058] }
+/** Cabo de BT pré-reunido novo, em metros + 5%. A chave é bitola + fases do código do vão. */
+const BT_NOVO: Record<string, string> = { '035T': '330993', '050T': '330994', '025T': '330757', '025M': '330786' }
+/** Cabo de BT pré-reunido retirado, em metros. O 3x35 (330945) saiu da base da Enel, não da planilha de conversão. */
+const BT_MULTI_SUCATA: Record<string, [string, boolean]> = { '025M': ['330886', false], '025T': ['330888', false], '050T': ['330887', false], '035T': ['330945', true] }
+const SOBRA = 1.05
+
+/** Arredonda ao inteiro mais perto (0,5 sobe), sem o erro de ponto flutuante (10 × 1,05 = 10,500000000000002). */
+const inteiro = (n: number) => Math.round(Math.round(n * 1e6) / 1e6)
+const duasCasas = (n: number) => Math.round(n * 100) / 100
+const br = (n: number) => String(n).replace('.', ',')
 
 // ---------------- materiais com código conhecido ----------------
 
-/** Códigos de material vistos nos orçamentos reais (seção 5.2 da base). */
-const POSTE_NOVO: Record<string, [string, string]> = {
-  '600/12': ['231233', 'POSTE,CONC,DT, 600/12M'],
-  '300/9': ['231228', 'POSTE,CONC,DT, 300/9M'],
+/** Postes de concreto DT (base de material da Enel). */
+const POSTE_NOVO: Record<string, string> = {
+  '150/9': '231227', '300/9': '231228', '600/9': '231235', '300/11': '231230', '300/12': '231232', '600/12': '231233', '1000/12': '231238',
+  '150/10,5': '231274', '300/10,5': '231275', '600/10,5': '231276', '1000/10,5': '231277',
 }
-const POSTE_SUCATA: Record<string, [string, string]> = {
-  '150/8': ['231602', 'POSTE,SUCATA,CONC, 150/8D'],
+const POSTE_SUCATA: Record<string, string> = {
+  '150/8': '231602', '300/8': '231603', '150/9': '231604', '300/9': '231605', '600/9': '231606', '150/10': '231672', '300/10': '231576', '600/10': '231577',
+  '150/10,5': '231658', '300/10,5': '231659', '600/10,5': '231573', '1000/10,5': '231574', '300/11': '231579', '600/11': '231580',
+  '300/12': '231582', '600/12': '231584', '1000/12': '231586',
 }
-const TRAFO: Record<string, [string, string]> = {
-  TT15KVA: ['111279', 'TRAFO,3F, 15KVA,13.8'],
+/** Trafo trifásico 13,8 kV (TT..KVA). */
+const TRAFO: Record<string, string> = {
+  TT15KVA: '111279', TT30KVA: '111280', TT45KVA: '111281', TT75KVA: '111283', 'TT112.5KVA': '111212', TT112KVA: '111212', TT150KVA: '111290', TT225KVA: '111291', TT300KVA: '111292',
 }
-const KG_POR_M_CAA4 = 0.08925 // CAA 4 AWG, por condutor (conferido: 2181 m x 2 x 0,08925 = 389,31 kg)
-const KG_POR_M_CA4_SUCATA = 0.05803 // conferido numa obra real: 152 m → 8,82 kg
-const SOBRA_CABO_BT = 1.05 // 266 m → 279; 22 m → 23
+/** Trafo trifásico 13,8 kV retirado: até 30 kVA volta como sucata, acima como salvado (Italo, 04/11).
+ *  O de 500 kVA só tem código de sucata na base, e o Italo mandou usar esse. */
+const TRAFO_RETIRADO: Record<string, string> = {
+  TT10KVA: '111734', TT15KVA: '111736', TT30KVA: '111738',
+  TT45KVA: '111739', TT75KVA: '111741', 'TT112.5KVA': '111743', TT112KVA: '111743', TT150KVA: '111745', TT225KVA: '111747', TT300KVA: '111749',
+  TT500KVA: '111751',
+}
+/** Códigos dos orçamentos reais que não estão na base DE-PARA. */
+const DESCRICAO_FIXA: Record<string, string> = {
+  '860342': 'FITA,ISOL,19MM,20M,PR,D22001',
+  '860344': 'FITA,ISOL,AUTOFUS,19X10,D22002',
+  '990257': 'CONEC,PERF,50-150',
+}
+const SUPORTE_CF = '251841' // SUPORTE,L,AZ,198,CF/PR: nunca vem em estrutura, um por chave fusível
+const CONECTOR_CUNHA = '274921' // CONEC,CUN,BIM,VII: um por chave (obra real)
 
 // ---------------- contagem ----------------
 
-function somar(lista: Linha[], codigo: string, descricao: string, qtd: number, origem: string, palpite = false) {
-  const ex = lista.find((l) => l.codigo === codigo)
+function somar(lista: Linha[], l: Omit<Linha, 'origem' | 'quantidade'>, qtd: number, origem: string) {
+  const ex = lista.find((x) => x.codigo === l.codigo)
   if (ex) {
     ex.quantidade += qtd
     if (origem && !ex.origem.includes(origem)) ex.origem.push(origem)
-    ex.palpite ||= palpite
-  } else lista.push({ codigo, descricao, quantidade: qtd, origem: origem ? [origem] : [], palpite })
+    ex.palpite ||= l.palpite
+  } else lista.push({ ...l, quantidade: qtd, origem: origem ? [origem] : [] })
 }
 
-export function contarObra(dxf: Dxf): ResultadoCeara {
+export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
   const avisos: string[] = []
   const vaos: Vao[] = []
   const etiquetas: Etiqueta[] = []
+  const desc = (codigo: string, reserva: string) => catalogo?.materiais[codigo]?.[0] ?? DESCRICAO_FIXA[codigo] ?? reserva
+  /** Material com código conhecido (descrição da base da Enel). */
+  const material = (codigo: string, reserva = '', palpite = false): Omit<Linha, 'origem' | 'quantidade'> => ({ codigo, descricao: desc(codigo, reserva), palpite })
+  /** Material sem código: o nome vai no lugar do código, em vermelho no Excel. */
+  const semCodigo = (nome: string, descricao: string): Omit<Linha, 'origem' | 'quantidade'> => ({ codigo: nome, descricao, semCodigo: true })
 
   // vãos que vêm como cota: o estilo traz o cabo, ex. "(1)P3AN004<>"
   for (const c of dxf.cotas) {
@@ -188,10 +300,12 @@ export function contarObra(dxf: Dxf): ResultadoCeara {
     vaos.push({ situacao: p.sit, cabo: p.resto.trim(), metros: Math.round(c.medida), origem: 'cota' })
   }
 
+  // textos: vão de uma linha só, etiqueta em MTEXT (uma por poste) ou TEXTs soltos empilhados
+  const blocos: { linhas: string[]; camada: string; soltos: boolean }[] = []
+  const soltos: TextoDxf[] = []
   for (const t of dxf.textos) {
     const linhas = linhasDoTexto(t.bruto)
     if (!linhas.length) continue
-    // vão escrito como texto de uma linha só
     if (linhas.length === 1) {
       const v = VAO_TEXTO.exec(linhas[0].replace(/\s+/g, ''))
       if (v) {
@@ -199,32 +313,31 @@ export function contarObra(dxf: Dxf): ResultadoCeara {
         continue
       }
     }
+    if (t.tipo === 'TEXT') soltos.push(t)
+    else blocos.push({ linhas, camada: t.camada, soltos: false })
+  }
+  for (const g of agruparTextos(soltos)) blocos.push({ ...g, soltos: true })
+
+  for (const b of blocos) {
     // etiqueta de poste: tem poste (esforço/altura) ou estrutura, com ou sem prefixo
-    const uteis = linhas.filter((l) => !COORDENADA.test(l.replace(/\s/g, '')))
+    let uteis = b.linhas.filter((l) => !COORDENADA.test(l.replace(/\s/g, '')))
     let poste = ''
     if (uteis.length > 1 && NUMERO_POSTE.test(uteis[uteis.length - 1])) poste = uteis.pop()!.replace(/^P/, '')
-    const itens: ItemEtiqueta[] = []
-    for (const l of uteis) {
-      for (const p of pedacosDaLinha(l)) {
-        const mult = /^(\d+)[xX](.+)$/.exec(p.texto)
-        const qtd = mult ? Number(mult[1]) : 1
-        const nome = mult ? mult[2] : p.texto
-        const c = classificar(nome)
-        itens.push({ situacao: p.sit, texto: p.texto, quantidade: qtd, tipo: c.tipo, codigo: c.base + (c.precisaCabo ? '§' + c.precisaCabo : '') })
-      }
-    }
+    // texto solto juntado pela posição: tira as linhas que não são da etiqueta (nome de rua, nota...)
+    if (b.soltos) uteis = uteis.filter((l) => linhaDeEtiqueta(itensDaLinha(l)))
+    const itens = uteis.flatMap(itensDaLinha)
     const temPoste = itens.some((i) => i.tipo === 'poste')
     const reconhecidos = itens.filter((i) => i.tipo !== 'nao-reconhecido').length
     // texto solto que não é etiqueta (legenda, carimbo, nota): fica de fora
-    if (!temPoste && (reconhecidos === 0 || reconhecidos < itens.length / 2)) continue
-    etiquetas.push({ poste, linhas, itens, camada: t.camada })
+    if (!itens.length || (!temPoste && (reconhecidos === 0 || reconhecidos < itens.length / 2))) continue
+    etiquetas.push({ poste, linhas: poste ? [...uteis, poste] : uteis, itens, camada: b.camada })
   }
 
   // etiqueta repetida do mesmo poste (versão antiga não apagada): conta uma só e avisa
   const vistos = new Map<string, Etiqueta>()
   for (const e of [...etiquetas]) {
     if (!e.poste) continue
-    const chave = e.poste + '|' + e.linhas.join('/')
+    const chave = JSON.stringify([e.poste, e.linhas])
     if (vistos.has(chave)) {
       etiquetas.splice(etiquetas.indexOf(e), 1)
       avisos.push(`Etiqueta do poste ${e.poste} aparece duas vezes iguais no desenho: contei uma vez só.`)
@@ -252,61 +365,109 @@ export function contarObra(dxf: Dxf): ResultadoCeara {
   const adicaoMaterial: Linha[] = []
   const devolucaoMaterial: Linha[] = []
   const naoReconhecidos: { poste: string; texto: string }[] = []
+  const ignorados: { poste: string; texto: string }[] = []
 
   for (const e of etiquetas) {
     const origem = e.poste ? 'P' + e.poste : 'sem nº'
     for (const i of e.itens) {
       if (i.situacao === null || i.situacao === 2) continue // existente ou realocação: não soma
       const add = i.situacao === 1
+      const lista = add ? adicaoMaterial : devolucaoMaterial
       if (i.tipo === 'nao-reconhecido') {
         naoReconhecidos.push({ poste: origem, texto: `(${i.situacao})${i.texto}` })
-        continue
-      }
-      if (i.tipo === 'estrutura') {
-        const cod = completar(i.codigo) + (add ? '_S' : '_E')
-        somar(add ? adicaoEstrutura : devolucaoEstrutura, cod, '', i.quantidade, origem)
+      } else if (i.tipo === 'ignorado') {
+        ignorados.push({ poste: origem, texto: `(${i.situacao})${i.texto.replace('_', ' ')}` })
+      } else if (i.tipo === 'estrutura') {
+        const base = completar(i.codigo)
+        const descricao = catalogo?.estruturas[base] ?? ''
+        somar(add ? adicaoEstrutura : devolucaoEstrutura, { codigo: base + (add ? '_S' : '_E'), descricao, foraDaBase: !!catalogo && !descricao }, i.quantidade, origem)
       } else if (i.tipo === 'poste') {
-        const tab = add ? POSTE_NOVO : POSTE_SUCATA
-        const [cod, desc] = tab[i.codigo] ?? [`POSTE ${i.codigo}`, add ? 'poste novo (código a definir)' : 'poste sucata (código a definir)']
-        somar(add ? adicaoMaterial : devolucaoMaterial, cod, desc, i.quantidade, origem)
+        const cod = (add ? POSTE_NOVO : POSTE_SUCATA)[i.codigo]
+        somar(lista, cod ? material(cod) : semCodigo(`POSTE ${i.codigo}`, add ? 'poste novo: código a definir' : 'poste retirado (sucata): código a definir'), i.quantidade, origem)
       } else if (i.tipo === 'trafo') {
-        const [cod, desc] = TRAFO[i.codigo] ?? [i.codigo, 'transformador (código a definir)']
-        somar(add ? adicaoMaterial : devolucaoMaterial, cod, desc, i.quantidade, origem)
+        const cod = (add ? TRAFO : TRAFO_RETIRADO)[i.codigo]
+        somar(lista, cod ? material(cod) : semCodigo(i.codigo, add ? 'transformador: código a definir' : 'transformador retirado: código a definir'), i.quantidade, origem)
       } else if (i.tipo === 'conector') {
-        const cod = /50-150/.test(i.codigo) ? '990257' : /PERF/.test(i.codigo) ? '275695' : i.codigo
-        const desc = cod === '990257' ? 'CONEC,PERF,50-150' : cod === '275695' ? 'CONEC,PERF,25-120 TR/DR' : 'conector (código a definir)'
-        somar(add ? adicaoMaterial : devolucaoMaterial, cod, desc, i.quantidade, origem)
+        const cod = /50-150/.test(i.codigo) ? '990257' : /PERF/.test(i.codigo) ? '275695' : null
+        somar(lista, cod ? material(cod) : semCodigo(i.codigo, 'conector: código a definir'), i.quantidade, origem)
+      } else if (i.tipo === 'elo' && add) {
+        const m = /^ELO(\d+)([KH])$/.exec(i.codigo)!
+        const cod = Object.keys(catalogo?.materiais ?? {}).find((k) => new RegExp(`^ELO,FUS,BOT,MT, *${m[1]}A,${m[2]},`).test(catalogo!.materiais[k][0]))
+        somar(lista, cod ? material(cod) : semCodigo(i.codigo, 'elo fusível: código a definir'), i.quantidade, origem)
       } else if (i.tipo === 'chave' && i.codigo === 'CF' && add) {
-        // chave fusível: elo + suporte + conector cunha, um de cada por chave (deduzido do orçamento real da obra com trafo)
-        somar(adicaoMaterial, '171089', 'ELO,FUS,BOT,MT, 1A,H', i.quantidade, origem, true)
-        somar(adicaoMaterial, '251841', 'SUPORTE,L,AZ,198,CF/PR', i.quantidade, origem, true)
-        somar(adicaoMaterial, '274921', 'CONEC,CUN,BIM,VII', i.quantidade, origem, true)
+        // chave fusível: suporte e conector cunha, um de cada por chave; o elo só se estiver escrito
+        somar(adicaoMaterial, material(SUPORTE_CF), i.quantidade, origem)
+        somar(adicaoMaterial, material(CONECTOR_CUNHA), i.quantidade, origem)
       } else {
-        somar(add ? adicaoMaterial : devolucaoMaterial, i.codigo, 'código a definir', i.quantidade, origem)
+        somar(lista, semCodigo(i.codigo, 'código a definir'), i.quantidade, origem)
       }
     }
   }
 
-  // cabos
-  const metros = (f: (v: Vao) => boolean) => vaos.filter(f).reduce((s, v) => s + v.metros, 0)
-  const mtNovo = metros((v) => v.situacao === 1 && /^P\d(AN|CA)004/.test(v.cabo))
-  if (mtNovo) somar(adicaoMaterial, '310604', `CABO,AL NU,CAA, 4AWG (kg: ${mtNovo} m x ${fasesMT} fases x ${KG_POR_M_CAA4})`, Math.round(mtNovo * fasesMT * KG_POR_M_CAA4 * 100) / 100, 'vãos de MT', true)
-  const btNovo = metros((v) => v.situacao === 1 && /^AM0\d\d[MT]?$/.test(v.cabo))
-  if (btNovo) somar(adicaoMaterial, '330993', `CB,P-REU,BT,AL (m: ${btNovo} m + 5%)`, Math.round(btNovo * SOBRA_CABO_BT), 'vãos de BT', true)
-  const nuRetirado = metros((v) => v.situacao === 3 && /^\d?AN004$/.test(v.cabo))
-  if (nuRetirado) somar(devolucaoMaterial, '310836', `CABO,NU CA, 4AWG, SUCATA (kg: ${nuRetirado} m x ${KG_POR_M_CA4_SUCATA})`, Math.round(nuRetirado * KG_POR_M_CA4_SUCATA * 100) / 100, 'vãos retirados', true)
-
-  // trafo novo sem chave escrita na etiqueta (a chave vem como símbolo): 3 elos, 3 suportes e 3
-  // conectores cunha, como no orçamento real da obra com trafo
-  const trafosNovos = etiquetas.flatMap((e) => e.itens.filter((i) => i.tipo === 'trafo' && i.situacao === 1).map((i) => ({ i, e })))
+  // trafo novo sem chave escrita na etiqueta (a chave vem como símbolo): 3 chaves, cada uma com
+  // suporte e conector cunha, como na obra real com trafo e na de Limoeiro. O elo não: ele vem
+  // dentro da estrutura do trafo (TR15, TR75, TR150...), confirmado pelo Italo em 04/11
   const temCF = etiquetas.some((e) => e.itens.some((i) => i.codigo === 'CF' && i.situacao === 1))
   if (!temCF) {
-    for (const { i, e } of trafosNovos) {
-      const origem = 'P' + e.poste + ' (trafo)'
-      somar(adicaoMaterial, '171089', 'ELO,FUS,BOT,MT, 1A,H', 3 * i.quantidade, origem, true)
-      somar(adicaoMaterial, '251841', 'SUPORTE,L,AZ,198,CF/PR', 3 * i.quantidade, origem, true)
-      somar(adicaoMaterial, '274921', 'CONEC,CUN,BIM,VII', 3 * i.quantidade, origem, true)
+    for (const e of etiquetas) {
+      for (const i of e.itens.filter((x) => x.tipo === 'trafo' && x.situacao === 1)) {
+        const origem = (e.poste ? 'P' + e.poste : 'sem nº') + ' (trafo)'
+        somar(adicaoMaterial, material(SUPORTE_CF), 3 * i.quantidade, origem)
+        somar(adicaoMaterial, material(CONECTOR_CUNHA), 3 * i.quantidade, origem)
+      }
     }
+  }
+
+  // cabos: soma os metros por situação e por cabo
+  const porCabo = new Map<string, { situacao: Situacao; cabo: Cabo; nome: string; metros: number }>()
+  for (const v of vaos) {
+    if (v.situacao !== 1 && v.situacao !== 3) continue // existente ou tensionado: não é material
+    const k = v.situacao + v.cabo
+    const atual = porCabo.get(k) ?? { situacao: v.situacao, cabo: lerCabo(v.cabo), nome: v.cabo, metros: 0 }
+    atual.metros += v.metros
+    porCabo.set(k, atual)
+  }
+  let btNovo = false
+  for (const { situacao, cabo, nome, metros } of porCabo.values()) {
+    const novo = situacao === 1
+    const lista = novo ? adicaoMaterial : devolucaoMaterial
+    const semRegra = () => somar(lista, semCodigo(`CABO ${nome}`, `${metros} m ${novo ? 'novos' : 'retirados'}: cabo sem regra de conversão`), metros, 'vãos')
+    if (cabo.grupo === 'mt') {
+      const fases = novo ? fasesMT : (cabo.fases ?? fasesMT)
+      const t = (novo ? MT_NOVO : MT_SUCATA)[cabo.bitola]
+      if (!t) semRegra()
+      else if (novo) somar(lista, { ...material(t[0]), conta: `kg: ${metros} m x ${fases} fases x 1,05 x ${br(t[1])}` }, duasCasas(metros * fases * SOBRA * t[1]), 'vãos de MT')
+      // retirado: as fases vêm do código do vão (P2 = 2 fases), ainda a confirmar com uma obra real
+      else somar(lista, { ...material(t[0], '', true), conta: `kg: ${metros} m x ${fases} fases x ${br(t[1])}` }, duasCasas(metros * fases * t[1]), 'vãos de MT')
+    } else if (cabo.grupo === 'bt-multi') {
+      const k = cabo.bitola + cabo.fases
+      if (novo) {
+        const cod = BT_NOVO[k]
+        if (!cod) semRegra()
+        else {
+          somar(lista, { ...material(cod), conta: `${metros} m + 5%` }, inteiro(metros * SOBRA), 'vãos de BT')
+          btNovo = true
+        }
+      } else {
+        const t = BT_MULTI_SUCATA[k]
+        if (!t) semRegra()
+        else somar(lista, { ...material(t[0], '', t[1]), conta: `${metros} m` }, metros, 'vãos de BT')
+      }
+    } else if (cabo.grupo === 'bt-nu' && !novo) {
+      const t = BT_NU_SUCATA[cabo.bitola]
+      if (!t) semRegra()
+      else {
+        // 2AN004 = 2 condutores (resposta do Italo, 04/11); sem o número, 1 condutor e a confirmar
+        const condutores = cabo.condutores ?? 1
+        somar(lista, { ...material(t[0], '', cabo.condutores === null), conta: `kg: ${metros} m x ${condutores} condutor${condutores > 1 ? 'es' : ''} x ${br(t[1])}` }, duasCasas(metros * condutores * t[1]), 'vãos retirados')
+      }
+    } else semRegra()
+  }
+
+  // fitas isolantes: 1 de cada, só quando há cabo de BT novo
+  if (btNovo) {
+    somar(adicaoMaterial, material('860342'), 1, 'cabo BT novo')
+    somar(adicaoMaterial, material('860344'), 1, 'cabo BT novo')
   }
 
   // poste sem etiqueta no meio da numeração (ex.: P1 a P35 sem o P34): falta no desenho
@@ -317,11 +478,18 @@ export function contarObra(dxf: Dxf): ResultadoCeara {
     if (faltam.length && faltam.length <= 10) avisos.push(`Sem etiqueta no desenho: ${faltam.map((n) => 'P' + n).join(', ')} (a numeração vai até P${max}). Esses postes não entraram na contagem.`)
   }
 
-  // fitas isolantes: 1 de cada por obra (fixo nos 3 orçamentos)
-  if (adicaoEstrutura.length || adicaoMaterial.length) {
-    somar(adicaoMaterial, '860342', 'FITA,ISOL,19MM,20M', 1, 'obra', true)
-    somar(adicaoMaterial, '860344', 'FITA,ISOL,AUTOFUS,19X10', 1, 'obra', true)
-  }
+  const fora = [...adicaoEstrutura, ...devolucaoEstrutura].filter((l) => l.foraDaBase).map((l) => l.codigo)
+  if (fora.length) avisos.push(`Estrutura que não existe na base da Enel: ${fora.join(', ')}. Confira a grafia no desenho; no Excel ela sai em vermelho.`)
+  const sem = [...adicaoMaterial, ...devolucaoMaterial].filter((l) => l.semCodigo).map((l) => l.codigo)
+  if (sem.length) avisos.push(`Material sem código conhecido: ${sem.join(', ')}. No Excel a linha sai em vermelho, para preencher o código à mão.`)
 
-  return { etiquetas, vaos, adicaoEstrutura, devolucaoEstrutura, adicaoMaterial, devolucaoMaterial, naoReconhecidos, avisos }
+  return { etiquetas, vaos, adicaoEstrutura, devolucaoEstrutura, adicaoMaterial, devolucaoMaterial, naoReconhecidos, ignorados, avisos }
+}
+
+/** Linha de texto solto que faz parte de uma etiqueta: tem prefixo, poste, ou a maioria dos itens reconhecidos. */
+function linhaDeEtiqueta(itens: ItemEtiqueta[]): boolean {
+  if (!itens.length) return false
+  if (itens.some((i) => i.situacao !== null || i.tipo === 'poste')) return true
+  const ok = itens.filter((i) => i.tipo !== 'nao-reconhecido').length
+  return ok > 0 && ok >= itens.length / 2
 }

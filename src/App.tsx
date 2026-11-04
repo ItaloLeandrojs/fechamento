@@ -23,7 +23,7 @@ import { Painel } from './plataforma/Painel'
 import { apagarPessoa, lerPessoa, type Pessoa } from './plataforma/pessoa'
 import type { RegiaoId } from './plataforma/regioes'
 
-// Ceará em teste: fora da vista da equipe, só por este endereço
+// atalho antigo para o Ceará (do tempo em que ficava fora do painel), abre sem passar pela entrada
 const HASH_CEARA = '#ceara-teste'
 const CONFIRMA_REGIOES = 'Voltar às regiões? O que foi lançado nesta obra será perdido.'
 
@@ -42,7 +42,7 @@ export default function App() {
   const [pessoa, setPessoa] = useState<Pessoa | null>(() => lerPessoa())
   const [regiao, setRegiao] = useState<RegiaoId | null>(null)
   const [obra, setObra] = useState<Obra | null>(null)
-  // Fechamento Ceará (em teste): contagem pelo CAD, à parte do fluxo da EDP
+  // Fechamento Ceará pelo atalho #ceara-teste: contagem pelo CAD, à parte do fluxo da EDP
   const [ceara, setCeara] = useState(() => window.location.hash === HASH_CEARA)
   const [carregando, setCarregando] = useState(false)
   const [erroInicio, setErroInicio] = useState<string | null>(null)
@@ -216,6 +216,7 @@ export default function App() {
 
   if (!obra && ceara) return <Ceara onVoltar={() => setCeara(false)} />
   if (!pessoa) return <Entrada onEntrar={setPessoa} />
+  if (regiao === 'ceara') return <Ceara onVoltar={() => setRegiao(null)} />
   if (regiao !== 'edp')
     return (
       <Painel
