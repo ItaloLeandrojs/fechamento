@@ -1,6 +1,9 @@
-// Pessoa que entrou no site. Fica só no localStorage deste navegador.
+// Pessoa que entrou no site. Os dados vêm do perfil (Supabase); aqui fica só a foto do crachá,
+// guardada por pessoa no localStorage deste navegador.
 // Todo acesso ao storage é protegido: se estiver bloqueado, cheio ou quebrado,
 // o site continua funcionando na sessão, só não lembra da pessoa.
+import type { Perfil } from '../nuvem/sessao'
+
 export interface Pessoa {
   nome: string
   cargo: string
@@ -8,7 +11,9 @@ export interface Pessoa {
   foto: string | null
 }
 
-const CHAVE = 'fechamento-pessoa'
+const CHAVE = 'fechamento-pessoa' // registro antigo, de antes do login
+const CHAVE_FOTO = 'fechamento-foto:'
+const CHAVE_PULOU = 'fechamento-foto-pulou:'
 
 // localStorage pode lançar só de ser acessado (modo privado, política do navegador)
 function storagePadrao(): Storage | null {
@@ -19,6 +24,7 @@ function storagePadrao(): Storage | null {
   }
 }
 
+// lerPessoa, gravarPessoa e apagarPessoa saem na Tarefa 7
 export function lerPessoa(storage: Storage | null = storagePadrao()): Pessoa | null {
   try {
     const bruto = storage?.getItem(CHAVE)
@@ -61,6 +67,68 @@ export function apagarPessoa(storage: Storage | null = storagePadrao()): void {
     storage?.removeItem(CHAVE)
   } catch {
     // sem storage, não há o que apagar
+  }
+}
+
+export function pessoaDoPerfil(p: Perfil, foto: string | null): Pessoa {
+  return { nome: p.nome, cargo: p.cargo, matricula: p.matricula, foto }
+}
+
+export function lerFoto(id: string, storage: Storage | null = storagePadrao()): string | null {
+  try {
+    return storage?.getItem(CHAVE_FOTO + id) ?? null
+  } catch {
+    return null
+  }
+}
+
+// gravou diz se a foto ficou guardada (false: storage bloqueado ou cheio, a foto vale só nesta sessão).
+// null apaga a foto.
+export function gravarFoto(id: string, foto: string | null, storage: Storage | null = storagePadrao()): { gravou: boolean } {
+  if (!storage) return { gravou: false }
+  try {
+    if (foto === null) storage.removeItem(CHAVE_FOTO + id)
+    else storage.setItem(CHAVE_FOTO + id, foto)
+    return { gravou: true }
+  } catch {
+    return { gravou: false }
+  }
+}
+
+// Marca de quem preferiu não pôr foto agora, para não perguntar de novo a cada entrada
+export function pulouFoto(id: string, storage: Storage | null = storagePadrao()): boolean {
+  try {
+    return storage?.getItem(CHAVE_PULOU + id) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function marcarPulouFoto(id: string, storage: Storage | null = storagePadrao()): void {
+  try {
+    storage?.setItem(CHAVE_PULOU + id, '1')
+  } catch {
+    // sem storage, pergunta de novo na próxima entrada
+  }
+}
+
+// Foto do registro de antes do login, para a pessoa aproveitar na primeira entrada
+export function fotoAntiga(storage: Storage | null = storagePadrao()): string | null {
+  try {
+    const bruto = storage?.getItem(CHAVE)
+    if (!bruto) return null
+    const o = JSON.parse(bruto)
+    return o && typeof o === 'object' && typeof o.foto === 'string' ? o.foto : null
+  } catch {
+    return null
+  }
+}
+
+export function esquecerPessoaAntiga(storage: Storage | null = storagePadrao()): void {
+  try {
+    storage?.removeItem(CHAVE)
+  } catch {
+    // sem storage, não há o que esquecer
   }
 }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { apagarPessoa, gravarPessoa, iniciais, lerPessoa, primeiroNome, saudacao, type Pessoa } from './pessoa'
+import {
+  apagarPessoa, esquecerPessoaAntiga, fotoAntiga, gravarFoto, gravarPessoa, iniciais, lerFoto, lerPessoa,
+  marcarPulouFoto, pessoaDoPerfil, primeiroNome, pulouFoto, saudacao, type Pessoa,
+} from './pessoa'
+import type { Perfil } from '../nuvem/sessao'
 
 // Storage falso em memória, no mesmo formato do localStorage
 function storageFalso(sobrescrever: Partial<Storage> = {}): Storage {
@@ -92,5 +96,86 @@ describe('guardar a pessoa no storage', () => {
     gravarPessoa(maria, s)
     apagarPessoa(s)
     expect(lerPessoa(s)).toBeNull()
+  })
+})
+
+describe('foto separada por pessoa', () => {
+  it('cada pessoa tem a sua foto', () => {
+    const s = storageFalso()
+    expect(gravarFoto('a', 'data:A', s)).toEqual({ gravou: true })
+    expect(gravarFoto('b', 'data:B', s)).toEqual({ gravou: true })
+    expect(lerFoto('a', s)).toBe('data:A')
+    expect(lerFoto('b', s)).toBe('data:B')
+    expect(s.getItem('fechamento-foto:a')).toBe('data:A')
+  })
+
+  it('sem foto guardada, lê null', () => {
+    expect(lerFoto('a', storageFalso())).toBeNull()
+  })
+
+  it('gravar null apaga a foto', () => {
+    const s = storageFalso()
+    gravarFoto('a', 'data:A', s)
+    expect(gravarFoto('a', null, s)).toEqual({ gravou: true })
+    expect(lerFoto('a', s)).toBeNull()
+  })
+
+  it('foto que não cabe: gravou false, sem lançar', () => {
+    const s = storageFalso({ setItem: () => { throw new DOMException('cheio', 'QuotaExceededError') } })
+    expect(gravarFoto('a', 'data:A', s)).toEqual({ gravou: false })
+  })
+
+  it('storage que lança: lê null e nada lança', () => {
+    const quebrado = storageFalso({
+      getItem: () => { throw new Error('bloqueado') },
+      setItem: () => { throw new Error('bloqueado') },
+      removeItem: () => { throw new Error('bloqueado') },
+    })
+    expect(lerFoto('a', quebrado)).toBeNull()
+    expect(gravarFoto('a', 'data:A', quebrado)).toEqual({ gravou: false })
+    expect(gravarFoto('a', null, quebrado)).toEqual({ gravou: false })
+    expect(pulouFoto('a', quebrado)).toBe(false)
+    expect(() => marcarPulouFoto('a', quebrado)).not.toThrow()
+    expect(() => esquecerPessoaAntiga(quebrado)).not.toThrow()
+    expect(fotoAntiga(quebrado)).toBeNull()
+  })
+})
+
+describe('foto pulada', () => {
+  it('marca por pessoa e lê de volta', () => {
+    const s = storageFalso()
+    expect(pulouFoto('a', s)).toBe(false)
+    marcarPulouFoto('a', s)
+    expect(pulouFoto('a', s)).toBe(true)
+    expect(pulouFoto('b', s)).toBe(false)
+    expect(s.getItem('fechamento-foto-pulou:a')).not.toBeNull()
+  })
+})
+
+describe('foto do registro antigo', () => {
+  it('é achada e depois esquecida', () => {
+    const s = storageFalso()
+    s.setItem('fechamento-pessoa', JSON.stringify({ nome: 'X', foto: 'data:F' }))
+    expect(fotoAntiga(s)).toBe('data:F')
+    esquecerPessoaAntiga(s)
+    expect(fotoAntiga(s)).toBeNull()
+    expect(s.getItem('fechamento-pessoa')).toBeNull()
+  })
+
+  it('sem registro, sem foto ou JSON quebrado: null', () => {
+    const s = storageFalso()
+    expect(fotoAntiga(s)).toBeNull()
+    s.setItem('fechamento-pessoa', JSON.stringify({ nome: 'X', foto: null }))
+    expect(fotoAntiga(s)).toBeNull()
+    s.setItem('fechamento-pessoa', '{nome:')
+    expect(fotoAntiga(s)).toBeNull()
+  })
+})
+
+describe('pessoaDoPerfil', () => {
+  it('junta perfil e foto', () => {
+    const perfil: Perfil = { id: 'u1', nome: 'Maria Souza', cargo: 'Técnica de campo', matricula: '0000', senhaInicial: true }
+    expect(pessoaDoPerfil(perfil, 'data:F')).toEqual({ nome: 'Maria Souza', cargo: 'Técnica de campo', matricula: '0000', foto: 'data:F' })
+    expect(pessoaDoPerfil(perfil, null).foto).toBeNull()
   })
 })
