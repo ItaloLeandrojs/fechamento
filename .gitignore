@@ -33,5 +33,6 @@ tecnicos*.json
 # prints da amostra com dados reais da obra (nunca publicar)
 docs/amostra/prints/
 
-# base da Enel Ceará (gerada por scripts/gerar-catalogo-enel.py; vai para o Supabase)
+# base da Enel Ceará (gerada por scripts/atualizar_base.py; vai para o Supabase)
 src/data/enel-catalogo.json
+src/data/kits.json
