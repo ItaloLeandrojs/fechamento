@@ -4,7 +4,7 @@
 // É um <dialog> modal: o resto da página fica inerte, o foco fica preso dentro e Esc cancela.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { MagnifyingGlassMinus, MagnifyingGlassPlus } from '@phosphor-icons/react'
-import { arrastar, mudarZoom, retanguloOrigem, ZOOM_MAX, ZOOM_MIN, type Ajuste } from './recorte'
+import { arrastar, mudarZoom, retanguloDaPrevia, ZOOM_MAX, ZOOM_MIN, type Ajuste } from './recorte'
 
 // o círculo ocupa 80% do quadro: a sobra em volta mostra, apagado, o que fica de fora
 const CIRCULO = 0.8
@@ -45,12 +45,10 @@ export function AjusteFoto({ imagem, inicial, onUsar, onCancelar }: { imagem: Im
       c.height = px
     }
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
-    const d = f * CIRCULO
-    const meio = f / 2
-    const r = retanguloOrigem(w, h, ajuste)
-    const k = d / r.lado
-    const cx = r.x + r.lado / 2
-    const cy = r.y + r.lado / 2
+    // a conta fica em recorte.ts (testada): o círculo mostra o mesmo quadrado que o recorte grava
+    const p = retanguloDaPrevia(w, h, ajuste, f, CIRCULO)
+    const d = p.circulo.diametro
+    const meio = p.circulo.cx
 
     g.fillStyle = FUNDO
     g.fillRect(0, 0, f, f)
@@ -60,7 +58,7 @@ export function AjusteFoto({ imagem, inicial, onUsar, onCancelar }: { imagem: Im
     g.fillStyle = '#ffffff'
     g.fill()
     g.imageSmoothingQuality = 'high'
-    g.drawImage(imagem, meio - cx * k, meio - cy * k, w * k, h * k)
+    g.drawImage(imagem, p.x, p.y, p.largura, p.altura)
     // fora do círculo fica apagado: é o que não vai para o crachá
     g.beginPath()
     g.rect(0, 0, f, f)
@@ -76,14 +74,22 @@ export function AjusteFoto({ imagem, inicial, onUsar, onCancelar }: { imagem: Im
 
   useLayoutEffect(desenhar, [desenhar])
 
-  // a área muda de tamanho (girar o celular, janela): redesenha na nova medida
+  // a área muda de tamanho (girar o celular, janela): redesenha na nova medida.
+  // Um observador só, criado uma vez; ele chama o desenho mais recente pelo ref
+  // e só redesenha se o tamanho mudou de fato (o aviso inicial não desenha de novo).
+  const desenharAgora = useRef(desenhar)
+  useLayoutEffect(() => {
+    desenharAgora.current = desenhar
+  }, [desenhar])
   useEffect(() => {
     const el = tela.current
     if (!el || typeof ResizeObserver === 'undefined') return
-    const ro = new ResizeObserver(() => desenhar())
+    const ro = new ResizeObserver(() => {
+      if (el.width !== Math.round(el.clientWidth * (window.devicePixelRatio || 1))) desenharAgora.current()
+    })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [desenhar])
+  }, [])
 
   // roda do mouse: precisa de ouvinte não passivo para a página não rolar junto
   useEffect(() => {

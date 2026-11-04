@@ -37,6 +37,28 @@ export function retanguloOrigem(largura: number, altura: number, ajuste: Ajuste)
   return { x: c.x - lado / 2, y: c.y - lado / 2, lado }
 }
 
+/** Onde a foto inteira é desenhada no quadro da prévia (em pixels de tela) e o círculo dentro dele. */
+export type Previa = { x: number; y: number; largura: number; altura: number; circulo: { cx: number; cy: number; diametro: number } }
+
+/**
+ * Conta da prévia do ajuste: o quadro quadrado tem `quadro` px e o círculo, no meio, ocupa
+ * `proporcao` do quadro. A foto é desenhada inteira de modo que o círculo mostre exatamente
+ * o mesmo quadrado de retanguloOrigem: é isso que garante "o que se vê é o que vai para o crachá".
+ */
+export function retanguloDaPrevia(largura: number, altura: number, ajuste: Ajuste, quadro: number, proporcao: number): Previa {
+  const diametro = quadro * proporcao
+  const meio = quadro / 2
+  const r = retanguloOrigem(largura, altura, ajuste)
+  const k = diametro / r.lado // pixels de tela por pixel da foto
+  return {
+    x: meio - (r.x + r.lado / 2) * k,
+    y: meio - (r.y + r.lado / 2) * k,
+    largura: largura * k,
+    altura: altura * k,
+    circulo: { cx: meio, cy: meio, diametro },
+  }
+}
+
 // Num retrato o rosto costuma ficar no terço de cima: o centro começa a 40% da altura (e não a 50%)
 const ALTURA_DO_ROSTO = 0.4
 

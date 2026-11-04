@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ajusteInicial, arrastar, ladoDoRecorte, limitarZoom, mudarZoom, retanguloOrigem, ZOOM_MAX, ZOOM_MIN, type Retangulo } from './recorte'
+import { ajusteInicial, arrastar, ladoDoRecorte, limitarZoom, mudarZoom, retanguloDaPrevia, retanguloOrigem, ZOOM_MAX, ZOOM_MIN, type Ajuste, type Retangulo } from './recorte'
 
 // o quadrado tem que caber inteiro na foto (senão sobra borda vazia no círculo)
 function dentro(r: Retangulo, largura: number, altura: number) {
@@ -94,5 +94,65 @@ describe('recorte: zoom', () => {
     const canto = arrastar(1600, 900, mudarZoom(1600, 900, ajusteInicial(1600, 900), 3), 1e6, 1e6, 280)
     expect(retanguloOrigem(1600, 900, canto)).toEqual({ x: 0, y: 0, lado: 300 })
     expect(retanguloOrigem(1600, 900, mudarZoom(1600, 900, canto, 1))).toEqual({ x: 0, y: 0, lado: 900 })
+  })
+})
+
+describe('recorte: a prévia mostra o mesmo que o recorte grava', () => {
+  // ponto da tela (dentro do quadro da prévia) -> ponto da foto
+  const naFoto = (p: ReturnType<typeof retanguloDaPrevia>, largura: number, sx: number, sy: number) => {
+    const k = p.largura / largura
+    return { x: (sx - p.x) / k, y: (sy - p.y) / k }
+  }
+  // ponto do JPEG gravado (lado x lado) -> ponto da foto
+  const doJpeg = (r: Retangulo, lado: number, jx: number, jy: number) => ({ x: r.x + (jx / lado) * r.lado, y: r.y + (jy / lado) * r.lado })
+
+  const casos: [number, number, Ajuste][] = []
+  for (const [w, h] of [[240, 120], [900, 1600], [1600, 900], [500, 500], [37, 91]]) {
+    const ini = ajusteInicial(w, h)
+    casos.push([w, h, ini])
+    for (const z of [1, 1.37, 2, 3]) {
+      // no centro, deslocado sem chegar no limite e preso no limite
+      const comZoom = mudarZoom(w, h, ini, z)
+      casos.push([w, h, comZoom])
+      casos.push([w, h, arrastar(w, h, comZoom, 13, -7, 320)])
+      casos.push([w, h, arrastar(w, h, comZoom, 1e6, 1e6, 320)])
+    }
+  }
+
+  it.each(casos)('foto %ix%i, ajuste %o: o quadrado do círculo é o quadrado do recorte', (w, h, a) => {
+    for (const [quadro, proporcao] of [[392, 0.8], [254.4, 0.8], [300, 1]]) {
+      const p = retanguloDaPrevia(w, h, a, quadro, proporcao)
+      const r = retanguloOrigem(w, h, a)
+      const { cx, cy, diametro } = p.circulo
+      // cantos do quadrado que contém o círculo
+      const a1 = naFoto(p, w, cx - diametro / 2, cy - diametro / 2)
+      const a2 = naFoto(p, w, cx + diametro / 2, cy + diametro / 2)
+      expect(a1.x).toBeCloseTo(r.x, 6)
+      expect(a1.y).toBeCloseTo(r.y, 6)
+      expect(a2.x).toBeCloseTo(r.x + r.lado, 6)
+      expect(a2.y).toBeCloseTo(r.y + r.lado, 6)
+      // a foto não é esticada: mesma escala nos dois eixos
+      expect(p.altura / h).toBeCloseTo(p.largura / w, 9)
+      // pontos dentro do círculo (centro e fora do centro) caem no mesmo ponto da foto que no JPEG de 480 px
+      for (const [u, v] of [[0.5, 0.5], [0.5, 0.12], [0.12, 0.5], [0.88, 0.5], [0.5, 0.88], [0.25, 0.25], [0.75, 0.7]]) {
+        const tela = naFoto(p, w, cx + (u - 0.5) * diametro, cy + (v - 0.5) * diametro)
+        const jpeg = doJpeg(r, 480, u * 480, v * 480)
+        expect(tela.x).toBeCloseTo(jpeg.x, 6)
+        expect(tela.y).toBeCloseTo(jpeg.y, 6)
+      }
+    }
+  })
+
+  it('o círculo fica no meio do quadro, com a proporção pedida', () => {
+    expect(retanguloDaPrevia(240, 120, ajusteInicial(240, 120), 400, 0.8).circulo).toEqual({ cx: 200, cy: 200, diametro: 320 })
+  })
+
+  it('exemplo à mão: foto 240x120, zoom 2, centro (100, 50), quadro 400 e círculo 320', () => {
+    // recorte: lado 60, de (70, 20) a (130, 80); escala 320/60; a foto começa em 200 - 100 * 320/60
+    const p = retanguloDaPrevia(240, 120, { zoom: 2, centro: { x: 100, y: 50 } }, 400, 0.8)
+    expect(p.x).toBeCloseTo(200 - (100 * 320) / 60, 9)
+    expect(p.y).toBeCloseTo(200 - (50 * 320) / 60, 9)
+    expect(p.largura).toBeCloseTo((240 * 320) / 60, 9)
+    expect(p.altura).toBeCloseTo((120 * 320) / 60, 9)
   })
 })
