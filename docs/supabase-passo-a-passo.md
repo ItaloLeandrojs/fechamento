@@ -51,6 +51,8 @@ Só você cria contas. Ninguém pode se cadastrar sozinho.
    - Em **Minimum password length**, ponha **8**.
 5. Clique em **Save**.
 
+Não ligue **Password requirements** além do mínimo de 8, nem **Secure password change**: o site não sabe lidar com essas regras e a troca de senha falharia.
+
 ---
 
 ## 4. Pegar as chaves
@@ -77,7 +79,10 @@ SUPABASE_URL=cole_aqui_a_Project_URL
 SUPABASE_SERVICE_ROLE_KEY=cole_aqui_a_chave_secreta
 ```
 
-**Esta chave só pode estar neste arquivo.** Não cole no `.env.local`, no código, no GitHub, em e-mail nem no chat. Quem tem essa chave apaga e lê tudo. Se vazar, vá em **Project Settings → API** e gere uma nova.
+**Esta chave só pode estar neste arquivo.** Não cole no `.env.local`, no código, no GitHub, em e-mail nem no chat. Quem tem essa chave apaga e lê tudo. Se vazar, em **Project Settings > API Keys**:
+
+- Com as chaves novas (`sb_secret_...` e `sb_publishable_...`): gere uma chave secreta nova, troque no `supabase.env` e apague/revogue a que vazou.
+- Com as chaves antigas (JWT, `service_role` e `anon`): girar o **JWT secret** troca as duas. Depois é preciso atualizar a chave `anon` no `.env.local` e montar o site de novo.
 
 ---
 
@@ -97,11 +102,25 @@ No primeiro acesso o site pede para a pessoa trocar a senha inicial.
 
 ## 6. Trocar a senha de alguém
 
-1. **Authentication → Users**, clique na pessoa.
-2. Use **Reset password** ou **Update password** e ponha a nova senha.
-3. Vá em **Table Editor → `perfis`**, ache a linha dela e mude `senha_inicial` para **true**.
+O painel não tem um campo para definir a senha de alguém, então a troca é feita pelo **SQL Editor**:
+
+1. Menu **SQL Editor**, nova consulta.
+2. Rode (trocando `SENHA-NOVA` e o e-mail da pessoa):
+
+```
+update auth.users set encrypted_password = extensions.crypt('SENHA-NOVA', extensions.gen_salt('bf')), updated_at = now() where email = '...';
+update public.perfis set senha_inicial = true where email = '...';
+```
 
 Assim, no próximo acesso, o site pede a troca de novo.
+
+O texto da consulta fica no histórico do SQL Editor. Tudo bem: é uma senha inicial, e a pessoa troca no próximo login.
+
+**Não use "Send password recovery"**: o e-mail padrão do Supabase não chega aos colegas e o site não trata o link de recuperação.
+
+Plano B, se o SQL não funcionar: apague o usuário (seção 7) e crie de novo (seção 5), preenchendo o perfil outra vez. A foto guardada no navegador da pessoa se perde, porque o id muda.
+
+> A conferir no painel real na Tarefa 9: este passo ainda não foi testado num projeto de verdade.
 
 ---
 
@@ -127,18 +146,24 @@ Os dados continuam lá. Se ficar pausado muito tempo (meses), o Supabase pode ap
 
 ---
 
-## 9. Atualizar a base da Enel
+## 9. Atualizar as bases (Enel e EDP)
 
-Quando sair uma planilha nova da Enel:
+São duas bases, e cada uma tem a sua subida. **Suba as duas antes do primeiro login da equipe.** Depois, só a que mudou.
 
 1. Abra o terminal na pasta `site-fechamento`.
-2. Rode, trocando o caminho pela planilha nova:
+2. Enel, trocando o caminho pela planilha nova:
 
 ```
 python scripts/atualizar_base.py enel "<caminho da planilha nova.xlsx>"
 ```
 
-3. O script confere a planilha, gera a base e envia para o Supabase.
+3. EDP, com o `kits-edp.json`:
+
+```
+python scripts/atualizar_base.py edp ../bases/kits-edp.json
+```
+
+4. O script confere o arquivo, gera a base e envia para o Supabase.
 
 Para só conferir, sem enviar nada, acrescente `--seco` no fim:
 
