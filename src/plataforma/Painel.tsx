@@ -10,8 +10,20 @@ import './plataforma.css'
 // Sergipe vai sem artigo ("Sergipe ainda está em construção.")
 const ARTIGO: Record<RegiaoId, string> = { edp: 'A ', ceara: 'O ', sergipe: '' }
 const TEMPO_AVISO = 2600
+const SEM_GUARDAR = 'Este navegador não guarda seus dados; na próxima vez você terá de preencher de novo.'
 
-export function Painel({ pessoa, onAbrir, onTrocar }: { pessoa: Pessoa; onAbrir: (id: RegiaoId) => void; onTrocar: () => void }) {
+export function Painel({
+  pessoa,
+  semGuardar = false,
+  onAbrir,
+  onTrocar,
+}: {
+  pessoa: Pessoa
+  /** o navegador não deixou guardar a pessoa */
+  semGuardar?: boolean
+  onAbrir: (id: RegiaoId) => void
+  onTrocar: () => void
+}) {
   // a arte do crachá é redesenhada quando o objeto muda: só muda se algum dado mudar
   const { nome, cargo, matricula, foto } = pessoa
   const dados = useMemo(() => ({ nome, cargo, matricula, foto }), [nome, cargo, matricula, foto])
@@ -55,6 +67,7 @@ export function Painel({ pessoa, onAbrir, onTrocar }: { pessoa: Pessoa; onAbrir:
           {saudacao(new Date().getHours())}, {primeiroNome(nome)}.
         </h1>
         <p>Escolha a região que você vai fechar hoje.</p>
+        {semGuardar && <p className="pl-aviso-foto">{SEM_GUARDAR}</p>}
         <ul className="pl-regioes">
           {REGIOES.map((r) => {
             const pronto = r.estado === 'pronto'

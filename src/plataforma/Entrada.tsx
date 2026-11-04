@@ -19,7 +19,7 @@ const FOTO_NAO_COUBE = 'A foto não coube neste navegador; o crachá fica com as
 type Original = { imagem: ImageBitmap; ajuste: Ajuste }
 type Edicao = Original & { nova: boolean; id: number }
 
-export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
+export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa, guardou: boolean) => void }) {
   const [nome, setNome] = useState('')
   const [cargo, setCargo] = useState('')
   const [matricula, setMatricula] = useState('')
@@ -140,8 +140,9 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
       refCargo.current?.focus()
       return
     }
-    const { gravouFoto } = gravarPessoa(p)
-    if (!gravouFoto && p.foto !== null) {
+    const { gravouFoto, guardou } = gravarPessoa(p)
+    // navegador que não guarda nada: entra com a foto mesmo (fica só nesta aba) e o painel avisa
+    if (guardou && !gravouFoto && p.foto !== null) {
       // fica nesta tela para a pessoa ler o aviso; o próximo "Entrar" segue sem a foto
       pedido.current++
       esquecerConfirmada()
@@ -149,7 +150,7 @@ export function Entrada({ onEntrar }: { onEntrar: (p: Pessoa) => void }) {
       setNaoCoube(true)
       return
     }
-    onEntrar(p)
+    onEntrar(p, guardou)
   }
 
   return (

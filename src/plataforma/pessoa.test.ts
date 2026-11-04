@@ -37,7 +37,7 @@ describe('texto da pessoa', () => {
 describe('guardar a pessoa no storage', () => {
   it('gravar e ler devolve o mesmo objeto', () => {
     const s = storageFalso()
-    expect(gravarPessoa(maria, s)).toEqual({ gravouFoto: true })
+    expect(gravarPessoa(maria, s)).toEqual({ gravouFoto: true, guardou: true })
     expect(lerPessoa(s)).toEqual(maria)
   })
 
@@ -64,12 +64,12 @@ describe('guardar a pessoa no storage', () => {
       removeItem: () => { throw new Error('bloqueado') },
     })
     expect(lerPessoa(quebrado)).toBeNull()
-    expect(gravarPessoa(maria, quebrado)).toEqual({ gravouFoto: false })
+    expect(gravarPessoa(maria, quebrado)).toEqual({ gravouFoto: false, guardou: false })
     expect(() => apagarPessoa(quebrado)).not.toThrow()
   })
 
   it('sem foto e gravando bem, não acusa foto perdida', () => {
-    expect(gravarPessoa({ ...maria, foto: null }, storageFalso())).toEqual({ gravouFoto: true })
+    expect(gravarPessoa({ ...maria, foto: null }, storageFalso())).toEqual({ gravouFoto: true, guardou: true })
   })
 
   it('cota estourada com foto: regrava sem a foto e avisa', () => {
@@ -81,7 +81,7 @@ describe('guardar a pessoa no storage', () => {
         dados.set(k, v)
       },
     })
-    expect(gravarPessoa(maria, s)).toEqual({ gravouFoto: false })
+    expect(gravarPessoa(maria, s)).toEqual({ gravouFoto: false, guardou: true })
     const lida = lerPessoa(s)
     expect(lida?.foto).toBeNull()
     expect(lida?.nome).toBe('Maria Souza')

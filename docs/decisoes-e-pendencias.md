@@ -55,6 +55,12 @@ Feito com a instalação do projeto cosampa-site (nada entra neste): `createRequ
 - Códigos e descrições vêm da base DE-PARA da Enel (`scripts/gerar-catalogo-enel.py` gera `src/data/enel-catalogo.json`, FORA do git: a base é da Enel e o repositório é público; vai para o Supabase antes de publicar). Estrutura que não existe na base e material sem código saem em vermelho no Excel.
 - Conferido: 3 obras com orçamento real (estruturas iguais, menos a MB4 da mt-trafo, em que vale o desenho) e a de Limoeiro (igual à contagem do Italo). O Excel gerado abre no Excel sem reparo.
 
+## Pendências pequenas da plataforma resolvidas (04/11/2026)
+- Chave da arte do crachá em JSON (antes juntava com "|": "A|B" + "C" dava a mesma chave que "A" + "B|C").
+- Cargo comprido: numa linha se couber com letra de pelo menos 26 px do modelo; senão vai para 2 linhas de 28 px (bases 796 e 828), quebradas no espaço que deixa as linhas mais parelhas. Continua até 60 letras.
+- Navegador que não guarda nada: entra com um clique, com a foto, e o painel avisa "Este navegador não guarda seus dados; na próxima vez você terá de preencher de novo." (`gravarPessoa` devolve `guardou`). O aviso "a foto não coube" ficou só para a cota estourada.
+- "← Regiões" na EDP pede confirmação também quando só a foto do DP foi posta; só ter escolhido parcial ou final não conta.
+
 ## Pendências
 1. Ficha de aterramento com mais de 8 pontos: hoje o site avisa e bloqueia; falta criar os blocos extras.
 2. Ficha de equipamento: lugar fixo para os equipamentos da ficha; acima disso o site dá erro claro.

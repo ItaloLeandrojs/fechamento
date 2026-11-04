@@ -76,16 +76,23 @@ describe('frente do crachá', () => {
 })
 
 describe('cargo comprido', () => {
-  it('cargo de 40 letras diminui a fonte até caber na largura do cargo', async () => {
-    const cargo = 'Coordenador de planejamento e fechamento de obras'.slice(0, 40)
-    expect(cargo).toHaveLength(40)
+  it('cargo curto fica numa linha só', async () => {
+    await frente({ ...maria, cargo: 'Analista' })
+    expect(escritas.some((x) => x.texto === 'ANALISTA')).toBe(true)
+  })
+
+  it('cargo de 60 letras vai para 2 linhas legíveis, cada uma cabendo na largura do cargo', async () => {
+    const cargo = 'Coordenador de planejamento e fechamento de obras de distrib'
+    expect(cargo).toHaveLength(60)
     await frente({ ...maria, cargo })
-    const e = escritas.find((x) => x.texto === cargo.toUpperCase())
-    expect(e).toBeDefined()
-    const px = tamanhoDaFonte(e!.font)
-    // o canvas é desenhado em 2x: o tamanho em pixels do modelo é a metade
-    expect(px / 2).toBeLessThan(LAYOUT.cargo.tam)
-    expect((cargo.length * px) / 2).toBeLessThanOrEqual(LAYOUT.cargo.max)
+    const linhas = escritas.filter((x) => cargo.toUpperCase().includes(x.texto) && x.texto.length > 10)
+    expect(linhas.map((l) => l.texto).join(' ')).toBe(cargo.toUpperCase())
+    for (const l of linhas) {
+      const px = tamanhoDaFonte(l.font)
+      // o canvas é desenhado em 2x: o tamanho em pixels do modelo é a metade
+      expect(px / 2).toBeGreaterThanOrEqual(13)
+      expect((l.texto.length * px) / 2).toBeLessThanOrEqual(LAYOUT.cargo.max)
+    }
   })
 })
 
@@ -152,6 +159,8 @@ describe('arte guardada (não desenha de novo a mesma pessoa)', () => {
     expect(chaveDaPessoa({ ...maria, foto: 'data:a' })).not.toBe(chaveDaPessoa({ ...maria, foto: 'data:b' }))
     expect(chaveDaPessoa({ ...maria, foto: 'data:a' })).not.toBe(chaveDaPessoa(maria))
     expect(chaveDaPessoa({ ...maria, foto: 'data:a' })).toBe(chaveDaPessoa({ ...maria, foto: 'data:a' }))
+    // separador dentro do texto não confunde duas pessoas
+    expect(chaveDaPessoa({ ...maria, nome: 'A|B', cargo: 'C' })).not.toBe(chaveDaPessoa({ ...maria, nome: 'A', cargo: 'B|C' }))
   })
 
   it('o cordão é desenhado uma vez só', async () => {

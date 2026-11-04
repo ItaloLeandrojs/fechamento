@@ -36,21 +36,23 @@ export function lerPessoa(storage: Storage | null = storagePadrao()): Pessoa | n
   }
 }
 
+// guardou diz se a pessoa ficou guardada no navegador (false: storage bloqueado, segue só nesta aba).
 // gravouFoto diz se a foto ficou guardada (true também quando não havia foto).
 // Se a foto não couber (cota), grava de novo sem ela e devolve gravouFoto: false.
-export function gravarPessoa(p: Pessoa, storage: Storage | null = storagePadrao()): { gravouFoto: boolean } {
+export function gravarPessoa(p: Pessoa, storage: Storage | null = storagePadrao()): { gravouFoto: boolean; guardou: boolean } {
   const semFoto = p.foto === null
-  if (!storage) return { gravouFoto: semFoto }
+  if (!storage) return { gravouFoto: semFoto, guardou: false }
   try {
     storage.setItem(CHAVE, JSON.stringify(p))
-    return { gravouFoto: true }
+    return { gravouFoto: true, guardou: true }
   } catch {
     try {
       storage.setItem(CHAVE, JSON.stringify({ ...p, foto: null }))
+      return { gravouFoto: semFoto, guardou: true }
     } catch {
       // nem sem a foto coube: segue só na sessão
+      return { gravouFoto: semFoto, guardou: false }
     }
-    return { gravouFoto: semFoto }
   }
 }
 

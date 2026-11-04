@@ -176,10 +176,34 @@ export async function frente(p: Pessoa): Promise<string> {
     texto(g, iniciais(p.nome), I.x, I.base, { peso: 700, tam: I.tam, max: 330, alinhar: 'center', cor: '#2A2F31' })
   }
   const A = LAYOUT.apelido
-  const C = LAYOUT.cargo
   texto(g, p.nome.trim().toUpperCase(), A.x, A.base, { peso: 700, tam: A.tam, max: A.max, alinhar: 'center' })
-  texto(g, p.cargo.trim().toUpperCase(), C.x, C.base, { peso: 400, tam: C.tam, max: C.max, alinhar: 'center' })
+  desenharCargo(g, p.cargo.trim().toUpperCase())
   return c.toDataURL('image/png')
+}
+
+const CARGO_MIN = 26 // menor que isso, numa linha só, fica difícil de ler: o cargo vai para 2 linhas
+const CARGO_2_LINHAS = { tam: 28, bases: [796, 828] } // entre o apelido e o logotipo
+
+/** Cargo numa linha se couber num tamanho legível; senão em 2, quebrado no espaço que deixa as linhas mais parelhas. */
+function desenharCargo(g: G, txt: string) {
+  const C = LAYOUT.cargo
+  const palavras = txt.split(/\s+/).filter(Boolean)
+  g.font = `400 ${CARGO_MIN * K}px ${F}`
+  if (palavras.length < 2 || g.measureText(txt).width <= C.max * K) {
+    texto(g, txt, C.x, C.base, { peso: 400, tam: C.tam, max: C.max, alinhar: 'center' })
+    return
+  }
+  let corte = 1
+  let maisLarga = Infinity
+  for (let i = 1; i < palavras.length; i++) {
+    const w = Math.max(g.measureText(palavras.slice(0, i).join(' ')).width, g.measureText(palavras.slice(i).join(' ')).width)
+    if (w < maisLarga) {
+      maisLarga = w
+      corte = i
+    }
+  }
+  const linhas = [palavras.slice(0, corte).join(' '), palavras.slice(corte).join(' ')]
+  linhas.forEach((l, i) => texto(g, l, C.x, CARGO_2_LINHAS.bases[i], { peso: 400, tam: CARGO_2_LINHAS.tam, max: C.max, alinhar: 'center' }))
 }
 
 /** Verso do crachá (data URL PNG). Setor e empresa são fixos; matrícula vazia fica em branco. */
@@ -215,7 +239,7 @@ export async function cordao(): Promise<string> {
 
 // ---- arte já desenhada, guardada em memória --------------------------------------------------
 // O painel pode pedir a mesma arte mais de uma vez (o parado de reserva enquanto o 3D carrega, e o 3D):
-// a de uma pessoa é desenhada uma vez só. A chave é nome | cargo | matrícula | resumo da foto.
+// a de uma pessoa é desenhada uma vez só. A chave é a lista nome, cargo, matrícula, resumo da foto.
 
 /** Resumo curto de um texto (FNV-1a de 32 bits em hexadecimal): distingue fotos sem guardar a foto na chave. */
 function resumo(txt: string): string {
@@ -229,7 +253,8 @@ function resumo(txt: string): string {
 
 /** Chave da arte de uma pessoa: o que for igual aqui desenha igual. */
 export function chaveDaPessoa(p: Pessoa): string {
-  return [p.nome, p.cargo, p.matricula, p.foto ? resumo(p.foto) : ''].join('|')
+  // em JSON, e não juntando com "|": o nome "A|B" e o cargo "C" não podem dar a mesma chave que "A" e "B|C"
+  return JSON.stringify([p.nome, p.cargo, p.matricula, p.foto ? resumo(p.foto) : ''])
 }
 
 const MAX_GUARDADAS = 4 // as últimas pessoas; mais que isso só gastaria memória (cada arte são alguns MB)

@@ -40,6 +40,8 @@ interface Obra {
 export default function App() {
   // quem entrou (só neste navegador) e a região aberta no painel
   const [pessoa, setPessoa] = useState<Pessoa | null>(() => lerPessoa())
+  // o navegador não deixou guardar a pessoa: o painel avisa que da próxima vez terá de preencher de novo
+  const [semGuardar, setSemGuardar] = useState(false)
   const [regiao, setRegiao] = useState<RegiaoId | null>(null)
   const [obra, setObra] = useState<Obra | null>(null)
   // Fechamento Ceará pelo atalho #ceara-teste: contagem pelo CAD, à parte do fluxo da EDP
@@ -77,7 +79,8 @@ export default function App() {
     window.scrollTo(0, 0)
   }, [semPessoa, regiao, ceara])
 
-  const temTrabalho = estado.estruturas.length + estado.itens.length + estado.aterramento.length + estado.equipamentos.length > 0
+  // a foto do DP também é trabalho; só ter escolhido parcial ou final não é (Italo, 04/11)
+  const temTrabalho = estado.estruturas.length + estado.itens.length + estado.aterramento.length + estado.equipamentos.length > 0 || !!estado.fotoDP
   useEffect(() => {
     if (!temTrabalho) return
     const aviso = (e: BeforeUnloadEvent) => e.preventDefault()
@@ -215,12 +218,21 @@ export default function App() {
   }
 
   if (!obra && ceara) return <Ceara onVoltar={() => setCeara(false)} />
-  if (!pessoa) return <Entrada onEntrar={setPessoa} />
+  if (!pessoa)
+    return (
+      <Entrada
+        onEntrar={(p, guardou) => {
+          setSemGuardar(!guardou)
+          setPessoa(p)
+        }}
+      />
+    )
   if (regiao === 'ceara') return <Ceara onVoltar={() => setRegiao(null)} />
   if (regiao !== 'edp')
     return (
       <Painel
         pessoa={pessoa}
+        semGuardar={semGuardar}
         onAbrir={setRegiao}
         onTrocar={() => {
           apagarPessoa()
