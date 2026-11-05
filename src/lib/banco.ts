@@ -1,10 +1,15 @@
-// Banco do navegador (IndexedDB) deste computador: técnicos e bases baixadas.
-// Versão 1 só tinha 'tecnicos'; a versão 2 acrescenta 'bases' sem mexer nos técnicos.
+// Banco do navegador (IndexedDB) deste computador: técnicos, bases baixadas e sugestões de ajuste.
+// Versão 1 só tinha 'tecnicos'; a 2 acrescenta 'bases'; a 3 acrescenta 'ajustes'. Nenhuma mexe nas lojas antigas.
+import type { Ajuste } from '../ceara/estratificacao'
 
 const DB = 'fechamento'
-const VERSAO = 2
+const VERSAO = 3
 export const LOJA_TECNICOS = 'tecnicos'
 export const LOJA_BASES = 'bases'
+export const LOJA_AJUSTES = 'ajustes'
+
+/** Último ajuste feito numa estrutura (chave sem _S), guardado só neste navegador. */
+export interface SugestaoGuardada { estrutura: string; ajuste: Ajuste; data: string }
 
 export type NomeBase = 'enel' | 'edp'
 
@@ -32,6 +37,7 @@ export function abrirBanco(): Promise<IDBDatabase> {
       const db = req.result
       if (!db.objectStoreNames.contains(LOJA_TECNICOS)) db.createObjectStore(LOJA_TECNICOS, { keyPath: 'registro' })
       if (!db.objectStoreNames.contains(LOJA_BASES)) db.createObjectStore(LOJA_BASES, { keyPath: 'nome' })
+      if (!db.objectStoreNames.contains(LOJA_AJUSTES)) db.createObjectStore(LOJA_AJUSTES, { keyPath: 'estrutura' })
     }
     req.onblocked = () => {
       // outra aba ainda tem a versão antiga aberta: não espera para sempre
@@ -88,5 +94,38 @@ export async function gravarBase(registro: BaseGuardada): Promise<void> {
     }))
   } catch {
     // sem IndexedDB: segue sem guardar, a base é baixada de novo na próxima vez
+  }
+}
+
+export async function lerSugestoes(): Promise<Record<string, SugestaoGuardada>> {
+  try {
+    return await comBanco<Record<string, SugestaoGuardada>>((db) => new Promise((ok, erro) => {
+      const req = db.transaction(LOJA_AJUSTES).objectStore(LOJA_AJUSTES).getAll()
+      req.onsuccess = () => {
+        const r: Record<string, SugestaoGuardada> = {}
+        for (const s of req.result as SugestaoGuardada[]) r[s.estrutura] = s
+        ok(r)
+      }
+      req.onerror = () => erro(req.error)
+    }))
+  } catch {
+    return {} // navegador sem IndexedDB: não há sugestão guardada
+  }
+}
+
+/** Grava e apaga numa transação só, para a sugestão nunca ficar pela metade. */
+export async function gravarSugestoes(gravar: SugestaoGuardada[], apagar: string[]): Promise<void> {
+  try {
+    await comBanco((db) => new Promise<void>((ok, erro) => {
+      const tx = db.transaction(LOJA_AJUSTES, 'readwrite')
+      const loja = tx.objectStore(LOJA_AJUSTES)
+      for (const s of gravar) loja.put(s)
+      for (const e of apagar) loja.delete(e)
+      tx.oncomplete = () => ok()
+      tx.onerror = () => erro(tx.error)
+      tx.onabort = () => erro(tx.error)
+    }))
+  } catch {
+    // sem IndexedDB: segue sem guardar a sugestão
   }
 }

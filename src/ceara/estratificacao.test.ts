@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BaseEnel, Linha, ResultadoCeara } from './contagem'
 import {
-  adicionarNovo, ajustesValidos, aplicarSugestao, chaveKit, kitDe, limpar, linhasDoKit, mesmaObra, somarNaAdicao, type Ajuste,
+  adicionarNovo, ajustesValidos, aplicarSugestao, chaveKit, kitDe, limpar, linhasDoKit, mesmaObra, somarNaAdicao, sugestoesAoBaixar, type Ajuste,
 } from './estratificacao'
 
 // base inventada, só para os testes
@@ -102,6 +102,16 @@ describe('estratificação do material', () => {
     const a: Ajuste = { qtd: { '900001': 1 }, novos: [] }
     const r = ajustesValidos({ KITX1: a, SUMIU: a }, [{ codigo: 'KITX1_S', descricao: '', quantidade: 1, origem: [] }])
     expect(Object.keys(r)).toEqual(['KITX1'])
+  })
+})
+
+describe('sugestão do último ajuste', () => {
+  it('ao baixar, grava os ajustados e apaga os que voltaram ao kit', () => {
+    const a: Ajuste = { qtd: { '900001': 1 }, novos: [] }
+    expect(sugestoesAoBaixar({ KITX1: a }, new Set(['KITX1', 'KITX2']), new Date('2026-11-05T12:00:00Z'))).toEqual({
+      gravar: [{ estrutura: 'KITX1', ajuste: a, data: '2026-11-05T12:00:00.000Z' }],
+      apagar: ['KITX2'],
+    })
   })
 })
 

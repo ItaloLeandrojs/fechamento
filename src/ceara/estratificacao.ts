@@ -3,6 +3,7 @@
 // o ajuste guarda apenas o que DIFERE do kit, e daí saem retirada (devolução) e adição.
 import type { BaseEnel, Linha, ResultadoCeara } from './contagem'
 import { otDoNome } from './excel'
+import type { SugestaoGuardada } from '../lib/banco'
 
 export type Unidade = 'UN' | 'M' | 'KG'
 export interface MaterialNovo {
@@ -199,4 +200,13 @@ export function somarNaAdicao(r: ResultadoCeara, base: BaseEnel, ajustes: Ajuste
     })
   }
   return { adicaoMaterial, somados }
+}
+
+/** O que guardar ao baixar: grava toda estrutura ajustada; apaga a que a pessoa tocou e voltou ao kit puro. */
+export function sugestoesAoBaixar(ajustes: Ajustes, tocadas: ReadonlySet<string>, data: Date): { gravar: SugestaoGuardada[]; apagar: string[] } {
+  const iso = data.toISOString()
+  return {
+    gravar: Object.entries(ajustes).map(([estrutura, ajuste]) => ({ estrutura, ajuste, data: iso })),
+    apagar: [...tocadas].filter((c) => !(c in ajustes)),
+  }
 }
