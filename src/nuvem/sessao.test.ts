@@ -10,10 +10,10 @@ const SESSAO = { user: { id: 'u1' } }
 const LINHA = { id: 'u1', nome: 'Maria', cargo: 'Planejadora', matricula: '123', senha_inicial: false }
 
 /** Cliente falso: só o que sessao.ts usa. */
-function falso(o: { signIn?: unknown; sessao?: unknown; linha?: unknown; update?: unknown; respLinha?: unknown; respRpc?: unknown } = {}) {
+function falso(o: { signIn?: unknown; sessao?: unknown; erroSessao?: unknown; linha?: unknown; update?: unknown; respLinha?: unknown; respRpc?: unknown } = {}) {
   const f = {
     signInWithPassword: vi.fn(async () => o.signIn ?? { data: { session: SESSAO, user: SESSAO.user }, error: null }),
-    getSession: vi.fn(async () => ({ data: { session: 'sessao' in o ? o.sessao : SESSAO }, error: null })),
+    getSession: vi.fn(async () => ({ data: { session: 'sessao' in o ? o.sessao : SESSAO }, error: o.erroSessao ?? null })),
     updateUser: vi.fn(async () => o.update ?? { data: {}, error: null }),
     signOut: vi.fn(async () => ({ error: null })),
     maybeSingle: vi.fn(async () => o.respLinha ?? { data: 'linha' in o ? o.linha : LINHA, error: null }),
@@ -58,9 +58,36 @@ describe('sessão', () => {
     expect(mensagemDeErro({ status: 540, message: 'x' }, true)).toBe(SERVIDOR_PARADO)
   })
 
-  it('sem perfil vira cadastro incompleto', async () => {
-    const { c } = falso({ linha: null })
-    await expect(perfilAtual(c)).rejects.toThrow(CADASTRO_INCOMPLETO)
+  it('perfil sem nome vira cadastro incompleto (sessão guardada e ao entrar)', async () => {
+    const semNome = { ...LINHA, nome: '  ' }
+    const guardada = falso({ linha: semNome })
+    await expect(perfilAtual(guardada.c)).rejects.toThrow(CADASTRO_INCOMPLETO)
+    expect(guardada.f.signOut).toHaveBeenCalledTimes(0)
+    await expect(entrar(falso({ linha: semNome }).c, 'a@b.c', 'x')).rejects.toThrow(CADASTRO_INCOMPLETO)
+  })
+
+  it('ao entrar, conta sem linha de perfil continua cadastro incompleto', async () => {
+    await expect(entrar(falso({ linha: null }).c, 'a@b.c', 'x')).rejects.toThrow(CADASTRO_INCOMPLETO)
+  })
+
+  it('sessão guardada de conta apagada (sem linha de perfil) é esquecida em silêncio', async () => {
+    const { c, f } = falso({ linha: null })
+    expect(await perfilAtual(c)).toBeNull()
+    expect(f.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  it('sessão vencida que o servidor recusa (conta apagada) é esquecida em silêncio', async () => {
+    const { c, f } = falso({ sessao: null, erroSessao: { name: 'AuthApiError', status: 400, code: 'refresh_token_not_found', message: 'Invalid Refresh Token' } })
+    expect(await perfilAtual(c)).toBeNull()
+    expect(f.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  it('sessão vencida sem rede continua avisando e não esquece a sessão', async () => {
+    const { c, f } = falso({ sessao: null, erroSessao: { name: 'AuthRetryableFetchError', status: 0, message: 'Failed to fetch' } })
+    vi.stubGlobal('navigator', { onLine: false })
+    await expect(perfilAtual(c)).rejects.toThrow(SEM_INTERNET)
+    vi.unstubAllGlobals()
+    expect(f.signOut).toHaveBeenCalledTimes(0)
   })
 
   it('sem sessão devolve null e com perfil devolve senhaInicial', async () => {

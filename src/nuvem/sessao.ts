@@ -39,11 +39,33 @@ export function erroDoBanco(error: unknown, status: number | undefined, online: 
   return new Error(mensagemDeErro(status === 0 ? { ...(error as object), status: 0 } : error, online))
 }
 
-async function lerPerfil(c: SupabaseClient, userId: string): Promise<Perfil> {
+type LinhaPerfil = { id: string; nome: string | null; cargo: string | null; matricula: string | null; senha_inicial: boolean | null }
+
+async function buscarPerfil(c: SupabaseClient, userId: string): Promise<LinhaPerfil | null> {
   const { data, error, status } = await c.from('perfis').select('id,nome,cargo,matricula,senha_inicial').eq('id', userId).maybeSingle()
   if (error) throw erroDoBanco(error, status)
+  return data as LinhaPerfil | null
+}
+
+function montarPerfil(data: LinhaPerfil | null): Perfil {
   if (!data || !String(data.nome ?? '').trim()) throw new Error(CADASTRO_INCOMPLETO)
-  return { id: data.id, nome: data.nome, cargo: data.cargo ?? '', matricula: data.matricula ?? '', senhaInicial: !!data.senha_inicial }
+  return { id: data.id, nome: data.nome ?? '', cargo: data.cargo ?? '', matricula: data.matricula ?? '', senhaInicial: !!data.senha_inicial }
+}
+
+/** O servidor respondeu e recusou a sessão (ex.: conta apagada, sessão revogada). Falha de rede, 429 e 5xx não contam. */
+function sessaoRecusada(e: unknown): boolean {
+  const x = (typeof e === 'object' && e !== null ? e : {}) as { status?: unknown; name?: unknown }
+  if (x.name === 'AuthRetryableFetchError' || typeof x.status !== 'number') return false
+  return x.status >= 400 && x.status < 500 && x.status !== 429
+}
+
+/** Esquece a sessão guardada neste navegador, sem falar com o servidor. */
+async function esquecerSessao(c: SupabaseClient): Promise<void> {
+  try {
+    await c.auth.signOut({ scope: 'local' })
+  } catch {
+    // não há o que fazer: a tela de entrada aparece do mesmo jeito
+  }
 }
 
 export async function entrar(c: SupabaseClient, email: string, senha: string): Promise<Perfil> {
@@ -55,19 +77,36 @@ export async function entrar(c: SupabaseClient, email: string, senha: string): P
   } catch (e) {
     throw new Error(mensagemDeErro(e))
   }
-  return lerPerfil(c, id)
+  return montarPerfil(await buscarPerfil(c, id))
 }
 
+/**
+ * Sessão guardada neste navegador. Se a conta foi apagada (o servidor recusa a sessão vencida, ou a
+ * sessão ainda vale mas o perfil sumiu junto), a sessão é esquecida e a pessoa vê a entrada limpa.
+ * Perfil que existe sem nome continua sendo "cadastro incompleto".
+ */
 export async function perfilAtual(c: SupabaseClient): Promise<Perfil | null> {
   let id: string | undefined
   try {
     const { data, error } = await c.auth.getSession()
-    if (error) throw error
+    if (error) {
+      if (!data?.session && sessaoRecusada(error)) {
+        await esquecerSessao(c)
+        return null
+      }
+      throw error
+    }
     id = data.session?.user.id
   } catch (e) {
     throw new Error(mensagemDeErro(e))
   }
-  return id ? lerPerfil(c, id) : null
+  if (!id) return null
+  const linha = await buscarPerfil(c, id)
+  if (!linha) {
+    await esquecerSessao(c)
+    return null
+  }
+  return montarPerfil(linha)
 }
 
 export async function trocarSenha(c: SupabaseClient, nova: string, confirma: string, atual?: string): Promise<void> {
