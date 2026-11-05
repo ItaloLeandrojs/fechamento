@@ -226,14 +226,14 @@ function itensDaLinha(l: string): ItemEtiqueta[] {
 
 // ---------------- cabos ----------------
 
-type Cabo =
+export type Cabo =
   | { grupo: 'mt'; fases: number | null; bitola: string }
   | { grupo: 'bt-nu'; condutores: number | null; bitola: string }
   | { grupo: 'bt-multi'; bitola: string; fases: 'M' | 'T' | '' }
   | { grupo: 'outro' }
 
 /** P3AN004 (MT, 3 fases, CAA 4); 2AN004 (BT nu, 2 condutores); AM050T (BT multiplexado 50 mm², trifásico). */
-function lerCabo(c: string): Cabo {
+export function lerCabo(c: string): Cabo {
   const mt = /^P(\d)?(?:AN|CA)(\d{3})$/.exec(c)
   if (mt) return { grupo: 'mt', fases: mt[1] ? Number(mt[1]) : null, bitola: mt[2] }
   const nu = /^(\d)?AN(\d{3})$/.exec(c)
@@ -306,6 +306,83 @@ const DESCRICAO_FIXA: Record<string, string> = {
 }
 const SUPORTE_CF = '251841' // SUPORTE,L,AZ,198,CF/PR: nunca vem em estrutura, um por chave fusível
 const CONECTOR_CUNHA = '274921' // CONEC,CUN,BIM,VII: um por chave (obra real)
+
+/** Cabo já somado em metros, por situação (1 novo, 3 retirado). */
+export interface CaboSomado {
+  situacao: 1 | 3
+  nome: string
+  metros: number
+  /** só o caderno passa: vale no lugar das fases da obra */
+  fases?: number
+}
+
+/** Soma em `adicao`/`devolucao` o material dos cabos com a regra de hoje (5%, kg, sucata, sem regra = semCodigo, fitas do BT novo uma vez). */
+export function converterCabos(cabos: CaboSomado[], fasesMT: number, catalogo: Catalogo | undefined, adicaoMaterial: Linha[], devolucaoMaterial: Linha[]): void {
+  const desc = (codigo: string, reserva: string) => catalogo?.materiais[codigo]?.[0] ?? DESCRICAO_FIXA[codigo] ?? reserva
+  const material = (codigo: string, reserva = '', palpite = false): Omit<Linha, 'origem' | 'quantidade'> => ({ codigo, descricao: desc(codigo, reserva), palpite })
+  const semCodigo = (nome: string, descricao: string): Omit<Linha, 'origem' | 'quantidade'> => ({ codigo: nome, descricao, semCodigo: true })
+  let btNovo = false
+  for (const { situacao, nome, metros, fases: fasesDoCaderno } of cabos) {
+    const cabo = lerCabo(nome)
+    const novo = situacao === 1
+    const lista = novo ? adicaoMaterial : devolucaoMaterial
+    const semRegra = () => somar(lista, semCodigo(`CABO ${nome}`, `${metros} m ${novo ? 'novos' : 'retirados'}: cabo sem regra de conversão`), metros, 'vãos')
+    if (cabo.grupo === 'mt') {
+      const fases = fasesDoCaderno ?? (novo ? fasesMT : (cabo.fases ?? fasesMT))
+      const t = (novo ? MT_NOVO : MT_SUCATA)[cabo.bitola]
+      if (!t) semRegra()
+      else if (novo) somar(lista, { ...material(t[0]), conta: `kg: ${metros} m x ${fases} fases x 1,05 x ${br(t[1])}` }, duasCasas(metros * fases * SOBRA * t[1]), 'vãos de MT')
+      // retirado: as fases vêm do código do vão (P2 = 2 fases), ainda a confirmar com uma obra real
+      else somar(lista, { ...material(t[0], '', true), conta: `kg: ${metros} m x ${fases} fases x ${br(t[1])}` }, duasCasas(metros * fases * t[1]), 'vãos de MT')
+    } else if (cabo.grupo === 'bt-multi') {
+      const k = cabo.bitola + cabo.fases
+      if (novo) {
+        const cod = BT_NOVO[k]
+        if (!cod) semRegra()
+        else {
+          somar(lista, { ...material(cod), conta: `${metros} m + 5%` }, inteiro(metros * SOBRA), 'vãos de BT')
+          btNovo = true
+        }
+      } else {
+        const t = BT_MULTI_SUCATA[k]
+        if (!t) semRegra()
+        else somar(lista, { ...material(t[0], '', t[1]), conta: `${metros} m` }, metros, 'vãos de BT')
+      }
+    } else if (cabo.grupo === 'bt-nu' && !novo) {
+      const t = BT_NU_SUCATA[cabo.bitola]
+      if (!t) semRegra()
+      else {
+        // 2AN004 = 2 condutores (resposta do Italo, 04/11); sem o número, 1 condutor e a confirmar
+        const condutores = cabo.condutores ?? 1
+        somar(lista, { ...material(t[0], '', cabo.condutores === null), conta: `kg: ${metros} m x ${condutores} condutor${condutores > 1 ? 'es' : ''} x ${br(t[1])}` }, duasCasas(metros * condutores * t[1]), 'vãos retirados')
+      }
+    } else semRegra()
+  }
+
+  // fitas isolantes: 1 de cada, só quando há cabo de BT novo
+  if (btNovo) {
+    somar(adicaoMaterial, material('860342'), 1, 'cabo BT novo')
+    somar(adicaoMaterial, material('860344'), 1, 'cabo BT novo')
+  }
+}
+
+/** Nomes de vão com regra de material, sem repetir: MT P1 a P3 × bitolas de MT_NOVO/MT_SUCATA; AM + chaves de BT_NOVO/BT_MULTI_SUCATA; BT nu 1 a 4 × bitolas de BT_NU_SUCATA. */
+export function nomesDeCabo(): string[] {
+  const nomes = new Set<string>()
+  for (const b of new Set([...Object.keys(MT_NOVO), ...Object.keys(MT_SUCATA)])) for (const f of [1, 2, 3]) nomes.add(`P${f}AN${b}`)
+  for (const k of new Set([...Object.keys(BT_NOVO), ...Object.keys(BT_MULTI_SUCATA)])) nomes.add(`AM${k}`)
+  for (const b of Object.keys(BT_NU_SUCATA)) for (const c of [1, 2, 3, 4]) nomes.add(`${c}AN${b}`)
+  return [...nomes]
+}
+
+/** Código de sucata do material novo (poste por POSTE_NOVO → POSTE_SUCATA pelo mesmo nome; trafo por TRAFO → TRAFO_RETIRADO); null se não houver. */
+export function codigoDeSucata(codigoNovo: string): string | null {
+  for (const [novos, sucatas] of [[POSTE_NOVO, POSTE_SUCATA], [TRAFO, TRAFO_RETIRADO]] as const) {
+    const nome = Object.keys(novos).find((n) => novos[n] === codigoNovo)
+    if (nome && sucatas[nome]) return sucatas[nome]
+  }
+  return null
+}
 
 // ---------------- contagem ----------------
 
@@ -468,56 +545,15 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
   }
 
   // cabos: soma os metros por situação e por cabo
-  const porCabo = new Map<string, { situacao: Situacao; cabo: Cabo; nome: string; metros: number }>()
+  const porCabo = new Map<string, CaboSomado>()
   for (const v of vaos) {
     if (v.situacao !== 1 && v.situacao !== 3) continue // existente ou tensionado: não é material
     const k = v.situacao + v.cabo
-    const atual = porCabo.get(k) ?? { situacao: v.situacao, cabo: lerCabo(v.cabo), nome: v.cabo, metros: 0 }
+    const atual = porCabo.get(k) ?? { situacao: v.situacao, nome: v.cabo, metros: 0 }
     atual.metros += v.metros
     porCabo.set(k, atual)
   }
-  let btNovo = false
-  for (const { situacao, cabo, nome, metros } of porCabo.values()) {
-    const novo = situacao === 1
-    const lista = novo ? adicaoMaterial : devolucaoMaterial
-    const semRegra = () => somar(lista, semCodigo(`CABO ${nome}`, `${metros} m ${novo ? 'novos' : 'retirados'}: cabo sem regra de conversão`), metros, 'vãos')
-    if (cabo.grupo === 'mt') {
-      const fases = novo ? fasesMT : (cabo.fases ?? fasesMT)
-      const t = (novo ? MT_NOVO : MT_SUCATA)[cabo.bitola]
-      if (!t) semRegra()
-      else if (novo) somar(lista, { ...material(t[0]), conta: `kg: ${metros} m x ${fases} fases x 1,05 x ${br(t[1])}` }, duasCasas(metros * fases * SOBRA * t[1]), 'vãos de MT')
-      // retirado: as fases vêm do código do vão (P2 = 2 fases), ainda a confirmar com uma obra real
-      else somar(lista, { ...material(t[0], '', true), conta: `kg: ${metros} m x ${fases} fases x ${br(t[1])}` }, duasCasas(metros * fases * t[1]), 'vãos de MT')
-    } else if (cabo.grupo === 'bt-multi') {
-      const k = cabo.bitola + cabo.fases
-      if (novo) {
-        const cod = BT_NOVO[k]
-        if (!cod) semRegra()
-        else {
-          somar(lista, { ...material(cod), conta: `${metros} m + 5%` }, inteiro(metros * SOBRA), 'vãos de BT')
-          btNovo = true
-        }
-      } else {
-        const t = BT_MULTI_SUCATA[k]
-        if (!t) semRegra()
-        else somar(lista, { ...material(t[0], '', t[1]), conta: `${metros} m` }, metros, 'vãos de BT')
-      }
-    } else if (cabo.grupo === 'bt-nu' && !novo) {
-      const t = BT_NU_SUCATA[cabo.bitola]
-      if (!t) semRegra()
-      else {
-        // 2AN004 = 2 condutores (resposta do Italo, 04/11); sem o número, 1 condutor e a confirmar
-        const condutores = cabo.condutores ?? 1
-        somar(lista, { ...material(t[0], '', cabo.condutores === null), conta: `kg: ${metros} m x ${condutores} condutor${condutores > 1 ? 'es' : ''} x ${br(t[1])}` }, duasCasas(metros * condutores * t[1]), 'vãos retirados')
-      }
-    } else semRegra()
-  }
-
-  // fitas isolantes: 1 de cada, só quando há cabo de BT novo
-  if (btNovo) {
-    somar(adicaoMaterial, material('860342'), 1, 'cabo BT novo')
-    somar(adicaoMaterial, material('860344'), 1, 'cabo BT novo')
-  }
+  converterCabos([...porCabo.values()], fasesMT, catalogo, adicaoMaterial, devolucaoMaterial)
 
   // poste sem etiqueta no meio da numeração (ex.: P1 a P35 sem o P34): falta no desenho
   const numeros = etiquetas.map((e) => Number(e.poste)).filter((n) => Number.isInteger(n) && n > 0)

@@ -7,7 +7,7 @@ import { SheetEditor } from '../core/sheet'
 import { linhasDoTexto } from './mtext'
 import { lerDxf, type Dxf, type TextoDxf } from './dxf'
 import JSZip from 'jszip'
-import { contarObra, type BaseEnel, type Catalogo, type Linha } from './contagem'
+import { codigoDeSucata, contarObra, converterCabos, lerCabo, nomesDeCabo, type BaseEnel, type Catalogo, type Linha } from './contagem'
 import type { Ajustes } from './estratificacao'
 import { comparar, lerOrcamento } from './orcamento'
 import { gerarExcelCeara, nomeDoExcel, otDoNome, serialExcel } from './excel'
@@ -309,4 +309,54 @@ describe.skipIf(!existsSync('../ceara-teste/limoeiro/obra.dxf'))('obra de Limoei
     expect(r.devolucaoEstrutura).toEqual([])
     expect(r.devolucaoMaterial).toEqual([])
   }, 120000)
+})
+
+describe('cabos reaproveitados', () => {
+  it('converterCabos dá o que a Leitura do CAD dá', () => {
+    const r = contarObra(dxfDe(['\\A1;(1)AM035T97']))
+    const a: Linha[] = []
+    const d: Linha[] = []
+    converterCabos([{ situacao: 1, nome: 'AM035T', metros: 97 }], 3, undefined, a, d)
+    expect(a).toEqual(r.adicaoMaterial)
+    expect(d).toEqual([])
+    expect(a[0]).toMatchObject({ quantidade: 102, conta: '97 m + 5%' })
+    expect(a).toHaveLength(3) // o cabo e as duas fitas
+  })
+
+  it('fases do caderno valem no MT', () => {
+    const a: Linha[] = []
+    converterCabos([{ situacao: 1, nome: 'P2AN004', metros: 100, fases: 2 }], 3, undefined, a, [])
+    expect(a[0].quantidade).toBe(17.85)
+    expect(a[0].conta).toBe('kg: 100 m x 2 fases x 1,05 x 0,085')
+  })
+
+  it('fases do caderno valem também no MT retirado', () => {
+    const d: Linha[] = []
+    converterCabos([{ situacao: 3, nome: 'P3AN004', metros: 100, fases: 1 }], 3, undefined, [], d)
+    expect(d[0].quantidade).toBe(8.5)
+    expect(d[0].conta).toBe('kg: 100 m x 1 fases x 0,085')
+  })
+
+  it('cabo sem regra vai sem código', () => {
+    const a: Linha[] = []
+    converterCabos([{ situacao: 1, nome: 'XYZ1', metros: 10 }], 3, undefined, a, [])
+    expect(a).toEqual([expect.objectContaining({ codigo: 'CABO XYZ1', semCodigo: true, quantidade: 10 })])
+  })
+
+  it('nomes de cabo', () => {
+    const nomes = nomesDeCabo()
+    expect(nomes).toEqual(expect.arrayContaining(['AM035T', 'P3AN004', '2AN004']))
+    expect(new Set(nomes).size).toBe(nomes.length)
+    for (const n of nomes) expect(lerCabo(n).grupo).not.toBe('outro')
+  })
+
+  it('sucata pelo mesmo nome', () => {
+    const r = contarObra(dxfDe(['(1)600/12 S1N\\P1', '(3)600/12\\P2', '(1)TT15KVA\\P3', '(3)TT15KVA\\P4']))
+    const novos = r.adicaoMaterial.map((l) => l.codigo) // poste, trafo e o que vem com a chave
+    const velhos = r.devolucaoMaterial.map((l) => l.codigo) // poste e trafo retirados
+    expect(velhos).toHaveLength(2)
+    expect(codigoDeSucata(novos[0])).toBe(velhos[0])
+    expect(codigoDeSucata(novos[1])).toBe(velhos[1])
+    expect(codigoDeSucata('900001')).toBeNull()
+  })
 })
