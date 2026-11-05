@@ -65,6 +65,7 @@ Feito com a instalação do projeto cosampa-site (nada entra neste): `createRequ
 - Projeto `Fechamento Cosampa` em São Paulo (sa-east-1), plano Free, chaves novas (`sb_publishable_` no `.env.local`, `sb_secret_` só no `../supabase.env`). Esquema rodado; cadastro pelo site, confirmação de e-mail e login anônimo desligados; senha mínima de 8, sem exigências extras na troca.
 - Bases no servidor: Enel (13.807 materiais, 6.521 estruturas, 76.626 linhas de kit) e EDP (450 kits, 5.163 itens).
 - `node scripts/conferir-supabase.mjs`: 21 itens OK com a conta de teste e sem login (inclui a rota pública do bucket, o cadastro e o login anônimo recusados).
+- Conta de teste apagada pelo Italo em 04/11 (a senha dela tinha sido trocada no teste e ficou desconhecida). Para rodar o `conferir-supabase.mjs` de novo, crie outra conta de teste (seção 5 do passo a passo) e ponha o e-mail e a senha atual no `../supabase-teste.env`.
 - Site montado com o endereço real (`conferir-dist`: limpo) e testado pelo Italo no Chrome/Edge em localhost:4400: entrar, trocar a senha, foto, bases baixadas, uma obra da EDP e uma do Ceará, Sair.
 - Falta: publicar (merge no `main`, push e gh-pages pelo procedimento isolado do dist, com o `conferir-dist.mjs` antes) só com o OK do Italo; criar as contas da equipe (seção 5 do passo a passo); testar o login a partir da rede da empresa; conferir o SQL de senha esquecida (seção 6) na primeira vez que for preciso.
 

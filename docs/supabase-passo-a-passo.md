@@ -2,6 +2,8 @@
 
 Este guia é para você, Italo. Cada seção é um assunto. Os nomes dos botões ficam em inglês, do jeito que aparecem no Supabase.
 
+**Não traduza o painel.** O tradutor do Chrome quebra o painel do Supabase ("Uma extensão do navegador pode ter causado um erro"). No ícone de tradução da barra de endereço, escolha **Nunca traduzir este site** e atualize a página, ou use o Edge.
+
 Antes de começar, saiba o que são as duas chaves:
 
 - **Chave pública** (`anon` ou `publishable`): pode ficar no site. Sozinha ela não abre nada.
