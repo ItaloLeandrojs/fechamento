@@ -32,6 +32,38 @@ const CATALOGO: Catalogo = {
 }
 
 describe('contagem pelas etiquetas', () => {
+  const mtextEm = (bruto: string, x: number, y: number): TextoDxf => ({ tipo: 'MTEXT', bruto, camada: 'DESCRICAOPROJETADA', x, y, altura: 2 })
+
+  it('número do poste na primeira linha da etiqueta (em cima)', () => {
+    const r = contarObra(dxfDe(['P7\\P(1)300/9 S2N']))
+    expect(r.etiquetas[0].poste).toBe('7')
+  })
+
+  it('número do poste escrito à parte, logo embaixo (com a coordenada antes)', () => {
+    const r = contarObra(dxfDe([mtextEm('(1)600/12 M1\\P(1)2xS1B', 100, 500), mtextEm('595137,9436298\\P01', 100.5, 490)]))
+    expect(r.etiquetas.map((e) => e.poste)).toEqual(['01'])
+  })
+
+  it('número do poste escrito à parte, logo em cima', () => {
+    const r = contarObra(dxfDe([mtextEm('(1)300/9 S2N', 100, 500), mtextEm('P4', 101, 506)]))
+    expect(r.etiquetas[0].poste).toBe('4')
+  })
+
+  it('número ao lado não serve, mesmo mais perto: vale o de cima ou de baixo', () => {
+    const r = contarObra(dxfDe([mtextEm('(1)300/9 S2N', 100, 500), mtextEm('9', 125, 499), mtextEm('3', 100, 488)]))
+    expect(r.etiquetas[0].poste).toBe('3')
+  })
+
+  it('sem número em cima nem embaixo, a etiqueta fica sem número', () => {
+    const r = contarObra(dxfDe([mtextEm('(1)300/9 S2N', 100, 500), mtextEm('9', 125, 499), mtextEm('5', 100, 300)]))
+    expect(r.etiquetas[0].poste).toBe('')
+  })
+
+  it('cada número solto vai para uma etiqueta só, a mais próxima', () => {
+    const r = contarObra(dxfDe([mtextEm('(1)300/9 S2N', 100, 500), mtextEm('(1)300/9 S2C', 100, 470), mtextEm('2', 100, 494)]))
+    expect(r.etiquetas.map((e) => e.poste)).toEqual(['2', ''])
+  })
+
   it('prefixo do começo vale para a linha; estrutura de MT ganha o cabo da obra; (3) vai para devolução', () => {
     const r = contarObra(dxfDe(['(1)600/12 MB1\\P(1)MB3.1\\P(0356400,9245150)\\P1', '{\\C6;(3)150/8 S2N}\\P(1)600/12 MB4\\P(1)2xS2B\\P2'], [cota('(1)P2AN004<>', 80.4)]))
     expect(qtd(r.adicaoEstrutura)).toEqual({ 'MB1CAA4S_S': 1, 'MB3.1CAA4S_S': 1, 'MB4CAA4S_S': 1, S2B_S: 2 })

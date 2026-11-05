@@ -114,7 +114,37 @@ function pedacosDaLinha(linha: string): { sit: Situacao | null; texto: string }[
  * junta as linhas empilhadas na mesma coluna. Duas linhas são da mesma etiqueta quando
  * começam no mesmo x (até uma altura de letra) e estão a no máximo 2,2 alturas uma da outra.
  */
-export function agruparTextos(textos: TextoDxf[]): { linhas: string[]; camada: string }[] {
+/** Retângulo aproximado de um texto no desenho (a largura é estimada pelo número de letras). */
+export interface Caixa {
+  x0: number
+  x1: number
+  topo: number
+  base: number
+  h: number
+}
+
+const ENTRELINHA = 1.67
+const LARGURA_LETRA = 0.8
+
+/** MTEXT: o ponto de inserção é o canto de cima; as linhas descem. TEXT: o ponto é a base da letra. */
+function caixaDoTexto(t: TextoDxf, linhas: string[]): Caixa {
+  const h = t.altura > 0 ? t.altura : 2.5
+  const largura = Math.max(1, ...linhas.map((l) => l.length)) * LARGURA_LETRA * h
+  if (t.tipo === 'MTEXT') return { x0: t.x, x1: t.x + largura, topo: t.y, base: t.y - Math.max(1, linhas.length) * ENTRELINHA * h, h }
+  return { x0: t.x, x1: t.x + largura, topo: t.y + h, base: t.y, h }
+}
+
+function juntarCaixas(c: Caixa[]): Caixa {
+  return {
+    x0: Math.min(...c.map((x) => x.x0)),
+    x1: Math.max(...c.map((x) => x.x1)),
+    topo: Math.max(...c.map((x) => x.topo)),
+    base: Math.min(...c.map((x) => x.base)),
+    h: Math.max(...c.map((x) => x.h)),
+  }
+}
+
+export function agruparTextos(textos: TextoDxf[]): { linhas: string[]; camada: string; caixa: Caixa }[] {
   const t = textos.map((x) => ({ ...x, h: x.altura > 0 ? x.altura : 2.5 })).sort((a, b) => a.x - b.x)
   const pai = t.map((_, i) => i)
   const raiz = (i: number): number => (pai[i] === i ? i : (pai[i] = raiz(pai[i])))
@@ -130,6 +160,7 @@ export function agruparTextos(textos: TextoDxf[]): { linhas: string[]; camada: s
   return [...grupos.values()].map((g) => ({
     camada: g[0].camada,
     linhas: g.sort((a, b) => b.y - a.y).flatMap((x) => linhasDoTexto(x.bruto)),
+    caixa: juntarCaixas(g.map((x) => caixaDoTexto(x, linhasDoTexto(x.bruto)))),
   }))
 }
 
@@ -306,7 +337,7 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
   }
 
   // textos: vão de uma linha só, etiqueta em MTEXT (uma por poste) ou TEXTs soltos empilhados
-  const blocos: { linhas: string[]; camada: string; soltos: boolean }[] = []
+  const blocos: { linhas: string[]; camada: string; soltos: boolean; caixa: Caixa }[] = []
   const soltos: TextoDxf[] = []
   for (const t of dxf.textos) {
     const linhas = linhasDoTexto(t.bruto)
@@ -319,15 +350,25 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
       }
     }
     if (t.tipo === 'TEXT') soltos.push(t)
-    else blocos.push({ linhas, camada: t.camada, soltos: false })
+    else blocos.push({ linhas, camada: t.camada, soltos: false, caixa: caixaDoTexto(t, linhas) })
   }
   for (const g of agruparTextos(soltos)) blocos.push({ ...g, soltos: true })
+
+  // número do poste escrito à parte (ex.: "01", às vezes junto da coordenada): fica em cima ou embaixo da etiqueta
+  const numerosSoltos: { numero: string; caixa: Caixa; usado: boolean }[] = []
+  const semNumero: { etiqueta: Etiqueta; caixa: Caixa }[] = []
 
   for (const b of blocos) {
     // etiqueta de poste: tem poste (esforço/altura) ou estrutura, com ou sem prefixo
     let uteis = b.linhas.filter((l) => !COORDENADA.test(l.replace(/\s/g, '')))
+    if (uteis.length === 1 && NUMERO_POSTE.test(uteis[0])) {
+      numerosSoltos.push({ numero: uteis[0].replace(/^P/, ''), caixa: b.caixa, usado: false })
+      continue
+    }
+    // o número do poste fecha a etiqueta embaixo ou abre em cima
     let poste = ''
     if (uteis.length > 1 && NUMERO_POSTE.test(uteis[uteis.length - 1])) poste = uteis.pop()!.replace(/^P/, '')
+    else if (uteis.length > 1 && NUMERO_POSTE.test(uteis[0])) poste = uteis.shift()!.replace(/^P/, '')
     // texto solto juntado pela posição: tira as linhas que não são da etiqueta (nome de rua, nota...)
     if (b.soltos) uteis = uteis.filter((l) => linhaDeEtiqueta(itensDaLinha(l)))
     const itens = uteis.flatMap(itensDaLinha)
@@ -335,8 +376,11 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
     const reconhecidos = itens.filter((i) => i.tipo !== 'nao-reconhecido').length
     // texto solto que não é etiqueta (legenda, carimbo, nota): fica de fora
     if (!itens.length || (!temPoste && (reconhecidos === 0 || reconhecidos < itens.length / 2))) continue
-    etiquetas.push({ poste, linhas: poste ? [...uteis, poste] : uteis, itens, camada: b.camada })
+    const etiqueta: Etiqueta = { poste, linhas: poste ? [...uteis, poste] : uteis, itens, camada: b.camada }
+    etiquetas.push(etiqueta)
+    if (!poste) semNumero.push({ etiqueta, caixa: b.caixa })
   }
+  darNumerosSoltos(semNumero, numerosSoltos)
 
   // etiqueta repetida do mesmo poste (versão antiga não apagada): conta uma só e avisa
   const vistos = new Map<string, Etiqueta>()
@@ -489,6 +533,40 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
   if (sem.length) avisos.push(`Material sem código conhecido: ${sem.join(', ')}. No Excel a linha sai em vermelho, para preencher o código à mão.`)
 
   return { etiquetas, vaos, adicaoEstrutura, devolucaoEstrutura, adicaoMaterial, devolucaoMaterial, naoReconhecidos, ignorados, avisos }
+}
+
+/** Até quantas alturas de letra o número pode ficar longe da etiqueta, em cima ou embaixo. */
+const DISTANCIA_NUMERO = 15
+
+/**
+ * Etiqueta sem número dentro dela: procura um número escrito à parte logo em cima ou logo embaixo
+ * (alinhado com a etiqueta). Um número ao lado não serve, mesmo se estiver mais perto (regra do Italo,
+ * 04/11). Cada número vai para uma etiqueta só: os pares mais próximos são ligados primeiro.
+ * Sem número em cima nem embaixo, a etiqueta fica "sem nº" (às vezes a pessoa esquece mesmo).
+ */
+function darNumerosSoltos(semNumero: { etiqueta: Etiqueta; caixa: Caixa }[], numeros: { numero: string; caixa: Caixa; usado: boolean }[]): void {
+  const pares: { e: (typeof semNumero)[number]; n: (typeof numeros)[number]; distancia: number }[] = []
+  for (const e of semNumero) {
+    const folga = e.caixa.h
+    for (const n of numeros) {
+      // alinhado: a faixa de x do número cruza a faixa de x da etiqueta
+      if (n.caixa.x1 < e.caixa.x0 - folga || n.caixa.x0 > e.caixa.x1 + folga) continue
+      const embaixo = e.caixa.base - n.caixa.topo
+      const emCima = n.caixa.base - e.caixa.topo
+      const distancia = Math.max(embaixo, emCima)
+      if (distancia < -folga || distancia > DISTANCIA_NUMERO * e.caixa.h) continue
+      pares.push({ e, n, distancia })
+    }
+  }
+  pares.sort((a, b) => a.distancia - b.distancia)
+  const ligadas = new Set<Etiqueta>()
+  for (const p of pares) {
+    if (p.n.usado || ligadas.has(p.e.etiqueta)) continue
+    p.n.usado = true
+    ligadas.add(p.e.etiqueta)
+    p.e.etiqueta.poste = p.n.numero
+    p.e.etiqueta.linhas = [...p.e.etiqueta.linhas, p.n.numero]
+  }
 }
 
 /** Linha de texto solto que faz parte de uma etiqueta: tem prefixo, poste, ou a maioria dos itens reconhecidos. */

@@ -180,9 +180,9 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
             </Painel>
 
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-5">
-              <Numero rotulo="Etiquetas de poste lidas" valor={resultado.etiquetas.length} />
-              <Numero rotulo="Vãos novos de MT (m)" valor={metros(resultado, 1, /^P\d/)} />
-              <Numero rotulo="Vãos novos de BT (m)" valor={metros(resultado, 1, /^AM/)} />
+              <Numero rotulo="Postes instalados" valor={postesInstalados(resultado)} />
+              <Numero rotulo="Cabo de MT instalado (m)" valor={metros(resultado, 1, /^P\d/)} />
+              <Numero rotulo="Cabo de BT instalado (m)" valor={metros(resultado, 1, /^AM/)} />
               {cmp ? <Numero rotulo="Linhas iguais ao orçamento" valor={`${iguais} de ${total.length}`} /> : <Numero rotulo="Itens não reconhecidos" valor={resultado.naoReconhecidos.length} />}
             </dl>
 
@@ -233,6 +233,11 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
       </main>
     </div>
   )
+}
+
+/** Postes com prefixo (1) nas etiquetas: os novos, instalados na obra. */
+function postesInstalados(r: ResultadoCeara): number {
+  return r.etiquetas.flatMap((e) => e.itens).filter((i) => i.tipo === 'poste' && i.situacao === 1).reduce((s, i) => s + i.quantidade, 0)
 }
 
 function metros(r: ResultadoCeara, sit: 1 | 3, cabo: RegExp): number {
