@@ -142,6 +142,23 @@
 .pl-form input[aria-invalid='true']:focus {
   box-shadow: 0 0 0 1px var(--danger);
 }
+/* preenchido pelo navegador (senha salva): o Chrome e o Edge pintam o fundo de azul e não deixam trocar
+   o background; a sombra por dentro cobre essa cor e o campo fica igual aos outros */
+.pl-form input:-webkit-autofill,
+.pl-form input:-webkit-autofill:hover,
+.pl-form input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  box-shadow: inset 0 0 0 1000px var(--bg);
+  transition: background-color 9999s ease-out 0s;
+}
+.pl-form input[aria-invalid='true']:-webkit-autofill:focus {
+  box-shadow: 0 0 0 1px var(--danger), inset 0 0 0 1000px var(--bg);
+}
+/* o Firefox escurece o campo preenchido com um filtro */
+.pl-form input:autofill {
+  filter: none;
+}
 
 /* título e dica dos cartões do login (senha nova, foto, bases) */
 .pl-form h2 {
