@@ -375,6 +375,8 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
                       linhas={cmp ? cmp[b.id] : resultado[b.id].map(semComparar)}
                       comparando={!!cmp}
                       bloco={b.id}
+                      // com um ajuste aberto a Adição de estrutura ocupa a linha inteira (o ajuste não cabe em meia tela)
+                      className={b.id === 'adicaoEstrutura' && aberta ? '2xl:col-span-2' : ''}
                       estrat={b.id === 'adicaoEstrutura' ? estrat(resultado.adicaoEstrutura) : undefined}
                     />
                   ))}

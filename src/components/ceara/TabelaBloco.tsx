@@ -34,11 +34,11 @@ const SITUACAO: Record<LinhaComparada['situacao'], { texto: string; tom: 'ok' | 
   'so-orcamento': { texto: 'só no orçamento', tom: 'perigo' },
 }
 
-export function TabelaBloco({ titulo, linhas, comparando, bloco, estrat }: { titulo: string; linhas: LinhaTela[]; comparando: boolean; bloco: Bloco; estrat?: Estratificar }) {
+export function TabelaBloco({ titulo, linhas, comparando, bloco, estrat, className = '' }: { titulo: string; linhas: LinhaTela[]; comparando: boolean; bloco: Bloco; estrat?: Estratificar; className?: string }) {
   const id = useId()
   const colunas = 3 + (comparando ? 2 : 0)
   return (
-    <Painel className="overflow-clip">
+    <Painel className={`overflow-clip ${className}`}>
       <h2 className="px-4 md:px-5 py-4 text-xl font-semibold tracking-[-0.02em] border-b border-line" id={'bloco-' + bloco}>
         {titulo} <span className="num text-muted font-medium">({linhas.length})</span>
       </h2>

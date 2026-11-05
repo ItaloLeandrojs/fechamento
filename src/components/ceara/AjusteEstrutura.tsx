@@ -8,6 +8,8 @@ import { adicionarNovo, arred, chaveKit, kitDe, limpar, linhasDoKit, paraId, typ
 
 const UNIDADES: Unidade[] = ['UN', 'M', 'KG']
 const MAX_RESULTADOS = 20
+// grade de cada linha do kit (e do cabeçalho): 2 colunas no painel estreito, 4 no largo (@2xl)
+const GRADE = 'grid grid-cols-[2.25rem_minmax(0,1fr)] @2xl:grid-cols-[4rem_minmax(0,1fr)_5rem_13rem] gap-x-2 @2xl:gap-x-4 px-3'
 
 const nome = (l: { descricao: string; codigo: string }) => l.descricao || l.codigo
 const qtdUn = (n: number, un: string) => `${formatarQtd(n)} ${ehQuilo(un) ? 'kg' : un}`.trim()
@@ -110,7 +112,7 @@ export function AjusteEstrutura({ linha, base, ajuste, onChange }: {
   const postes = linha.origem.slice(0, 12).join(', ') + (linha.origem.length > 12 ? ` e mais ${linha.origem.length - 12}` : '')
 
   return (
-    <section aria-labelledby={`${id}-t`} className="grid gap-4 px-4 md:px-5 py-4">
+    <section aria-labelledby={`${id}-t`} className="grid gap-4 px-4 md:px-5 py-4 max-w-[1180px]">
       <div className="flex flex-wrap items-start gap-x-5 gap-y-2">
         <div className="min-w-0">
           <h3 id={`${id}-t`} ref={titulo} tabIndex={-1} className="outline-none num text-lg font-semibold tracking-[-0.02em] break-words">
@@ -136,53 +138,57 @@ export function AjusteEstrutura({ linha, base, ajuste, onChange }: {
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-ctl border border-line" tabIndex={0} role="region" aria-label={`Kit de ${linha.codigo}`}>
-        <table className="w-full min-w-[500px] text-sm">
-          <thead className="border-b border-line-strong text-left text-xs text-muted">
-            <tr>
-              <th className="px-3 py-2 font-medium w-20">Entra</th>
-              <th className="px-2 py-2 font-medium">Material</th>
-              <th className="px-2 py-2 font-medium text-right">No kit</th>
-              <th className="px-3 py-2 font-medium text-right">Usado</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {linhas.map((l) => {
-              const fora = l.situacao === 'nao-usado'
-              return (
-                <tr key={l.codigo} id={idLinha(l.codigo)}>
-                  <td className="px-3 py-2.5 align-top">
-                    {l.situacao === 'novo' ? (
-                      <Botao variante="perigo" className="-ml-2 px-2 text-sm" aria-label={`Tirar ${nome(l)}`} onClick={() => tirar(l.codigo)}>
-                        Tirar
-                      </Botao>
-                    ) : (
-                      <input
-                        type="checkbox"
-                        checked={!fora}
-                        aria-label={`Entra: ${nome(l)}`}
-                        onChange={(e) => mudarQtd(l, e.target.checked ? l.noKit : 0)}
-                        className="accent-[var(--accent)] size-5 mt-1"
-                      />
-                    )}
-                  </td>
-                  <td className="px-2 py-2.5 align-top">
-                    <span className={`block break-words ${fora ? 'line-through text-muted' : ''}`}>{nome(l)}</span>
-                    <span className="num block text-xs text-muted">
-                      {l.codigo}
-                      {l.unidade && ` · ${l.unidade}`}
-                    </span>
-                    <Situacao l={l} />
-                  </td>
-                  <td className="px-2 py-2.5 align-top text-right num">{l.situacao === 'novo' ? '-' : formatarQtd(l.noKit)}</td>
-                  <td className="px-3 py-1.5 align-top text-right">
-                    <Quantidade valor={l.usado} onChange={(n, digitado) => mudarQtd(l, n, digitado)}rotulo={`Quantidade usada de ${nome(l)} por estrutura`} emQuilo={ehQuilo(l.unidade)} passo={1} />
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      {/* Lista do kit sem rolagem de lado. Painel estreito: cada material é um bloco (caixa "Entra" e
+          descrição em cima; no kit, quantidade e situação embaixo). Painel largo (@2xl): colunas alinhadas,
+          com a linha de baixo virando "contents" para as peças irem cada uma para a sua coluna. */}
+      <div className="@container rounded-ctl border border-line">
+        <div aria-hidden="true" className={`${GRADE} border-b border-line-strong py-2 text-xs font-medium text-muted`}>
+          <span>Entra</span>
+          <span>Material</span>
+          <span className="hidden @2xl:block text-right">No kit</span>
+          <span className="hidden @2xl:block text-right">Usado</span>
+        </div>
+        <ul className="divide-y divide-line text-sm" aria-label={`Kit de ${linha.codigo}`}>
+          {linhas.map((l) => {
+            const fora = l.situacao === 'nao-usado'
+            const novo = l.situacao === 'novo'
+            return (
+              <li key={l.codigo} id={idLinha(l.codigo)} className={`${GRADE} gap-y-2 @2xl:gap-y-1 py-3 @2xl:py-2 items-start`}>
+                {!novo && (
+                  <input
+                    type="checkbox"
+                    checked={!fora}
+                    aria-label={`Entra: ${nome(l)}`}
+                    onChange={(e) => mudarQtd(l, e.target.checked ? l.noKit : 0)}
+                    className="col-start-1 row-start-1 @2xl:row-span-2 accent-[var(--accent)] size-5 mt-0.5 @2xl:mt-3"
+                  />
+                )}
+                <div className="col-start-2 row-start-1 min-w-0 @2xl:pt-1.5">
+                  <span className={`block break-words ${fora ? 'line-through text-muted' : ''}`}>{nome(l)}</span>
+                  <span className="num block text-xs text-muted">
+                    {l.codigo}
+                    {l.unidade && ` · ${l.unidade}`}
+                  </span>
+                </div>
+                <div className="col-start-2 row-start-2 min-w-0 flex flex-wrap items-center gap-x-4 gap-y-2 @2xl:contents">
+                  <span className={`num whitespace-nowrap @2xl:col-start-3 @2xl:row-start-1 @2xl:row-span-2 @2xl:text-right @2xl:pt-3 ${novo ? 'hidden @2xl:block' : ''}`}>
+                    <span className="text-muted @2xl:sr-only">No kit </span>
+                    <span className="font-semibold @2xl:font-normal">{novo ? '-' : formatarQtd(l.noKit)}</span>
+                  </span>
+                  <span className="shrink-0 @2xl:col-start-4 @2xl:row-start-1 @2xl:row-span-2 @2xl:justify-self-end">
+                    <Quantidade valor={l.usado} onChange={(n, digitado) => mudarQtd(l, n, digitado)} rotulo={`Quantidade usada de ${nome(l)} por estrutura`} emQuilo={ehQuilo(l.unidade)} passo={1} />
+                  </span>
+                  {novo && (
+                    <Botao variante="perigo" className="px-3 text-sm @2xl:col-start-1 @2xl:row-start-1 @2xl:row-span-2 @2xl:justify-self-start @2xl:-ml-2 @2xl:px-2" aria-label={`Tirar ${nome(l)}`} onClick={() => tirar(l.codigo)}>
+                      Tirar
+                    </Botao>
+                  )}
+                  <Situacao l={l} className="@2xl:col-start-2 @2xl:row-start-2" />
+                </div>
+              </li>
+            )
+          })}
+        </ul>
       </div>
 
       {(saem.length > 0 || vao.length > 0) && (
@@ -312,9 +318,9 @@ export function AjusteEstrutura({ linha, base, ajuste, onChange }: {
 }
 
 /** O que acontece na Enel com o material, sempre em palavra ao lado da cor. */
-function Situacao({ l }: { l: LinhaEstrat }) {
+function Situacao({ l, className = '' }: { l: LinhaEstrat; className?: string }) {
   if (l.situacao === 'igual') return null
-  const linha = 'mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs'
+  const linha = `min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs ${className}`
   if (l.situacao === 'nao-usado')
     return (
       <span className={linha}>
