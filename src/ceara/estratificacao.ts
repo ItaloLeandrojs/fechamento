@@ -1,7 +1,7 @@
 // Estratificação do material dentro da estrutura: o kit da Enel diz o que cada estrutura leva;
 // a obra real pode usar menos, mais ou outro material. Aqui ficam só as regras (sem tela):
 // o ajuste guarda apenas o que DIFERE do kit, e daí saem retirada (devolução) e adição.
-import type { BaseEnel, Linha } from './contagem'
+import type { BaseEnel, Linha, ResultadoCeara } from './contagem'
 import { otDoNome } from './excel'
 
 export type Unidade = 'UN' | 'M' | 'KG'
@@ -144,4 +144,59 @@ export function mesmaObra(nomeAnterior: string, nomeNovo: string): boolean {
 export function ajustesValidos(ajustes: Ajustes, adicaoEstrutura: Linha[]): Ajustes {
   const chaves = new Set(adicaoEstrutura.map((l) => chaveKit(l.codigo)))
   return Object.fromEntries(Object.entries(ajustes).filter(([chave]) => chaves.has(chave)))
+}
+
+export interface Somado {
+  codigo: string
+  descricao: string
+  unidade: string
+  doCad: number
+  daEstratificacao: number // Σ aMais × qtd da estrutura na obra
+  total: number
+  estruturas: string // "KITX1_S (1), N3.1KIT_S (21)", na ordem da Adição de estrutura
+  foraDoCatalogo: boolean
+}
+
+/** Estruturas da obra que têm ajuste, na ordem da Adição de estrutura. */
+export function estruturasAjustadas(adicaoEstrutura: Linha[], ajustes: Ajustes): Linha[] {
+  return adicaoEstrutura.filter((l) => ajustes[chaveKit(l.codigo)])
+}
+
+/** Soma o material a mais (e o novo) das estruturas ajustadas na Adição de material do CAD. */
+export function somarNaAdicao(r: ResultadoCeara, base: BaseEnel, ajustes: Ajustes): { adicaoMaterial: Linha[]; somados: Somado[] } {
+  const extra = new Map<string, Somado & { quais: string[] }>()
+  for (const est of estruturasAjustadas(r.adicaoEstrutura, ajustes)) {
+    for (const l of linhasDoKit(base, chaveKit(est.codigo), ajustes[chaveKit(est.codigo)])) {
+      if (l.aMais <= 0) continue
+      const s = extra.get(l.codigo) ?? { codigo: l.codigo, descricao: l.descricao, unidade: l.unidade, doCad: 0, daEstratificacao: 0, total: 0, estruturas: '', foraDoCatalogo: l.foraDoCatalogo, quais: [] }
+      s.daEstratificacao = arred(s.daEstratificacao + l.aMais * est.quantidade)
+      s.quais.push(`${est.codigo} (${est.quantidade})`)
+      extra.set(l.codigo, s)
+    }
+  }
+  const doCad = new Map(r.adicaoMaterial.filter((l) => !l.semCodigo).map((l) => [l.codigo, l.quantidade]))
+  const adicaoMaterial: Linha[] = r.adicaoMaterial.map((l) => {
+    const s = l.semCodigo ? undefined : extra.get(l.codigo)
+    return s ? { ...l, quantidade: arred(l.quantidade + s.daEstratificacao), origem: [...l.origem, 'estratificação'] } : l
+  })
+  for (const s of extra.values()) {
+    if (doCad.has(s.codigo)) continue
+    adicaoMaterial.push({
+      codigo: s.codigo, descricao: s.descricao, quantidade: s.daEstratificacao, origem: ['estratificação'],
+      ...(s.foraDoCatalogo ? { foraDaBase: true } : {}),
+    })
+  }
+  // um Somado por material, na ordem da Adição de material final
+  const somados: Somado[] = []
+  for (const l of adicaoMaterial) {
+    const s = l.semCodigo ? undefined : extra.get(l.codigo)
+    if (!s) continue
+    const antes = doCad.get(s.codigo) ?? 0
+    somados.push({
+      codigo: s.codigo, descricao: s.descricao, unidade: s.unidade, doCad: antes,
+      daEstratificacao: s.daEstratificacao, total: arred(antes + s.daEstratificacao),
+      estruturas: s.quais.join(', '), foraDoCatalogo: s.foraDoCatalogo,
+    })
+  }
+  return { adicaoMaterial, somados }
 }

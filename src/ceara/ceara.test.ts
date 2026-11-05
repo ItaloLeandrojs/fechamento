@@ -6,7 +6,9 @@ import { Workbook } from '../core/workbook'
 import { SheetEditor } from '../core/sheet'
 import { linhasDoTexto } from './mtext'
 import { lerDxf, type Dxf, type TextoDxf } from './dxf'
-import { contarObra, type Catalogo, type Linha } from './contagem'
+import JSZip from 'jszip'
+import { contarObra, type BaseEnel, type Catalogo, type Linha } from './contagem'
+import type { Ajustes } from './estratificacao'
 import { comparar, lerOrcamento } from './orcamento'
 import { gerarExcelCeara, nomeDoExcel, otDoNome, serialExcel } from './excel'
 
@@ -214,6 +216,68 @@ describe('Excel da contagem', () => {
       const comCodigo = r[b].filter((l) => !l.semCodigo)
       expect([...lido[b].entries()].map(([c, v]) => [c, v.quantidade])).toEqual(comCodigo.map((l) => [l.codigo, l.quantidade]))
     }
+  })
+
+  describe('com estratificação', () => {
+    // base inventada: o kit KITX1 leva cabo, conector e elo
+    const base: BaseEnel = {
+      ...CATALOGO,
+      materiais: { ...CATALOGO.materiais, '900001': ['CABO TESTE', 'M'], '900002': ['CONECTOR TESTE', 'UN'], '900003': ['ELO TESTE', 'UN'] },
+      estruturas: { ...CATALOGO.estruturas, KITX1: 'ESTRUTURA TESTE' },
+      kits: { KITX1: [['900001', 2.45], ['900002', 4], ['900003', 1]] },
+    }
+    const cab = { ot: '1234567', area: 'LESTE' as const, data: new Date(2026, 10, 4) }
+    const obra = () => {
+      const r = contarObra(dxfDe(['(1)400/9 S5C\\P2']), CATALOGO)
+      const adicaoEstrutura = [{ codigo: 'KITX1_S', descricao: 'ESTRUTURA TESTE', quantidade: 2, origem: ['P1'] }]
+      const adicaoMaterial = [{ codigo: '900002', descricao: 'CONECTOR TESTE', quantidade: 4, origem: ['P1'] }]
+      return { ...r, adicaoEstrutura, adicaoMaterial }
+    }
+    const ajustes: Ajustes = { KITX1: { qtd: { '900001': 1.23, '900002': 6 }, novos: [{ codigo: '999999', qtd: 1, foraDoCatalogo: { descricao: 'PEÇA TESTE', unidade: 'UN' } }] } }
+
+    it('sem ajuste, o mesmo Excel de hoje', async () => {
+      const r = obra()
+      const a = await JSZip.loadAsync(await gerarExcelCeara(r, cab))
+      const b = await JSZip.loadAsync(await gerarExcelCeara(r, cab, { base, ajustes: {} }))
+      // ajuste de estrutura que não está na obra também não cria a aba
+      const c = await JSZip.loadAsync(await gerarExcelCeara(r, cab, { base, ajustes: { NAOTEM: { qtd: {}, novos: [] } } }))
+      for (const outro of [b, c]) {
+        for (const f of ['xl/workbook.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml', 'xl/worksheets/sheet3.xml', 'xl/worksheets/sheet4.xml']) {
+          expect(await outro.file(f)!.async('string')).toBe(await a.file(f)!.async('string'))
+        }
+        expect(outro.file('xl/worksheets/sheet5.xml')).toBeNull()
+      }
+    })
+
+    it('com ajuste, a 5ª aba', async () => {
+      const wb = await Workbook.open(await gerarExcelCeara(obra(), cab, { base, ajustes }))
+      expect(wb.sheets.map((s) => s.name)).toEqual(['ADIÇÃO ESTRUTURA', 'DEVOLUÇÃO ESTRUTURA', 'ADIÇÃO MATÉRIAL', 'DEVOLUÇÃO MATÉRIAL', 'ESTRATIFICAÇÃO'])
+      const ed = new SheetEditor(await wb.sheetDoc('ESTRATIFICAÇÃO'), wb.sharedStrings)
+      expect(ed.value('A1')).toBe('ESTRUTURA')
+      expect(ed.value('I1')).toBe('SITUAÇÃO')
+      const linhaDe = (codigo: number) => [2, 3, 4, 5, 6].find((n) => ed.value('C' + n) === codigo)!
+      const cabo = linhaDe(900001)
+      expect([ed.value('A' + cabo), ed.value('B' + cabo), ed.value('F' + cabo), ed.value('G' + cabo), ed.value('H' + cabo), ed.value('I' + cabo)]).toEqual(['KITX1_S', 2, 2.45, 1.22, 1.23, 'diminuiu'])
+      expect(ed.value('I' + linhaDe(900002))).toBe('a mais')
+      expect(ed.value('I' + linhaDe(900003))).toBe('igual')
+      expect(ed.value('I' + linhaDe(999999))).toBe('novo')
+      let titulo = 0
+      for (let n = 1; n <= 20 && !titulo; n++) if (ed.value('A' + n) === 'SOMADO EM ADIÇÃO DE MATERIAL') titulo = n
+      expect(titulo).toBeGreaterThan(0)
+      expect(ed.value('A' + (titulo + 1))).toBe('CÓDIGO')
+      const somado = titulo + 2
+      expect([ed.value('A' + somado), ed.value('D' + somado), ed.value('E' + somado), ed.value('F' + somado), ed.value('G' + somado)]).toEqual([900002, 4, 4, 8, 'KITX1_S (2)'])
+    })
+
+    it('Adição de material somada e lida de volta', async () => {
+      const r = obra()
+      const lido = await lerOrcamento(await gerarExcelCeara(r, cab, { base, ajustes }))
+      expect(lido.adicaoMaterial.get('900002')!.quantidade).toBe(8)
+      expect(lido.adicaoMaterial.get('999999')!.quantidade).toBe(2)
+      for (const b of ['adicaoEstrutura', 'devolucaoEstrutura', 'devolucaoMaterial'] as const) {
+        expect([...lido[b].entries()].map(([c, v]) => [c, v.quantidade])).toEqual(r[b].filter((l) => !l.semCodigo).map((l) => [l.codigo, l.quantidade]))
+      }
+    })
   })
 })
 

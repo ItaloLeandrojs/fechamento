@@ -4,7 +4,8 @@
 // (sem modelo guardado), para não levar nome de colega nem vínculo com planilha externa.
 import JSZip from 'jszip'
 import { indexToCol } from '../core/sheet'
-import type { Linha, ResultadoCeara } from './contagem'
+import type { BaseEnel, Linha, ResultadoCeara } from './contagem'
+import { chaveKit, estruturasAjustadas, linhasDoKit, somarNaAdicao, type Ajustes, type Situacao, type Somado } from './estratificacao'
 import { BLOCOS, type Bloco } from './orcamento'
 
 export const AREAS = ['SUL', 'LESTE', 'CENTRO SUL'] as const
@@ -101,6 +102,63 @@ function aba(bloco: Bloco, linhas: Linha[], cab: Cabecalho): string {
   )
 }
 
+const PALAVRA: Record<Situacao, string> = { igual: 'igual', 'nao-usado': 'não usado', diminuiu: 'diminuiu', 'a-mais': 'a mais', novo: 'novo' }
+const ABA_ESTRAT = 'ESTRATIFICAÇÃO'
+
+/** Aba ESTRATIFICAÇÃO: o que cada estrutura ajustada leva de fato e o que foi somado na Adição de material. */
+function abaEstratificacao(r: ResultadoCeara, base: BaseEnel, ajustes: Ajustes, somados: Somado[]): string {
+  const rows: string[] = []
+  let n = 0
+  const linha = (cels: Celula[], extra = ' ht="18" customHeight="1"') => {
+    n++
+    rows.push(`<row r="${n}"${extra}>${cels.map((c, i) => celula(indexToCol(i + 1) + n, c)).join('')}</row>`)
+  }
+  const cab = (t: string[]): Celula[] => t.map((v) => ({ v, s: S_CABECALHO }))
+  linha(cab(['ESTRUTURA', 'QTD DE ESTRUTURAS NA OBRA', 'CÓDIGO', 'DESCRIÇÃO', 'UNIDADE', 'QTD NO KIT', 'QTD RETIRADA', 'FICA NA ESTRUTURA', 'SITUAÇÃO']), ' ht="32" customHeight="1"')
+
+  let i = 0
+  for (const est of estruturasAjustadas(r.adicaoEstrutura, ajustes)) {
+    for (const l of linhasDoKit(base, chaveKit(est.codigo), ajustes[chaveKit(est.codigo)])) {
+      const versao = l.foraDoCatalogo ? S_VERMELHO : i % 2 ? S_LISTRA : 0
+      const c = S_CENTRO + versao
+      linha([
+        { v: est.codigo, s: c }, { v: est.quantidade, s: c }, { v: numeroOuTexto(l.codigo), s: c },
+        { v: l.descricao, s: S_ESQUERDA + versao }, { v: l.unidade, s: c },
+        { v: l.noKit, s: c }, { v: l.retirada, s: c }, { v: l.fica, s: c }, { v: PALAVRA[l.situacao], s: c },
+      ])
+      i++
+    }
+  }
+
+  // segundo bloco: o que entrou na Adição de material
+  linha([])
+  linha([{ v: 'SOMADO EM ADIÇÃO DE MATERIAL', s: S_CABECALHO }], ' ht="24" customHeight="1"')
+  linha(cab(['CÓDIGO', 'DESCRIÇÃO', 'UNIDADE', 'DO CAD', 'DA ESTRATIFICAÇÃO', 'TOTAL NA ADIÇÃO DE MATERIAL', 'DE QUAIS ESTRUTURAS']), ' ht="32" customHeight="1"')
+  somados.forEach((s, j) => {
+    const versao = s.foraDoCatalogo ? S_VERMELHO : j % 2 ? S_LISTRA : 0
+    const c = S_CENTRO + versao
+    linha([
+      { v: numeroOuTexto(s.codigo), s: c }, { v: s.descricao, s: S_ESQUERDA + versao }, { v: s.unidade, s: c },
+      { v: s.doCad, s: c }, { v: s.daEstratificacao, s: c }, { v: s.total, s: c }, { v: s.estruturas, s: S_ESQUERDA + versao },
+    ])
+  })
+
+  const larguras = [30, 34, 14, 52, 16, 16, 18, 20, 16]
+  return (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' +
+    `<dimension ref="A1:I${n}"/>` +
+    '<sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="15"/>' +
+    `<cols>${larguras.map((w, k) => `<col min="${k + 1}" max="${k + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` +
+    `<sheetData>${rows.join('')}</sheetData>` +
+    '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>' +
+    '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>' +
+    '</worksheet>'
+  )
+}
+
 // visual "grafite sóbrio" (Italo, 04/11): cabeçalho grafite com letra branca, linhas listradas
 // bem claras, bordas finas cinza; sem código ou fora da base com fundo rosado e letra vermelha escura
 const GRAFITE = 'FF2E3338'
@@ -147,10 +205,12 @@ const ESTILOS =
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
   '</styleSheet>'
 
-/** Monta o .xlsx com as abas Adição/Devolução de estrutura e de material. */
-export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho): Promise<Uint8Array> {
+/** Monta o .xlsx com as abas Adição/Devolução de estrutura e de material; com ajuste de estratificação, ganha a 5ª aba. */
+export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho, estrat?: { base: BaseEnel; ajustes: Ajustes }): Promise<Uint8Array> {
   const zip = new JSZip()
-  const n = BLOCOS.length
+  const comEstrat = !!estrat && estruturasAjustadas(r.adicaoEstrutura, estrat.ajustes).length > 0
+  const soma = comEstrat ? somarNaAdicao(r, estrat!.base, estrat!.ajustes) : undefined
+  const n = BLOCOS.length + (comEstrat ? 1 : 0)
   const folhas = Array.from({ length: n }, (_, i) => i + 1)
   zip.file(
     '[Content_Types].xml',
@@ -175,8 +235,8 @@ export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho): Promis
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<bookViews><workbookView/></bookViews>' +
-      `<sheets>${BLOCOS.map((b, i) => `<sheet name="${esc(b.aba)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>` +
-      `<definedNames>${BLOCOS.map((b, i) => `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${esc(b.aba)}'!$A$1:$${indexToCol(b.id.endsWith('Material') ? 7 : 6)}$${1 + Math.max(r[b.id].length, 1)}</definedName>`).join('')}</definedNames>` +
+      `<sheets>${[...BLOCOS.map((b) => b.aba), ...(comEstrat ? [ABA_ESTRAT] : [])].map((nome, i) => `<sheet name="${esc(nome)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>` +
+      `<definedNames>${BLOCOS.map((b, i) => `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${esc(b.aba)}'!$A$1:$${indexToCol(b.id.endsWith('Material') ? 7 : 6)}$${1 + Math.max((b.id === 'adicaoMaterial' && soma ? soma.adicaoMaterial : r[b.id]).length, 1)}</definedName>`).join('')}</definedNames>` +
       '<calcPr calcId="191029" fullCalcOnLoad="1"/>' +
       '</workbook>',
   )
@@ -189,7 +249,8 @@ export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho): Promis
       '</Relationships>',
   )
   zip.file('xl/styles.xml', ESTILOS)
-  BLOCOS.forEach((b, i) => zip.file(`xl/worksheets/sheet${i + 1}.xml`, aba(b.id, r[b.id], cab)))
+  BLOCOS.forEach((b, i) => zip.file(`xl/worksheets/sheet${i + 1}.xml`, aba(b.id, b.id === 'adicaoMaterial' && soma ? soma.adicaoMaterial : r[b.id], cab)))
+  if (comEstrat && soma) zip.file(`xl/worksheets/sheet${n}.xml`, abaEstratificacao(r, estrat!.base, estrat!.ajustes, soma.somados))
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
 

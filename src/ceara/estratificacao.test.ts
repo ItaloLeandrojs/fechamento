@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { BaseEnel } from './contagem'
+import type { BaseEnel, Linha, ResultadoCeara } from './contagem'
 import {
-  adicionarNovo, ajustesValidos, aplicarSugestao, chaveKit, kitDe, limpar, linhasDoKit, mesmaObra, type Ajuste,
+  adicionarNovo, ajustesValidos, aplicarSugestao, chaveKit, kitDe, limpar, linhasDoKit, mesmaObra, somarNaAdicao, type Ajuste,
 } from './estratificacao'
 
 // base inventada, só para os testes
@@ -102,5 +102,44 @@ describe('estratificação do material', () => {
     const a: Ajuste = { qtd: { '900001': 1 }, novos: [] }
     const r = ajustesValidos({ KITX1: a, SUMIU: a }, [{ codigo: 'KITX1_S', descricao: '', quantidade: 1, origem: [] }])
     expect(Object.keys(r)).toEqual(['KITX1'])
+  })
+})
+
+describe('material a mais somado na Adição de material', () => {
+  const lin = (codigo: string, quantidade: number, descricao = ''): Linha => ({ codigo, descricao, quantidade, origem: ['P1'] })
+  const r = {
+    adicaoEstrutura: [lin('KITX1_S', 2)],
+    adicaoMaterial: [lin('900002', 4, 'CONECTOR TESTE')],
+  } as unknown as ResultadoCeara
+
+  it('4 do CAD + a mais vira uma linha só', () => {
+    const { adicaoMaterial, somados } = somarNaAdicao(r, BASE, { KITX1: { qtd: { '900002': 6 }, novos: [] } })
+    expect(adicaoMaterial).toHaveLength(1)
+    expect(adicaoMaterial[0]).toMatchObject({ codigo: '900002', quantidade: 8 })
+    expect(adicaoMaterial[0].origem).toContain('estratificação')
+    expect(somados).toEqual([{
+      codigo: '900002', descricao: 'CONECTOR TESTE', unidade: 'UN', doCad: 4, daEstratificacao: 4, total: 8,
+      estruturas: 'KITX1_S (2)', foraDoCatalogo: false,
+    }])
+  })
+
+  it('código novo entra no fim', () => {
+    const { adicaoMaterial, somados } = somarNaAdicao(r, BASE, { KITX1: { qtd: {}, novos: [{ codigo: '900004', qtd: 1 }] } })
+    expect(adicaoMaterial.map((l) => l.codigo)).toEqual(['900002', '900004'])
+    expect(adicaoMaterial[1]).toMatchObject({ quantidade: 2, descricao: 'ELO TESTE B' })
+    expect(somados).toMatchObject([{ codigo: '900004', doCad: 0, daEstratificacao: 2, total: 2 }])
+  })
+
+  it('fora do catálogo sai vermelho', () => {
+    const novo = { codigo: '999999', qtd: 1, foraDoCatalogo: { descricao: 'PEÇA TESTE', unidade: 'UN' as const } }
+    const { adicaoMaterial, somados } = somarNaAdicao(r, BASE, { KITX1: { qtd: {}, novos: [novo] } })
+    expect(adicaoMaterial[1]).toMatchObject({ codigo: '999999', foraDaBase: true, quantidade: 2 })
+    expect(somados[0]).toMatchObject({ codigo: '999999', foraDoCatalogo: true })
+  })
+
+  it('diminuir e tirar não vão para a Adição de material', () => {
+    const { adicaoMaterial, somados } = somarNaAdicao(r, BASE, { KITX1: { qtd: { '900001': 1.23, '900003': 0 }, novos: [] } })
+    expect(adicaoMaterial).toEqual(r.adicaoMaterial)
+    expect(somados).toEqual([])
   })
 })
