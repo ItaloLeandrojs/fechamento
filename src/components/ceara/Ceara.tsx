@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle, ClipboardText, CompassTool, DownloadSimple, Envelope, FileXls, FileZip, Info, Trash, UploadSimple, WarningCircle } from '@phosphor-icons/react'
 import { Marca } from '../Logo'
 import { MenuLateral } from '../Etapas'
@@ -7,8 +7,11 @@ import type { ItemMenu } from '../../etapas'
 import { formatarQtd } from '../../lib/busca'
 import { lerDxf } from '../../ceara/dxf'
 import { contarObra, type BaseEnel, type Linha, type ResultadoCeara } from '../../ceara/contagem'
-import { BLOCOS, comparar, lerOrcamento, type Bloco, type LinhaComparada, type Orcamento } from '../../ceara/orcamento'
+import { BLOCOS, comparar, lerOrcamento, type Orcamento } from '../../ceara/orcamento'
 import { AREAS, gerarExcelCeara, nomeDoExcel, otDoNome, type Area } from '../../ceara/excel'
+import { ajustesValidos, aplicarSugestao, chaveKit, estruturasAjustadas, mesmaObra, somarNaAdicao, sugestoesAoBaixar, type Ajuste, type Ajustes } from '../../ceara/estratificacao'
+import { gravarSugestoes, lerSugestoes, type SugestaoGuardada } from '../../lib/banco'
+import { TabelaBloco, type Estratificar, type LinhaTela } from './TabelaBloco'
 
 type Ferramenta = 'cad' | 'sucata' | 'correcoes' | 'nomeacao' | 'aro'
 
@@ -63,13 +66,30 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
   const [ot, setOt] = useState('')
   const [area, setArea] = useState<Area>('SUL')
   const [baixado, setBaixado] = useState('')
-  const [aberta, setAberta] = useState<Ferramenta>('cad')
+  const [ferramenta, setFerramenta] = useState<Ferramenta>('cad')
+  // estratificação: ajuste do material por estrutura (chave sem _S) e a estrutura aberta
+  const [ajustes, setAjustes] = useState<Ajustes>({})
+  const [aberta, setAberta] = useState<string | null>(null)
+  // estruturas mexidas nesta obra: decide o que apagar da sugestão ao baixar
+  const [tocadas, setTocadas] = useState<Set<string>>(() => new Set())
+  const [sugestoes, setSugestoes] = useState<Record<string, SugestaoGuardada>>({})
+  const [recusadas, setRecusadas] = useState<Set<string>>(() => new Set())
+  const [avisoSugestao, setAvisoSugestao] = useState('')
   const inDxf = useRef<HTMLInputElement>(null)
   const inOrc = useRef<HTMLInputElement>(null)
   const idArea = useId()
 
+  // sugestões do último ajuste, guardadas só neste navegador
+  useEffect(() => {
+    let vivo = true
+    lerSugestoes().then((s) => vivo && setSugestoes(s))
+    return () => {
+      vivo = false
+    }
+  }, [])
+
   const ir = (f: Ferramenta) => {
-    setAberta(f)
+    setFerramenta(f)
     window.scrollTo(0, 0)
   }
 
@@ -84,6 +104,17 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
       await new Promise((ok) => setTimeout(ok, 30))
       const r = contarObra(lerDxf(new Uint8Array(await f.arrayBuffer())), base)
       setResultado(r)
+      setAvisoSugestao('')
+      // mesma obra: fica o ajuste das estruturas que continuam; outra obra: começa do zero
+      if (mesmaObra(nomeDxf, f.name)) {
+        setAjustes((a) => ajustesValidos(a, r.adicaoEstrutura))
+        setAberta((ch) => (ch && r.adicaoEstrutura.some((l) => chaveKit(l.codigo) === ch) ? ch : null))
+      } else {
+        setAjustes({})
+        setTocadas(new Set())
+        setRecusadas(new Set())
+        setAberta(null)
+      }
       setNomeDxf(f.name)
       setOt(otDoNome(f.name))
       if (!r.etiquetas.length) setErro('Não achei nenhuma etiqueta de poste nesse desenho. Confira se é o asbuilt da obra.')
@@ -108,19 +139,66 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
   const baixar = async () => {
     if (!resultado) return
     const nome = nomeDoExcel(ot)
-    const bytes = await gerarExcelCeara(resultado, { ot: ot.trim(), area, data: new Date() })
+    const data = new Date()
+    const bytes = await gerarExcelCeara(resultado, { ot: ot.trim(), area, data }, { base, ajustes })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
     a.download = nome
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+    // o ajuste baixado vira a sugestão da próxima obra (só neste navegador)
+    const { gravar, apagar } = sugestoesAoBaixar(ajustes, tocadas, data)
+    if (gravar.length || apagar.length) {
+      await gravarSugestoes(gravar, apagar)
+      setSugestoes((s) => {
+        const n = { ...s }
+        for (const c of apagar) delete n[c]
+        for (const g of gravar) n[g.estrutura] = g
+        return n
+      })
+    }
     setBaixado(nome)
   }
+
+  const tocar = (chave: string) => setTocadas((t) => new Set(t).add(chave))
+  const mudarAjuste = (chave: string, a: Ajuste | undefined) => {
+    setAjustes((todos) => {
+      const n = { ...todos }
+      if (a) n[chave] = a
+      else delete n[chave]
+      return n
+    })
+    tocar(chave)
+  }
+  const usarSugestao = (chave: string) => {
+    const s = sugestoes[chave]
+    if (!s) return
+    const { ajuste, ignorados } = aplicarSugestao(s.ajuste, base, chave)
+    mudarAjuste(chave, ajuste)
+    setAvisoSugestao(ignorados.length ? `Não existe mais na base: ${ignorados.join(', ')}. O resto do ajuste foi usado.` : '')
+  }
+  const estrat = (obra: Linha[]): Estratificar => ({
+    base,
+    obra,
+    ajustes,
+    aberta,
+    onAbrir: setAberta,
+    onMudar: mudarAjuste,
+    sugestoes,
+    tocadas,
+    recusadas,
+    onUsarSugestao: usarSugestao,
+    onRecusar: (chave) => setRecusadas((r) => new Set(r).add(chave)),
+    avisoSugestao,
+  })
 
   const cmp = resultado && orcamento ? comparar(resultado, orcamento) : null
   const total = cmp ? BLOCOS.flatMap((b) => cmp[b.id]) : []
   const iguais = total.filter((l) => l.situacao === 'igual').length
-  const vermelhas = resultado ? BLOCOS.flatMap((b) => resultado[b.id]).filter((l) => l.semCodigo || l.foraDaBase).length : 0
+  const comEstrat = !!resultado && estruturasAjustadas(resultado.adicaoEstrutura, ajustes).length > 0
+  // com ajuste, a Adição de material do Excel soma o a mais e os novos; o fora do catálogo sai em vermelho
+  const adicaoFinal = resultado && comEstrat ? somarNaAdicao(resultado, base, ajustes).adicaoMaterial : resultado?.adicaoMaterial ?? []
+  const vermelhas = resultado ? BLOCOS.flatMap((b) => (b.id === 'adicaoMaterial' ? adicaoFinal : resultado[b.id])).filter((l) => l.semCodigo || l.foraDaBase).length : 0
   const otValida = /^\d{7}$|^\d{11}$/.test(ot.trim())
 
   const ferramentas: ItemMenu<Ferramenta>[] = [
@@ -168,11 +246,11 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
       </header>
 
       <div className="max-w-[1680px] mx-auto md:grid md:grid-cols-[260px_minmax(0,1fr)] md:gap-10 px-4 sm:px-6 lg:px-10">
-        <MenuLateral itens={ferramentas} atual={aberta} onIr={ir} icones={ICONES} rotulo="Ferramentas do Ceará" />
+        <MenuLateral itens={ferramentas} atual={ferramenta} onIr={ir} icones={ICONES} rotulo="Ferramentas do Ceará" />
 
-        {aberta !== 'cad' ? (
-          <main className="py-6 md:py-8 min-w-0" key={aberta}>
-            <EmTeste {...EM_TESTE[aberta]} />
+        {ferramenta !== 'cad' ? (
+          <main className="py-6 md:py-8 min-w-0" key={ferramenta}>
+            <EmTeste {...EM_TESTE[ferramenta]} />
           </main>
         ) : (
           <main className="py-6 md:py-8 grid gap-6 content-start min-w-0 [&>*]:min-w-0">
@@ -219,7 +297,9 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
                 <Painel className="p-4 md:p-5">
                   <h2 className="text-xl font-semibold tracking-[-0.02em]">Excel da obra</h2>
                   <p className="mt-1 text-sm text-muted">
-                    4 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel. Data de hoje e empresa COSAMPA.
+                    {comEstrat
+                      ? '5 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel, e a ESTRATIFICAÇÃO. O material a mais e os códigos novos somam na Adição de material. Data de hoje e empresa COSAMPA.'
+                      : '4 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel. Data de hoje e empresa COSAMPA.'}
                   </p>
                   <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,220px)_auto] lg:grid-cols-[minmax(0,220px)_auto_minmax(0,1fr)] sm:items-start">
                     <Campo
@@ -255,7 +335,7 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
                   </div>
                   {vermelhas > 0 && (
                     <p className="mt-3 text-sm text-text">
-                      <span className="num font-semibold">{vermelhas}</span> {vermelhas === 1 ? 'linha sai' : 'linhas saem'} em vermelho no Excel (sem código ou fora da base da Enel): preencha ou corrija à mão.
+                      <span className="num font-semibold">{vermelhas}</span> {vermelhas === 1 ? 'linha sai' : 'linhas saem'} em vermelho no Excel (sem código, fora da base da Enel ou fora do catálogo): preencha ou corrija à mão.
                     </p>
                   )}
                   {baixado && (
@@ -284,7 +364,14 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
 
                 <div className="grid gap-6 2xl:grid-cols-2 min-w-0 [&>*]:min-w-0">
                   {BLOCOS.map((b) => (
-                    <TabelaBloco key={b.id} titulo={b.titulo} linhas={cmp ? cmp[b.id] : resultado[b.id].map(semComparar)} comparando={!!cmp} bloco={b.id} />
+                    <TabelaBloco
+                      key={b.id}
+                      titulo={b.titulo}
+                      linhas={cmp ? cmp[b.id] : resultado[b.id].map(semComparar)}
+                      comparando={!!cmp}
+                      bloco={b.id}
+                      estrat={b.id === 'adicaoEstrutura' ? estrat(resultado.adicaoEstrutura) : undefined}
+                    />
                   ))}
                 </div>
 
@@ -351,8 +438,6 @@ function metros(r: ResultadoCeara, sit: 1 | 3, cabo: RegExp): number {
   return r.vaos.filter((v) => v.situacao === sit && cabo.test(v.cabo)).reduce((s, v) => s + v.metros, 0)
 }
 
-type LinhaTela = LinhaComparada & Pick<Linha, 'semCodigo' | 'foraDaBase' | 'conta'>
-
 function semComparar(l: Linha): LinhaTela {
   return { codigo: l.codigo, descricao: l.descricao, desenho: l.quantidade, orcamento: null, situacao: 'so-desenho', origem: l.origem, palpite: !!l.palpite, semCodigo: l.semCodigo, foraDaBase: l.foraDaBase, conta: l.conta }
 }
@@ -397,62 +482,6 @@ function ListaPedacos({ titulo, texto, itens }: { titulo: string; texto: string;
           </li>
         ))}
       </ul>
-    </Painel>
-  )
-}
-
-const SITUACAO: Record<LinhaComparada['situacao'], { texto: string; tom: 'ok' | 'perigo' | 'neutro' | 'destaque' }> = {
-  igual: { texto: 'igual', tom: 'ok' },
-  diferente: { texto: 'diferente', tom: 'perigo' },
-  'so-desenho': { texto: 'só no desenho', tom: 'destaque' },
-  'so-orcamento': { texto: 'só no orçamento', tom: 'perigo' },
-}
-
-function TabelaBloco({ titulo, linhas, comparando, bloco }: { titulo: string; linhas: LinhaTela[]; comparando: boolean; bloco: Bloco }) {
-  return (
-    <Painel className="overflow-clip">
-      <h2 className="px-4 md:px-5 py-4 text-xl font-semibold tracking-[-0.02em] border-b border-line" id={'bloco-' + bloco}>
-        {titulo} <span className="num text-muted font-medium">({linhas.length})</span>
-      </h2>
-      {!linhas.length ? (
-        <p className="px-4 md:px-5 py-4 text-sm text-muted">Nada neste bloco.</p>
-      ) : (
-        <div className="overflow-x-auto" tabIndex={0} role="region" aria-labelledby={'bloco-' + bloco}>
-          <table className="w-full text-sm">
-            <thead className="border-b border-line-strong text-left text-xs text-muted">
-              <tr>
-                <th className="px-4 py-2 font-medium">Código</th>
-                <th className="px-2 py-2 font-medium text-right">Desenho</th>
-                {comparando && <th className="px-2 py-2 font-medium text-right">Orçamento</th>}
-                {comparando && <th className="px-2 py-2 font-medium">Situação</th>}
-                <th className="px-4 py-2 font-medium">De onde veio</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {linhas.map((l) => (
-                <tr key={l.codigo}>
-                  <td className="px-4 py-2 align-top">
-                    <span className={`num font-semibold whitespace-nowrap ${l.semCodigo || l.foraDaBase ? 'text-danger' : ''}`}>{l.codigo}</span>
-                    {l.descricao && <span className="block text-xs text-muted">{l.descricao}</span>}
-                    {l.conta && <span className="block text-xs text-muted num">{l.conta}</span>}
-                    {l.semCodigo && <span className="block text-xs font-medium text-danger">sem código: preencher no Excel</span>}
-                    {l.foraDaBase && <span className="block text-xs font-medium text-danger">não existe na base da Enel</span>}
-                    {l.palpite && <span className="block text-xs font-medium text-text">regra deduzida, a confirmar</span>}
-                  </td>
-                  <td className="px-2 py-2 align-top text-right num">{l.desenho === null ? '-' : formatarQtd(l.desenho)}</td>
-                  {comparando && <td className="px-2 py-2 align-top text-right num">{l.orcamento === null ? '-' : formatarQtd(l.orcamento)}</td>}
-                  {comparando && (
-                    <td className="px-2 py-2 align-top">
-                      <Selo tom={SITUACAO[l.situacao].tom}>{SITUACAO[l.situacao].texto}</Selo>
-                    </td>
-                  )}
-                  <td className="px-4 py-2 align-top text-xs text-muted">{l.origem.slice(0, 12).join(', ')}{l.origem.length > 12 ? ` e mais ${l.origem.length - 12}` : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </Painel>
   )
 }
