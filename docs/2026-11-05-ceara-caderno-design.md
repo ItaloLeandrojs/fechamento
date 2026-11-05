@@ -48,7 +48,7 @@ Rascunho aprovado (05/11): `AUTOMACAO KIT MATERIAL\rascunhos-plataforma\f-ceara-
 
 ## Fora do escopo agora
 - Puxar postes ou itens do DXF para dentro do caderno.
-- Regras automáticas de mão de obra por poste (cruzetas, armação por face, linha viva...). No poste, a mão de obra é escolhida à mão. Só a do **cabo** é automática.
+- Regras automáticas de mão de obra por poste (cruzetas, armação por face, linha viva...). No poste, a mão de obra é escolhida à mão. Só a do **cabo** e o **tensionar** (pelas estruturas e pela marcação do cabo no poste) são automáticos.
 - Compartilhar o caderno com a equipe pelo Supabase. Ele fica no navegador de quem fez.
 - EDP e Sergipe.
 
@@ -67,7 +67,7 @@ Rascunho aprovado (05/11): `AUTOMACAO KIT MATERIAL\rascunhos-plataforma\f-ceara-
   - Sem OT válida, o caderno não salva.
   - Um seletor abre os cadernos já guardados.
 - **À esquerda:** a lista P1, P2... com a marca "feito", "+ Poste" e, no fim, "Rede".
-- **No centro:** o poste aberto, com as três colunas, a busca no topo de cada coluna e os botões −/+1 em cada item, e o botão "Feito, próximo →".
+- **No centro:** o poste aberto, com as marcações "Cabo MT" e "Cabo BT", as três colunas, a busca no topo de cada coluna e os botões −/+1 em cada item, e o botão "Feito, próximo →".
 - **Embaixo:** a tabela "Soma de cada poste" (uma linha por poste e a Rede) e "Soma da obra" nas três colunas.
 - **À direita:** o ARO.
 - **No fim:** os botões "Lançar na Enel", "Comparar com a Leitura do CAD" e "Baixar Excel".
@@ -100,12 +100,20 @@ Rascunho aprovado (05/11): `AUTOMACAO KIT MATERIAL\rascunhos-plataforma\f-ceara-
   - usar a mesma regra de conversão da Leitura do CAD (`src/ceara/contagem.ts`, conversão de cabos com a porcentagem e o kg);
   - novo e substituído entram em adição de material;
   - retirado e substituído entram em devolução, com a mesma regra da Leitura do CAD para retirada.
-- Mão de obra do cabo, regras já explicadas pelo Italo (memória do projeto, fora do repo):
-  - lançamento por **metro de rede**, com uma voz para condutor nu e outra para pré-reunido;
-  - retirada **por condutor**;
-  - tensionar só quando o cabo é ancorado.
+- Mão de obra do cabo (Italo, 05/11 à tarde; os códigos ficam fora do repo, na tabela de regras da base):
+  - **Instalação por metro de rede:** todos os condutores do circuito contam como um (100 m de MT com 3 fases = 100). Uma voz para o pré-reunido de BT; para o condutor nu (BT e MT) a voz depende da bitola (uma para as bitolas pequenas e outra para as acima de 120 mm²).
+  - **Retirada por condutor:** metros × condutores (100 m de MT com 3 fases = 300). O pré-reunido de BT retirado conta como **1 condutor**. No MT a voz de retirada também depende da bitola.
+  - **MT sem as fases no nome do vão:** o site **pergunta as fases na linha**. Até a pessoa informar, a linha fica em vermelho com "falta o número de fases" e não soma material nem mão de obra.
+  - Linha (2) tensionado ou realocado na Rede não gera material nem mão de obra: o tensionar sai dos postes (abaixo).
   - O código exato de cada caso fica numa tabela de regras guardada **na base**, não no código do site, porque o repositório é público.
-  - Onde a regra não se aplica com certeza, o site sugere e a pessoa confirma.
+
+### Cabo em cada poste e o tensionar (Italo, 05/11 à tarde)
+- Cada poste tem **duas marcações de cabo, uma para MT e outra para BT**, no mesmo jeito do CAD: (1) novo, (2) existente tensionado, (3) retirado, ou **sem nada = existente** (o padrão).
+- O **tensionar** (voz cobrada por vão) entra **sozinho** na Mão de obra do poste, marcado "automático", e pode ser mudado à mão ("mudado à mão", "voltar ao automático"):
+  - **MT:** com o cabo de MT existente (sem nada ou (2)) e estrutura nova de MT do **tipo 3** (inclui 3.1 e 3.3) → 1 tensionar; do **tipo 4** → 2 (um para cada lado). Tipo 1 ou 2 não cobra.
+  - **BT:** com o cabo de BT existente e as duas estruturas de BT de ancoragem que o Italo citou no poste (com ou sem alças) → 2 (um para cada lado). Só a estrutura de passagem com o laço não cobra.
+  - Cabo (1) novo ou (3) retirado no poste: não cobra (o lançamento do cabo novo já inclui o tensionamento).
+  - Quais estruturas são tipo 3, tipo 4 e as de BT fica na tabela de regras da base (expressões sobre o nome da estrutura), não no site.
 
 ### ARO
 - **Poste:** soma dos materiais de poste em adição.

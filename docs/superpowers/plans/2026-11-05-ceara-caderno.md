@@ -36,6 +36,8 @@ Casos que a especificação implica e que mais podem pegar quem usa. Cada um tem
 3. **Metros escritos de jeitos diferentes:** espaços, "+" no fim, ponto ou vírgula decimal, letra no meio. Conta inválida aparece como erro e não soma zero calado. Teste em `contaMetros` (Tarefa 4).
 4. **Caderno guardado com código que saiu da base nova** (estrutura, material ou atividade): o item continua lá, em vermelho, "não está mais na base", e sai em vermelho no Excel. Teste em `somaDoPoste` (Tarefa 4) e no Excel (Tarefa 6).
 5. **Fechar a página ou trocar de ferramenta logo depois de mudar algo** (dentro do atraso da gravação): a mudança não se perde. Gravação imediata no `pagehide` e ao sair da tela; teste no e2e (Tarefa 8, recarregar logo depois do +1).
+6. **Tensionar:** só com o cabo daquela rede existente no poste; a maior regra da mesma rede, sem somar duas; MT e BT somam entre si; mudado à mão não volta sozinho. Teste em `tensionarDoPoste`/`somaDoPoste` (Tarefa 4) e no e2e (Tarefa 8).
+7. **MT sem fases no nome:** nunca soma com 3 fases calado; fica em vermelho até a pessoa informar. Teste em `calcularRede` (Tarefa 5) e no e2e (Tarefa 9).
 
 ---
 
@@ -92,19 +94,28 @@ Regras:
 export type GrupoCabo = 'mt' | 'bt-nu' | 'bt-multi'
 export interface RegraCabo {
   grupo: GrupoCabo
-  situacao: 'novo' | 'tensionado' | 'retirado'
+  situacao: 'novo' | 'retirado'
   codigo: string
   /** 'metro': metros de rede (todos os condutores contam como um); 'condutor': metros × condutores */
   por: 'metro' | 'condutor'
-  /** bitolas do código do vão ('004', '035'...); sem a lista, vale para todas */
+  /** bitolas como `lerCabo` devolve; sem a lista, vale para todas */
   bitolas?: string[]
-  /** o site sugere e a pessoa confirma (ex.: tensionar só quando ancorado) */
-  confirmar?: boolean
+}
+/** Tensionar pelo poste (decisão do Italo, 05/11 à tarde): vale quando o cabo daquela rede no poste
+ *  é existente (sem marcação ou (2)) e TODAS as expressões de `exige` acham uma estrutura (1) no poste.
+ *  Várias regras da mesma rede no mesmo poste: fica a de maior `qtd` (não soma). */
+export interface RegraTensionar {
+  rede: 'mt' | 'bt'
+  /** expressões regulares (sem barras) testadas no código da estrutura, sem o _S/_E */
+  exige: string[]
+  qtd: number
+  codigo: string
 }
 export interface ListasAro { poste: string[]; cinta: string[]; trafo: string[] } // começos da descrição do material
 export interface BaseMaoDeObra {
   atividades: Record<string, [descricao: string, unidade: string]>
   regrasCabo: RegraCabo[]
+  regrasTensionar: RegraTensionar[]
   aro: ListasAro
 }
 /** Usada quando a base não chegou: começos genéricos, sem código. */
@@ -123,7 +134,7 @@ export async function garantirBases(fonte: FonteBases, guarda?: GuardaBases): Pr
 ```
 
 Regras:
-- `conferirBaseMaoDeObra`: lança se `atividades` não for objeto com pelo menos uma entrada, se `regrasCabo` não for lista, se uma regra tiver `grupo`/`situacao`/`por` fora dos valores acima ou `codigo` que não está em `atividades`, ou se `aro` não tiver as três listas.
+- `conferirBaseMaoDeObra`: lança se `atividades` não for objeto com pelo menos uma entrada, se `regrasCabo` ou `regrasTensionar` não for lista, se uma regra tiver `grupo`/`situacao`/`por`/`rede` fora dos valores acima, `codigo` que não está em `atividades`, `exige` vazio ou com expressão que não compila, ou `qtd` que não é número > 0, ou se `aro` não tiver as três listas. Base antiga sem `regrasTensionar` vira `[]` (não lança).
 - `garantirBases`, para `mao-de-obra` (enel e edp como hoje):
   - sem linha no servidor e sem cópia guardada → `null` e o aviso `A lista de mão de obra ainda não está no servidor. No caderno, a mão de obra fica só digitada à mão.`;
   - sem linha no servidor e com cópia → a cópia, sem aviso;
@@ -134,11 +145,11 @@ Regras:
 - `conferir-dist.mjs`: com `../bases/mao-de-obra.json`, sorteia também 20 descrições de `atividades` (mesma regra de semente e tamanho mínimo); sem o arquivo, segue só com as duas de hoje e avisa.
 - `conferir-supabase.mjs`: aceita `edp,enel` ou `edp,enel,mao-de-obra`.
 
-- [ ] **Passo 1: escrever os testes** em `src/nuvem/bases.test.ts` (o `montar` ganha a 3ª base opcional; `MO = { atividades: { XX101: ['ATIVIDADE TESTE', 'm de rede'] }, regrasCabo: [{ grupo: 'bt-multi', situacao: 'novo', codigo: 'XX101', por: 'metro' }], aro: ARO_PADRAO }`):
+- [ ] **Passo 1: escrever os testes** em `src/nuvem/bases.test.ts` (o `montar` ganha a 3ª base opcional; `MO = { atividades: { XX101: ['ATIVIDADE TESTE', 'm de rede'], XX104: ['TENSIONAR TESTE', 'Vão'] }, regrasCabo: [{ grupo: 'bt-multi', situacao: 'novo', codigo: 'XX101', por: 'metro' }], regrasTensionar: [{ rede: 'mt', exige: ['^KT3'], qtd: 1, codigo: 'XX104' }], aro: ARO_PADRAO }`):
   - `sem lista de mão de obra no servidor, segue sem ela` → versões sem `mao-de-obra`, nada guardado: `maoDeObra` `null`, `enel`/`edp` normais, aviso com `ainda não está no servidor`.
   - `com lista no servidor, baixa e guarda` → `maoDeObra.atividades.XX101` igual; `guardado.get('mao-de-obra').versao` é a do servidor.
   - `download da lista falhou e há cópia` → devolve a cópia e avisa; sem cópia → `null`, sem lançar.
-  - `conferir lista de mão de obra` → recusa `{}`, recusa regra com `codigo: 'XX999'` fora de `atividades`, recusa `por: 'km'`, aceita `MO`.
+  - `conferir lista de mão de obra` → recusa `{}`, recusa regra com `codigo: 'XX999'` fora de `atividades`, recusa `por: 'km'`, recusa `situacao: 'tensionado'` em `regrasCabo`, recusa tensionar com `exige: ['(']` (não compila), com `exige: []` e com `qtd: 0`; aceita `MO`; `MO` sem `regrasTensionar` volta com `[]`.
   - os testes de hoje continuam passando sem mudar o que afirmam.
 - [ ] **Passo 2: rodar e ver falhar:** `npx vitest run src/nuvem/bases.test.ts` → FALHA.
 - [ ] **Passo 3: escrever** o código e os trechos acima (o `Preparando` e o `useAcesso` não mudam: o tipo `Bases` acompanha `garantirBases`).
@@ -171,9 +182,9 @@ Regras:
 - PxQ: cabeçalho na linha 3, colunas `B` (`novo codigo`), `E` (`descri`), `H` (`unidade`), conferidas com `_conferir_cabecalho`; o mesmo código aparece uma vez por área: fica a primeira.
 - Listagem: cabeçalho na linha 8, colunas `A` (`voz`), `C` (`descri`), `E` (`unidade`); o mesmo código aparece por tipo (urbana, rural): fica a primeira.
 - `montar_mao_de_obra`: todos os códigos do PxQ (contrato novo) e, depois, os da Listagem que não estão no PxQ. Descrição e unidade com `_texto`.
-- `conferir_mao_de_obra` para (`PARA:`) com: nenhuma atividade; regra com código fora das atividades; `grupo`, `situacao` ou `por` fora dos valores da Tarefa 2; `aro` sem `poste`, `cinta` ou `trafo`. Queda de mais de 2% nas contagens: aviso, como na Enel.
+- `conferir_mao_de_obra` para (`PARA:`) com: nenhuma atividade; regra (de cabo ou de tensionar) com código fora das atividades; `grupo`, `situacao`, `por` ou `rede` fora dos valores da Tarefa 2; tensionar com `exige` vazio, expressão que não compila (`re.compile`) ou `qtd` ≤ 0; `aro` sem `poste`, `cinta` ou `trafo`. Queda de mais de 2% nas contagens: aviso, como na Enel. `ler_regras` devolve também `regrasTensionar` e `contagens_mao_de_obra` conta as duas listas de regras.
 - `executar('mao-de-obra', ...)` segue o mesmo caminho da Enel (grava `../bases/mao-de-obra.json`, `--seco` compara com a cópia local, sobe o arquivo, grava a linha, apaga o antigo). `NOMES_CONTAGEM` ganha `atividades` e `regras`.
-- `regras-mao-de-obra.json` (fora do git): o implementador escreve com as regras que o Italo já explicou (memória do projeto `fechamento-ceara-mao-de-obra.md`): lançamento por metro de rede, uma voz para condutor nu e outra para pré-reunido; retirada por condutor; tensionar com `confirmar: true`. `aro` com `POSTE`, `CINTA`, `TRANSFORMADOR`. **Mostrar o arquivo ao Italo antes de subir.** Grupo sem regra conhecida (ex.: MT) fica sem regra: o site pede a mão de obra à mão.
+- `regras-mao-de-obra.json` (fora do git): o implementador escreve com as regras que o Italo explicou, **copiadas da memória do projeto `fechamento-ceara-mao-de-obra.md`, seção "Regras do cabo e do tensionar (05/11)"** (códigos, bitolas e expressões estão lá, nunca neste plano). Resumo sem código: instalação por metro de rede (pré-reunido com voz própria; condutor nu, BT e MT, com uma voz para as bitolas pequenas e outra para acima de 120 mm²); retirada por condutor (BT com uma voz, pré-reunido = 1 condutor; MT com voz pela bitola); tensionar MT tipo 3 (inclui 3.1 e 3.3) = 1 e tipo 4 = 2; tensionar BT com as duas estruturas de ancoragem = 2. `aro` com `POSTE`, `CINTA`, `TRANSFORMADOR`. **Mostrar o arquivo ao Italo antes de subir.** Antes de escrever as expressões, conferir contra as chaves de `../bases/enel.json` que elas acham as estruturas certas e nenhuma de outro tipo (ex.: a do tipo 3 não pode pegar trafo nem tipo 1), e mostrar ao Italo uma amostra do que cada uma acha.
 
 - [ ] **Passo 1: escrever os testes** em `scripts/test_atualizar_base.py` com planilhas montadas na hora (códigos `XX101`, `XX102`, `XX103`; descrições inventadas):
   - `test_le_pxq_um_por_codigo` (o mesmo código em duas áreas vira um);
@@ -181,6 +192,7 @@ Regras:
   - `test_pxq_primeiro_listagem_completa` (código só da Listagem entra; código dos dois fica com a descrição do PxQ);
   - `test_cabecalho_mudou_para` (coluna E do PxQ sem "descri" → `ErroBase` com a coluna);
   - `test_regra_com_codigo_fora_para` e `test_regra_com_por_invalido_para`;
+  - `test_tensionar_expressao_invalida_para` (`exige: ['(']`) e `test_tensionar_qtd_zero_para`;
   - `test_seco_grava_json_sem_internet` (`--seco` grava `mao-de-obra.json` numa pasta temporária, sem chamar `_chamar`).
 - [ ] **Passo 2: rodar e ver falhar:** `python -m unittest scripts/test_atualizar_base.py -v` → FALHA.
 - [ ] **Passo 3: escrever** as funções e o subcomando.
@@ -211,14 +223,26 @@ export interface ItemCaderno {
   /** digitado à mão, fora da base: vai em vermelho */
   digitado?: { descricao: string; unidade: string }
 }
-export interface PosteCaderno { id: string; nome: string; feito: boolean; itens: Record<Coluna, ItemCaderno[]> }
+/** Cabo daquela rede no poste: 1 novo, 2 existente tensionado, 3 retirado, null = sem marcação (existente, o padrão). */
+export type SituacaoCaboPoste = 1 | 2 | 3 | null
+export interface PosteCaderno {
+  id: string; nome: string; feito: boolean
+  itens: Record<Coluna, ItemCaderno[]>
+  caboMT: SituacaoCaboPoste
+  caboBT: SituacaoCaboPoste
+  /** chaveLinha → quantidade final do tensionar automático mudada à mão (0 = tirar) */
+  mao: Record<string, number>
+}
 export type SituacaoRede = 1 | 2 | 3 | 'S'
-export interface LinhaRede { id: string; cabo: string; /** só no S; vazio = o mesmo cabo */ caboRetirado?: string; situacao: SituacaoRede; metros: string }
+export interface LinhaRede {
+  id: string; cabo: string; /** só no S; vazio = o mesmo cabo */ caboRetirado?: string; situacao: SituacaoRede; metros: string
+  /** só cabo de MT sem as fases no nome: a pessoa informa (1 a 3) */
+  fases?: number
+}
 export interface Rede {
   linhas: LinhaRede[]
   itens: Record<'material' | 'maoDeObra', ItemCaderno[]>        // à mão (cabo sem regra, extras)
   mao: Record<string, number>                                    // chaveLinha → quantidade final mudada à mão (0 = tirar)
-  confirmadas: string[]                                          // chaves de linhas "a confirmar" já confirmadas
   feito: boolean
 }
 export type ItemAro = 'cinta' | 'poste' | 'cabo' | 'trafo'
@@ -243,6 +267,8 @@ export interface LinhaSoma {
   foraDaBase: boolean   // digitado à mão ou código que não está (mais) na base
   origem: string[]      // nomes dos postes, ou 'Rede'
   conta?: string        // só cabos
+  /** só linhas que o site calculou (cabo da Rede, tensionar do poste): a quantidade que o automático daria */
+  automatico?: number
 }
 export interface ItemBusca { codigo: string; descricao: string; unidade: string; norm: string }
 
@@ -260,6 +286,10 @@ export function contaMetros(texto: string): { metros: number; valida: boolean }
 export function descrever(coluna: Coluna, codigo: string, base: BaseEnel, mo: BaseMaoDeObra | null): { descricao: string; unidade: string; naBase: boolean }
 export function indiceDeBusca(coluna: Coluna, base: BaseEnel, mo: BaseMaoDeObra | null): ItemBusca[]
 export function buscar(indice: ItemBusca[], termo: string, max?: number): ItemBusca[] // max padrão 20
+export function mudarCaboPoste(c: Caderno, posteId: string, rede: 'mt' | 'bt', s: SituacaoCaboPoste): Caderno
+/** O tensionar que o poste pede pelas regras da base: [{ codigo, qtd }] (vazio sem `mo`). */
+export function tensionarDoPoste(p: PosteCaderno, mo: BaseMaoDeObra | null): { codigo: string; qtd: number }[]
+export function mudarMaoPoste(c: Caderno, posteId: string, chave: string, n: number | null): Caderno // null = voltar ao automático
 export function somaDoPoste(p: PosteCaderno, base: BaseEnel, mo: BaseMaoDeObra | null): LinhaSoma[]
 export function juntar(...listas: LinhaSoma[][]): LinhaSoma[] // soma por chave; ordem: estrutura, material, maoDeObra; dentro, situação 1 e depois 3; dentro, a ordem da 1ª vez
 export function estaLancada(c: Caderno, l: LinhaSoma): boolean   // c.lancadas[l.chave] === l.qtd
@@ -273,7 +303,9 @@ Regras que os testes fixam:
 - `contaMetros`: aceita dígitos, `+`, espaço, vírgula ou ponto decimal (ambos são decimal; ponto como milhar não existe aqui). Vazio ou só espaço → `{ metros: 0, valida: true }`. `+` sobrando no começo ou no fim é ignorado. `++`, letra, `-`, `*` → `{ metros: 0, valida: false }`.
 - `descrever`: estrutura em `base.estruturas` (unidade `UN`), material em `base.materiais`, mão de obra em `mo.atividades`; `naBase: false` com descrição vazia quando não acha (sem `mo`, toda atividade é `naBase: false`). O `digitado` do item vale por cima.
 - `indiceDeBusca`: estrutura = chaves de `base.estruturas` (código + descrição); material = `base.materiais` (código + descrição + unidade); mão de obra = `mo.atividades` (código + descrição + unidade), lista vazia sem `mo`. `norm` = `normalizar` de tudo junto, feito uma vez.
-- `somaDoPoste`: uma `LinhaSoma` por item com qtd > 0; `foraDaBase` quando há `digitado` ou `descrever(...).naBase` é falso; `origem: [p.nome]`.
+- `somaDoPoste`: uma `LinhaSoma` por item com qtd > 0; `foraDaBase` quando há `digitado` ou `descrever(...).naBase` é falso; `origem: [p.nome]`. Depois, o tensionar de `tensionarDoPoste` como mão de obra (situação 1) com `automatico` = a qtd da regra; `p.mao[chave]` definido vale no lugar (0 tira a linha). Se a pessoa também pôs o mesmo código à mão na coluna, as duas somam (o automático não engole o digitado).
+- `tensionarDoPoste`: para cada rede (`mt` com `caboMT`, `bt` com `caboBT`), só se a marcação for `null` ou `2`; entre as `mo.regrasTensionar` dessa rede cujas expressões de `exige` acham, **cada uma**, alguma estrutura em situação 1 do poste (código sem `_S`/`_E`), fica a de maior `qtd`. Expressão compilada uma vez (cache por texto); expressão que não compila é ignorada.
+- `cadernoNovo`/`novoPoste`: poste novo com `caboMT: null`, `caboBT: null`, `mao: {}`. Caderno guardado antes sem esses campos é lido com os padrões (função `normalizarCaderno` usada ao ler do banco).
 - `trocarOt`: `otNova` igual à atual → `usar`; sem `guardado` → `usar` (o caderno muda de OT; a tela grava na nova e apaga a antiga); com `guardado` e o atual vazio → `abrir-guardado` (devolve o guardado); com `guardado` e o atual com itens → `perguntar` (devolve o atual sem mudar).
 
 - [ ] **Passo 1: escrever os testes** em `src/ceara/caderno.test.ts` com:
@@ -284,7 +316,17 @@ const BASE: BaseEnel = {
   estruturas: { KITX1: 'ESTRUTURA TESTE', KITX2: 'DERIVAÇÃO TESTE' },
   kits: { KITX1: [['900004', 2]] },
 }
-const MO: BaseMaoDeObra = { atividades: { XX101: ['LANÇAMENTO DE CABO TESTE', 'm de rede'], XX102: ['POSTE TESTE', 'Unidade'] }, regrasCabo: [], aro: ARO_PADRAO }
+const MO: BaseMaoDeObra = {
+  atividades: { XX101: ['LANÇAMENTO DE CABO TESTE', 'm de rede'], XX102: ['POSTE TESTE', 'Unidade'], XX104: ['TENSIONAR TESTE', 'Vão'] },
+  regrasCabo: [],
+  regrasTensionar: [
+    { rede: 'mt', exige: ['^KT3'], qtd: 1, codigo: 'XX104' },
+    { rede: 'mt', exige: ['^KT4'], qtd: 2, codigo: 'XX104' },
+    { rede: 'bt', exige: ['^KBA$', '^KBB$'], qtd: 2, codigo: 'XX104' },
+  ],
+  aro: ARO_PADRAO,
+}
+// BASE ganha as estruturas inventadas KT1, KT3, KT3.1, KT4, KBA, KBB
 ```
 
 Testes (nome → o que afirma):
@@ -299,6 +341,12 @@ Testes (nome → o que afirma):
 - `soma da obra junta e ordena` → `juntar` de P1 e P2 com 900001 (1) em cada: uma linha qtd 2, `origem: ['P1', 'P2']`; ordem estrutura, material (1), material (3), mão de obra.
 - `lançada sai da marca ao mudar a quantidade` → `marcarLancada` com qtd 2: `estaLancada` verdadeiro; a mesma chave com qtd 3: falso.
 - `trocar a OT não mistura cadernos` → os quatro casos de `trocarOt` acima.
+- `tensionar do MT pelo tipo da estrutura` → poste com KT3 (1): XX104 1; com KT3.1 (1): 1; com KT4 (1): 2; com KT3 e KT4: 2 (a maior, não soma); com KT1: nada; com KT3 em situação 3 (retirada): nada.
+- `tensionar só com cabo existente` → KT4 com `caboMT` `null`: 2; `2`: 2; `1`: nada; `3`: nada.
+- `tensionar da BT precisa das duas estruturas` → KBA e KBB com `caboBT` `null`: XX104 2; só KBA: nada; KBA e KBB com `caboBT` `1`: nada. Poste com KT4 e KBA+KBB, os dois cabos existentes: XX104 2 + 2 = 4 na soma do poste (redes diferentes somam).
+- `tensionar mudado à mão` → `mudarMaoPoste(..., chave de XX104, 1)` no KT4: soma 1, `automatico` 2; `0` tira a linha; `null` volta a 2. XX104 também posto à mão com 1 na coluna: soma 3 (automático 2 + digitado 1).
+- `sem lista de mão de obra, sem tensionar` → `tensionarDoPoste(p, null)` vazio.
+- `caderno antigo sem as marcações` → `normalizarCaderno` de um poste sem `caboMT`/`caboBT`/`mao` devolve `null`, `null`, `{}`.
 - [ ] **Passo 2: rodar e ver falhar:** `npx vitest run src/ceara/caderno.test.ts` → FALHA.
 - [ ] **Passo 3: escrever `src/ceara/caderno.ts`** (funções puras, sempre devolvendo objeto novo; `id` de poste e de linha com `crypto.randomUUID()`).
 - [ ] **Passo 4: rodar e ver passar:** `npx vitest run src/ceara/caderno.test.ts`; `npx tsc -b` sem erro.
@@ -318,16 +366,18 @@ Testes (nome → o que afirma):
 
 ```ts
 // rede.ts
-export interface LinhaRedeCalculada { id: string; metros: number; valida: boolean; caboConhecido: boolean; semRegraMaoDeObra: boolean }
+export interface LinhaRedeCalculada {
+  id: string; metros: number; valida: boolean; caboConhecido: boolean; semRegraMaoDeObra: boolean
+  /** cabo de MT sem as fases no nome e sem `fases` na linha: não soma nada até a pessoa informar */
+  faltaFases: boolean
+}
 export interface RedeCalculada {
   linhas: LinhaRedeCalculada[]
-  /** o que vai para a soma: automático com a mão por cima, os confirmados e os itens à mão */
+  /** o que vai para a soma: automático com a mão por cima e os itens à mão */
   soma: LinhaSoma[]
   /** chaveLinha → quantidade que o automático daria (para "mudado à mão") */
   automatico: Record<string, number>
-  /** sugeridas por regra com `confirmar`, ainda não confirmadas: não entram na soma */
-  aConfirmar: LinhaSoma[]
-  /** metros puros das linhas (1) e S válidas, para o ARO */
+  /** metros puros das linhas (1) e S válidas, para o ARO (conta também a linha com `faltaFases`) */
   metrosNovos: number
 }
 export function calcularRede(rede: Rede, base: BaseEnel, mo: BaseMaoDeObra | null): RedeCalculada
@@ -346,18 +396,22 @@ export function codigoEnel(l: LinhaSoma): string
 ```
 
 Regras:
-- **Metros:** soma por (situação, cabo) como `contarObra`. S gera (1) com `cabo` e (3) com `caboRetirado || cabo`. Linha (2) não é material. Linha inválida (`valida: false`) não entra em nada.
-- **Material:** `converterCabos(cabosSomados, 3, base, adicao, devolucao)` com `fases: lerCabo(nome).fases ?? 3` nos cabos de MT. Linhas que voltam com `semCodigo` (cabo desconhecido) não entram na soma: a linha da Rede fica `caboConhecido: false` e a tela pede o material à mão. As outras viram `LinhaSoma` de material com `origem: ['Rede']` e `conta`.
-- **Mão de obra:** para cada (situação, cabo), a 1ª regra de `mo.regrasCabo` com o mesmo `grupo` de `lerCabo`, a situação (`1` → `novo`, `2` → `tensionado`, `3` → `retirado`; S → `novo` e `retirado`) e a bitola na lista (ou sem lista). `por: 'metro'` → metros; `por: 'condutor'` → metros × condutores (MT: fases ou 3; BT nu: condutores ou 1; BT pré-reunido: 1). Soma por código. Sem regra (ou sem `mo`): `semRegraMaoDeObra: true` na linha.
-- **Mão:** `rede.mao[chave]` substitui a quantidade automática da chave (0 tira da soma); `automatico[chave]` guarda a que o site daria. Regra com `confirmar` vai para `aConfirmar` até a chave estar em `rede.confirmadas`. `rede.itens` entram como em `somaDoPoste`, com `origem: ['Rede']`.
+- **Metros:** soma por (situação, cabo, fases) como `contarObra`. S gera (1) com `cabo` e (3) com `caboRetirado || cabo`. Linha (2) não gera material nem mão de obra (o tensionar sai dos postes, Tarefa 4). Linha inválida (`valida: false`) não entra em nada.
+- **Fases do MT:** cabo do grupo `mt` cujo `lerCabo(nome).fases` não existe usa `linha.fases`; sem `linha.fases`, a linha fica `faltaFases: true` e não entra no material nem na mão de obra (entra só nos `metrosNovos`). No S, a regra vale para cada lado (o cabo novo e o retirado).
+- **Material:** `converterCabos(cabosSomados, 3, base, adicao, devolucao)` com `fases` (do nome ou da linha) nos cabos de MT. Linhas que voltam com `semCodigo` (cabo desconhecido) não entram na soma: a linha da Rede fica `caboConhecido: false` e a tela pede o material à mão. As outras viram `LinhaSoma` de material com `origem: ['Rede']` e `conta`.
+- **Mão de obra:** para cada (situação, cabo), a 1ª regra de `mo.regrasCabo` com o mesmo `grupo` de `lerCabo`, a situação (`1` → `novo`, `3` → `retirado`; S → `novo` e `retirado`) e a bitola na lista (ou sem lista). `por: 'metro'` → metros (todos os condutores contam como um); `por: 'condutor'` → metros × condutores (MT: as fases do nome ou da linha; BT nu: condutores do nome ou 1; BT pré-reunido: 1). Soma por código. Sem regra (ou sem `mo`): `semRegraMaoDeObra: true` na linha.
+- **Mão:** `rede.mao[chave]` substitui a quantidade automática da chave (0 tira da soma); `automatico[chave]` e `LinhaSoma.automatico` guardam a que o site daria. `rede.itens` entram como em `somaDoPoste`, com `origem: ['Rede']`.
 - **ARO:** `poste`, `cinta`, `trafo` = soma das `LinhaSoma` de material, situação 1, cuja descrição normalizada começa com um dos começos da lista (`mo?.aro ?? ARO_PADRAO`, também normalizados). `cabo` = `metrosNovos`. `c.aroMao[item]` definido → `valor` = ele, `mudadoAMao: true`; o `automatico` continua calculado. `deOnde`: `soma dos materiais de poste em adição`, `soma dos materiais de cinta`, `metros dos cabos novos e substituídos, sem porcentagem e sem kg`, `soma dos materiais de transformador`.
 - **Soma da obra:** `juntar(...postes.map(somaDoPoste), rede.soma)`.
 
-- [ ] **Passo 1: escrever os testes** em `src/ceara/rede.test.ts` (BASE e MO da Tarefa 4, com `regrasCabo`: `{ bt-multi, novo, XX101, metro }`, `{ bt-nu, retirado, XX105, condutor }`, `{ bt-multi, tensionado, XX104, metro, confirmar: true }` e `XX104`/`XX105` em `atividades`; nenhum código de material escrito: as quantidades e `conta` do cabo são comparadas com `converterCabos`):
+- [ ] **Passo 1: escrever os testes** em `src/ceara/rede.test.ts` (BASE e MO da Tarefa 4, com `regrasCabo`: `{ bt-multi, novo, XX101, metro }`, `{ bt-nu, retirado, XX105, condutor }`, `{ bt-multi, retirado, XX105, condutor }`, `{ mt, novo, XX106, metro }`, `{ mt, retirado, XX107, condutor }` e `XX105`/`XX106`/`XX107` em `atividades`; nenhum código de material escrito: as quantidades e `conta` do cabo são comparadas com `converterCabos`):
   - `novo: metros, material com 5% e mão de obra por metro` → linha `{ cabo: 'AM035T', situacao: 1, metros: '32+35+30' }`: `metros` 97; material de adição com quantidade 102 e `conta '97 m + 5%'`; XX101 com 97; `metrosNovos` 97.
   - `substituído põe o novo e retira o velho` → `{ cabo: 'AM035T', caboRetirado: '2AN004', situacao: 'S', metros: '100' }`: material na adição (o novo) e na devolução (o velho, em kg, como `converterCabos`); XX101 100; XX105 200 (2 condutores); `metrosNovos` 100.
   - `retirado não vai para o ARO` → `{ cabo: '2AN004', situacao: 3, metros: '50' }`: `metrosNovos` 0; XX105 100.
-  - `tensionado espera confirmar` → `{ cabo: 'AM035T', situacao: 2, metros: '40' }`: nenhum material; XX104 em `aConfirmar` com 40 e fora da `soma`; com a chave em `confirmadas`, XX104 40 na `soma`.
+  - `pré-reunido retirado conta 1 condutor` → `{ cabo: 'AM035T', situacao: 3, metros: '100' }`: XX105 100.
+  - `MT: instala por metro de rede, retira por condutor` → `{ cabo: 'P3AN004', situacao: 1, metros: '100' }`: XX106 100; `{ cabo: 'P3AN004', situacao: 3, metros: '100' }`: XX107 300.
+  - `MT sem fases no nome pergunta` → um nome de MT que `lerCabo` lê sem `fases` (o implementador acha um em `nomesDeCabo()`; se não houver, o teste usa o nome sem o prefixo de fases que `lerCabo` aceita), `situacao: 1`, sem `fases`: `faltaFases: true`, nada na soma, `metrosNovos` com os metros; com `fases: 2`: material com 2 fases (igual a `converterCabos` com `fases: 2`) e a mão de obra por metro.
+  - `tensionado na Rede não gera nada` → `{ cabo: 'AM035T', situacao: 2, metros: '40' }`: soma vazia, `metrosNovos` 0.
   - `cabo desconhecido fica à mão` → `{ cabo: '3#4CAA', situacao: 1, metros: '30' }`: `caboConhecido: false`, `semRegraMaoDeObra: true`, nada na soma; `metrosNovos` 30 (o ARO conta metros puros).
   - `mudar à mão e o automático guardado` → `mao[chave de XX101] = 90` com 97 m: soma 90, `automatico` 97; `mao = 0` tira a linha.
   - `conta inválida não soma` → `metros: '32+a'`: `valida: false`, nada na soma, `metrosNovos` 0.
@@ -432,6 +486,7 @@ idPessoa: string | null // perfil.id quando pronto, como `pessoa`
 Regras:
 - `VERSAO` 3 → 4; `onupgradeneeded` cria `cadernos` (`keyPath: 'chave'`) sem tocar nas outras lojas. Atualizar o comentário do topo.
 - O padrão de `lerBase`/`gravarBase` (`comBanco`, `try/catch` que engole a falta de IndexedDB).
+- `lerCaderno` devolve o caderno passado por `normalizarCaderno` (Tarefa 4), para postes guardados sem `caboMT`/`caboBT`/`mao` e Rede sem `fases`.
 
 - [ ] **Passo 1: escrever os testes** em `src/lib/banco.test.ts`:
   - o teste de migração espera `db.version` 4;
@@ -473,13 +528,15 @@ export function useGuardarCaderno(pessoa: string, caderno: Caderno): EstadoGuard
 - **Cabeçalho:** `Campo` OT (só dígitos, até 11), área (os mesmos botões SUL / LESTE / CENTRO SUL da Leitura do CAD) e o estado da gravação com palavra: `Salvo neste computador`, `Salvando...`, `Não está sendo salvo: digite a OT (7 dígitos, ou 11 começando com 1722)`, `Não está sendo salvo: este navegador não guarda dados`. Seletor `Abrir caderno guardado` (`<select>` com `listarCadernos`, texto `1234567, salvo em 05/11 14:32`) e botão `Novo caderno` (grava o atual e abre um vazio, sem OT).
   - A OT vale ao sair do campo ou com Enter (não a cada tecla: no meio de uma OT de 11 dígitos, os 7 primeiros já parecem uma OT). Com OT válida: `lerCaderno` + `trocarOt`. `perguntar` mostra um aviso com `Abrir o guardado` e `Ficar com este (substitui o guardado)`; até a resposta, nada é gravado. `usar` com OT anterior válida e diferente: grava na nova e `apagarCaderno` da antiga.
 - **À esquerda:** lista dos postes (`P1`, `P2`... com o selo `feito`), botão `+ Poste` e, no fim, `Rede` (o bloco da Rede vem na Tarefa 9; aqui o item já aparece e abre um painel vazio com o título). Lista vazia: `Nenhum poste ainda. Crie com "+ Poste", como no papel.` Poste aberto com `aria-current`. No celular, a lista vira uma faixa rolável de lado, como o `MenuLateral`.
-- **No centro, o poste aberto:** título `Poste P1`, três `ColunaItens` (Estrutura, Material, Mão de obra) lado a lado no computador e uma embaixo da outra abaixo de `lg`; `Feito, próximo →` (marca e abre o próximo; no último, abre a Rede) e `Tirar este poste` (só com poste vazio).
+- **No centro, o poste aberto:** título `Poste P1`; logo abaixo, dois seletores curtos `Cabo MT` e `Cabo BT` (rótulos `Cabo de MT no poste P1` / `Cabo de BT no poste P1`) com `existente (sem marcação)`, `(1) novo`, `(2) existente tensionado`, `(3) retirado`; três `ColunaItens` (Estrutura, Material, Mão de obra) lado a lado no computador e uma embaixo da outra abaixo de `lg`; `Feito, próximo →` (marca e abre o próximo; no último, abre a Rede) e `Tirar este poste` (só com poste vazio).
 - **`ColunaItens`:** busca `type="search"` rotulada `Buscar estrutura` / `Buscar material` / `Buscar mão de obra`; resultados como botões `Adicionar <código> <descrição>` (até 20; `Nada na base com "<texto>"`); depois de adicionar, a busca limpa e o foco volta para ela. Mão de obra sem lista: texto `A lista de mão de obra não chegou: digite o código à mão.`. Botão `Não achei: digitar à mão` abre Código, Descrição e Unidade (como no `AjusteEstrutura`). Cada item: código, descrição, `Quantidade` (passo 1, rótulo `Quantidade de <código>`), e, em Estrutura e Material, um seletor `(1) novo` / `(3) retirado` rotulado `Situação de <código>`. Ao passar um material para (3), se `codigoDeSucata` conhece, aparece `Na devolução, este material costuma voltar como <código de sucata>.` com o botão `Trocar para <código>`. Fora da base: selo `fora da base` (digitado) ou `não está mais na base` (código salvo que sumiu), em vermelho com a palavra.
+- **Tensionar automático na coluna Mão de obra:** linha com selo `automático` e o texto `pelas estruturas do poste e o cabo existente`; mudar a quantidade grava em `p.mao` e mostra `mudado à mão`, `o automático daria N` e `Voltar ao automático`. Trocar o `Cabo MT`/`Cabo BT` ou tirar a estrutura faz a linha aparecer ou sumir na hora.
 - **Embaixo (`Somas.tsx`):** `Soma de cada poste` (tabela em região rolável com `tabIndex=0`, uma linha por poste e a Rede, três colunas com `qtd código`) e `Soma da obra` (três colunas, adição e devolução separadas por subtítulo `Novo` / `Retirado`).
 
 **No e2e (`cearaCaderno()`, a 1366 e a 390, tema escuro, com o falso servindo `mao-de-obra.json`):** os códigos vêm de `../bases/enel.json` e `../bases/mao-de-obra.json` lidos no próprio teste (a 1ª estrutura de `estruturas`; o 1º material cuja descrição começa com `POSTE`; a 1ª atividade), nunca escritos.
 - abrir `Caderno do orçamento` pelo menu; OT `1234567` + Enter; `+ Poste`; adicionar um material; `Novo caderno`; OT `7654321` + Enter; ver `Salvo neste computador`;
 - `+ Poste` três vezes; no P1, buscar e adicionar uma estrutura, um material poste e uma atividade; `Aumentar` duas vezes na estrutura; digitar `0,5` na quantidade da atividade (foco continua e o valor fica `0,5`);
+- no P2, adicionar uma estrutura que alguma `regrasTensionar` de MT do `../bases/mao-de-obra.json` acha (o teste escolhe a 1ª chave de `enel.json` que casa, sem escrever o código): a linha do tensionar aparece com `automático`; `Cabo MT` = `(1) novo` → a linha some; volta para `existente (sem marcação)` → reaparece;
 - `Feito, próximo →` leva ao P2 e o P1 mostra `feito`;
 - na `Soma da obra`, a estrutura com 3;
 - clicar `Aumentar` no material e **recarregar na hora**: depois do login, voltar ao caderno, abrir pelo seletor a OT `7654321` e ver o material com 2;
@@ -507,7 +564,9 @@ export function useGuardarCaderno(pessoa: string, caderno: Caderno): EstadoGuard
 **`BlocoRede`:**
 - Tabela (região rolável) com uma linha por cabo: `Cabo` (campo com `list` de um `<datalist>` de `nomesDeCabo()`, rótulo `Cabo da linha N`), `Situação` (`(1) novo`, `(2) tensionado ou realocado`, `(3) retirado`, `substituído (retira o velho e põe o novo)`), `Cabo retirado` (só no substituído, vazio = o mesmo), `Metros` (rótulo `Metros da linha N, pode somar: 32+35+30`), `Total` (os metros da conta, ou `conta com erro` em vermelho com a palavra) e `Tirar linha N`. Botão `+ Cabo`.
 - Cabo que o site não conhece: `cabo sem regra: lance o material à mão abaixo`; sem regra de mão de obra: `sem regra de mão de obra: lance à mão abaixo`.
-- Embaixo, duas colunas: `Vai para Material` e `Vai para Mão de obra`, com as linhas de `rede.soma` (código, descrição, a `conta`, quantidade em `Quantidade`); mudar a quantidade grava em `rede.mao` e mostra o selo `mudado à mão` com `o automático daria N` e `Voltar ao automático`. As de `aConfirmar` aparecem com o selo `a confirmar`, o texto `Só vale se o cabo for ancorado.` quando a regra é de tensionar, e o botão `Confirmar <código>`. Abaixo de cada coluna, a busca de `ColunaItens` para pôr à mão (vai em `rede.itens`).
+- Cabo de MT sem as fases no nome: aparece na linha o campo `Fases` (seletor 1, 2, 3, rótulo `Fases da linha N`) e, até escolher, o selo vermelho `falta o número de fases` (nada da linha soma).
+- Linha (2): texto curto `não soma aqui: o tensionar sai dos postes`.
+- Embaixo, duas colunas: `Vai para Material` e `Vai para Mão de obra`, com as linhas de `rede.soma` (código, descrição, a `conta`, quantidade em `Quantidade`); mudar a quantidade grava em `rede.mao` e mostra o selo `mudado à mão` com `o automático daria N` e `Voltar ao automático`. Abaixo de cada coluna, a busca de `ColunaItens` para pôr à mão (vai em `rede.itens`).
 - `Feito` na Rede marca `rede.feito`.
 
 **`PainelAro`** (à direita no computador, embaixo no celular): título `ARO`, `calculado da soma`; uma linha por `LinhaAro` com `Campo` numérico rotulado pelo item; selo `automático` + `deOnde`, ou selo `mudado à mão` + `o automático daria N` + botão `Voltar ao automático` (some e o foco vai para o campo do item). Digitar grava em `aroMao`; só o botão volta.
@@ -517,6 +576,7 @@ export function useGuardarCaderno(pessoa: string, caderno: Caderno): EstadoGuard
 - ARO: `Cabo (m)` 97 e `Poste` 1 (o material poste do P1);
 - digitar 5 no Poste → `mudado à mão` e `o automático daria 1`; `Voltar ao automático` → 1 e `automático`;
 - metros `32+a` → `conta com erro`, depois corrigir para `32+35+30`;
+- `+ Cabo` com um cabo de MT sem fases no nome → `falta o número de fases`; escolher 3 → o selo some e aparece material na `Vai para Material`;
 - recarregar, voltar ao caderno `7654321` pelo seletor e ver a linha da Rede com Total 97;
 - axe (`${tag} caderno rede`) e largura; print `14-ceara-caderno-rede.png`.
 
