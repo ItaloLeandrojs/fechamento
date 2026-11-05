@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { DownloadSimple, FileText, IdentificationCard, Package, Shovel, Stack, Wrench } from '@phosphor-icons/react'
-import type { Etapa, Secao } from '../etapas'
+import type { Etapa, ItemMenu, Secao } from '../etapas'
 import { formatarQtd } from '../lib/busca'
 import { IconeTransformador } from './IconeTransformador'
 
@@ -17,7 +17,7 @@ const icones: Record<Secao, ReactNode> = {
 }
 
 /** Estado da etapa em palavras (a cor nunca fica sozinha). */
-function Marcador({ etapa }: { etapa: Etapa }) {
+function Marcador({ etapa }: { etapa: ItemMenu<string> }) {
   return (
     <span className="ml-auto flex items-center gap-1.5 pl-2">
       {etapa.n ? <span className="num text-xs font-semibold text-text min-w-7 text-right">{formatarQtd(etapa.n)}</span> : null}
@@ -28,16 +28,35 @@ function Marcador({ etapa }: { etapa: Etapa }) {
         </span>
       ) : null}
       {etapa.estado === 'pendente' && <span className="text-xs font-medium text-danger">falta</span>}
-      {etapa.estado === 'feito' && !etapa.n && <span className="text-xs font-medium text-ok">ok</span>}
+      {etapa.estado === 'feito' && !etapa.n && <span className="text-xs font-medium text-ok">{etapa.marca ?? 'ok'}</span>}
     </span>
   )
 }
 
-/**
- * Caminho do trabalho: coluna de 260 px no computador (com grupos),
- * faixa rolável no topo no celular.
- */
+/** Caminho do trabalho da EDP (as etapas da obra) no menu lateral. */
 export function Etapas({ etapas, atual, onIr, rodape }: { etapas: Etapa[]; atual: Secao; onIr: (s: Secao) => void; rodape?: ReactNode }) {
+  return <MenuLateral itens={etapas} atual={atual} onIr={onIr} icones={icones} rotulo="Etapas" rodape={rodape} />
+}
+
+/**
+ * Menu lateral: coluna de 260 px no computador (com grupos),
+ * faixa rolável no topo no celular. Serve à EDP (etapas) e ao Ceará (ferramentas).
+ */
+export function MenuLateral<T extends string>({
+  itens: etapas,
+  atual,
+  onIr,
+  icones,
+  rotulo,
+  rodape,
+}: {
+  itens: ItemMenu<T>[]
+  atual: T
+  onIr: (s: T) => void
+  icones: Record<T, ReactNode>
+  rotulo: string
+  rodape?: ReactNode
+}) {
   const lista = useRef<HTMLUListElement>(null)
   // no celular, a etapa atual sempre aparece na faixa: rola só a própria lista
   // (scrollIntoView mexeria também na rolagem da página e no computador não há faixa)
@@ -50,7 +69,7 @@ export function Etapas({ etapas, atual, onIr, rodape }: { etapas: Etapa[]; atual
   }, [atual])
 
   return (
-    <nav aria-label="Etapas" className="md:sticky md:top-[72px] md:self-start md:max-h-[calc(100dvh-72px)] md:overflow-y-auto md:py-8 -mx-4 sm:-mx-6 md:-mx-1 px-4 sm:px-6 md:px-1 border-b md:border-0 border-line bg-bg">
+    <nav aria-label={rotulo} className="md:sticky md:top-[72px] md:self-start md:max-h-[calc(100dvh-72px)] md:overflow-y-auto md:py-8 -mx-4 sm:-mx-6 md:-mx-1 px-4 sm:px-6 md:px-1 border-b md:border-0 border-line bg-bg">
       <ul ref={lista} className="relative flex md:grid gap-1.5 md:gap-1 overflow-x-auto md:overflow-visible py-2 md:py-0">
         {etapas.map((m, i) => {
           const ativa = atual === m.id

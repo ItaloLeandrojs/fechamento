@@ -507,18 +507,30 @@ async function ceara() {
     await page.goto(URL_SITE + '#ceara-teste')
     await preencherLogin(page)
     const telaFoto = page.getByRole('heading', { name: 'Sua foto no crachá' })
-    const telaCeara = page.getByRole('heading', { name: 'Fechamento Ceará' })
+    const telaCeara = page.getByRole('heading', { level: 1, name: 'Leitura do CAD' })
     await telaFoto.or(telaCeara).first().waitFor({ timeout: 20000 })
     if (await telaFoto.count()) await page.getByRole('button', { name: /^Continuar/ }).click()
     await telaCeara.waitFor({ timeout: 30000 })
     await axe(page, `${tag} início`)
+    // menu lateral: uma ferramenta em teste abre a página curta com o selo, e a Leitura do CAD volta
+    const menu = page.getByRole('navigation', { name: 'Ferramentas do Ceará' })
+    await menu.getByRole('button', { name: 'ARO' }).click()
+    await page.getByRole('heading', { level: 1, name: 'ARO' }).waitFor({ timeout: 5000 })
+    if (!(await page.getByRole('main').getByText('Em teste', { exact: true }).count())) falhas.push(`[${tag}] a página do ARO não mostra o selo Em teste`)
+    await axe(page, `${tag} em teste`)
+    await page.screenshot({ path: path.join(PRINTS, `${largura}-${tema}-12-ceara-em-teste.png`), fullPage: true })
+    placar.telas++
+    await menu.getByRole('button', { name: /Leitura do CAD/ }).click()
+    await telaCeara.waitFor({ timeout: 5000 })
     const t0 = Date.now()
     await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
-    await page.getByText('Etiquetas de poste lidas').waitFor({ timeout: 60000 })
+    await page.getByRole('heading', { name: /^Etiquetas lidas/ }).waitFor({ timeout: 60000 })
+    if (!(await menu.getByRole('button', { name: /Leitura do CAD/ }).getByText('lido').count())) falhas.push(`[${tag}] o menu não marcou a Leitura do CAD como lida`)
     const segundos = ((Date.now() - t0) / 1000).toFixed(1)
     // Excel da obra: OT tirada do nome do arquivo (o ceara.dxf não tem OT no nome: digita) e o nome do arquivo baixado
     await page.getByLabel('OT', { exact: true }).fill('1234567')
-    await page.getByLabel('Área').selectOption('LESTE')
+    await page.getByRole('group', { name: 'Área' }).getByRole('button', { name: 'LESTE' }).click()
+    if ((await page.getByRole('button', { name: 'LESTE' }).getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] o botão LESTE não ficou marcado`)
     const [baixa] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.getByRole('button', { name: 'Baixar Excel' }).click()])
     if (baixa.suggestedFilename() !== '1234567 - ESTRUTURA E MATERIAL.xlsx') falhas.push(`[${tag}] Excel baixado com o nome errado: ${baixa.suggestedFilename()}`)
     if (fs.existsSync(orc)) await page.locator('input[accept=".xlsx"]').setInputFiles(orc)
@@ -1251,6 +1263,8 @@ async function cenasDoLogin() {
 const gerados = []
 try {
   await ceara()
+  // E2E_SO=ceara roda só o Ceará (mais rápido para conferir essa tela)
+  if (process.env.E2E_SO === 'ceara') throw new Error('PARAR')
   await plataforma()
   await cenasDoLogin()
   await modeloDiferente()
@@ -1264,7 +1278,7 @@ try {
   gerados.push(await rodada({ largura: 390, altura: 844, tema: 'dark', boletim: 'Parcial', movel: true }))
   gerados.push(await rodada({ largura: 390, altura: 844, tema: 'dark', boletim: 'Final', movel: true }))
 } catch (e) {
-  falhas.push('FALHOU NO MEIO: ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | '))
+  if (e.message !== 'PARAR') falhas.push('FALHOU NO MEIO: ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | '))
 } finally {
   await browser.close()
   srv.close()

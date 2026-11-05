@@ -4,15 +4,23 @@ export type Secao = 'estruturas' | 'materiais' | 'servicos' | 'aterramento' | 'e
 
 export type EstadoEtapa = 'vazio' | 'feito' | 'pendente'
 
-export interface Etapa {
-  id: Secao
+/** Um item do menu lateral (etapa da EDP ou ferramenta do Ceará). */
+export interface ItemMenu<T extends string> {
+  id: T
   rotulo: string
-  grupo: 'Lançamentos' | 'Fichas' | 'Fechar'
+  /** título do grupo no computador (o item abre um grupo novo quando o anterior é de outro) */
+  grupo: string
   estado: EstadoEtapa
+  /** palavra em verde quando está feito e sem quantidade (padrão: "ok") */
+  marca?: string
   /** quantidade lançada (some quando é zero) */
   n?: number
   /** só na revisão: quantas pendências ainda existem (marcador neutro, sem alarme) */
   restam?: number
+}
+
+export interface Etapa extends ItemMenu<Secao> {
+  grupo: 'Lançamentos' | 'Fichas' | 'Fechar'
 }
 
 /**

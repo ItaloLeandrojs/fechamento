@@ -160,13 +160,14 @@ export function Quantidade({
   )
 }
 
-export function Selo({ children, tom = 'neutro' }: { children: ReactNode; tom?: 'neutro' | 'destaque' | 'ok' | 'perigo' }) {
+export function Selo({ children, tom = 'neutro' }: { children: ReactNode; tom?: 'neutro' | 'destaque' | 'ok' | 'perigo' | 'aviso' }) {
   const t = {
     neutro: 'bg-surface-2 text-muted',
     // destaque é contorno claro, sem verde: o verde (ok) é só do que já foi lançado
     destaque: 'ring-1 ring-inset ring-line-strong text-text',
     ok: 'bg-ok-soft text-ok',
     perigo: 'bg-danger-soft text-danger',
+    aviso: 'bg-aviso-soft text-aviso ring-1 ring-inset ring-aviso/40',
   }[tom]
   return <span className={`num inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${t}`}>{children}</span>
 }

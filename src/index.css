@@ -21,6 +21,9 @@
   --danger-soft: #3a1a16;
   --ok: #6fcf97;
   --ok-soft: #14291d;
+  /* amarelo só do selo "Em teste" (ferramenta que ainda não funciona) */
+  --aviso: #e8c46a;
+  --aviso-soft: #2e2714;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 20px rgb(0 0 0 / 0.3);
   color-scheme: dark;
 }
@@ -53,6 +56,8 @@
   --color-danger-soft: var(--danger-soft);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
+  --color-aviso: var(--aviso);
+  --color-aviso-soft: var(--aviso-soft);
   --radius-ctl: 10px;
   --radius-panel: 14px;
   --shadow-panel: var(--shadow);
