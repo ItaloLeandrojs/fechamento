@@ -51,7 +51,9 @@ export function AjusteEstrutura({ linha, base, ajuste, onChange }: {
   const mudar = (a: Ajuste) => onChange(limpar(a, kit))
   const atual = (): Ajuste => ({ qtd: { ...(ajuste?.qtd ?? {}) }, novos: [...(ajuste?.novos ?? [])] })
 
-  const mudarQtd = (l: LinhaEstrat, n: number) => {
+  const mudarQtd = (l: LinhaEstrat, n: number, digitado = false) => {
+    // 0 digitado num item novo é o meio da digitação ("0,5"): não tira o item; tirar é pelo "−" ou pelo "Tirar"
+    if (digitado && l.situacao === 'novo' && arred(n) === 0) return
     const a = atual()
     if (l.situacao === 'novo') a.novos = a.novos.map((x) => (x.codigo === l.codigo ? { ...x, qtd: arred(n) } : x))
     else a.qtd[l.codigo] = arred(n)
@@ -70,9 +72,13 @@ export function AjusteEstrutura({ linha, base, ajuste, onChange }: {
     tr?.querySelector<HTMLInputElement>('input[inputmode="decimal"]')?.focus({ preventScroll: true })
     setAviso(`${codigo} já está no kit: mude a quantidade na linha dele.`)
   }
-  const adicionar = (novo: MaterialNovo) => {
+  /** true só quando o item entrou como novo (código do kit não entra: leva à linha dele). */
+  const adicionar = (novo: MaterialNovo): boolean => {
     const r = adicionarNovo(ajuste, kit, base, novo)
-    if (r.noKit) return irParaKit(novo.codigo)
+    if (r.noKit) {
+      irParaKit(novo.codigo)
+      return false
+    }
     onChange(r.ajuste)
     setAviso(`${novo.codigo} adicionado com 1 por estrutura.`)
     return true
@@ -84,7 +90,8 @@ export function AjusteEstrutura({ linha, base, ajuste, onChange }: {
     const descricao = mao.descricao.trim()
     if (!codigo || !descricao) return setErroMao('Preencha o código e a descrição.')
     setErroMao('')
-    adicionar({ codigo, qtd: 1, foraDoCatalogo: { descricao, unidade: mao.unidade } })
+    // código do kit não entra (só leva à linha dele): o formulário fica como está
+    if (!adicionar({ codigo, qtd: 1, foraDoCatalogo: { descricao, unidade: mao.unidade } })) return
     setMao({ codigo: '', descricao: '', unidade: 'UN' })
     setMaoAberta(false)
   }
@@ -152,7 +159,7 @@ export function AjusteEstrutura({ linha, base, ajuste, onChange }: {
                   </td>
                   <td className="px-2 py-2.5 align-top text-right num">{l.situacao === 'novo' ? '-' : formatarQtd(l.noKit)}</td>
                   <td className="px-3 py-1.5 align-top text-right">
-                    <Quantidade valor={l.usado} onChange={(n) => mudarQtd(l, n)} rotulo={`Quantidade usada de ${nome(l)} por estrutura`} emQuilo={ehQuilo(l.unidade)} passo={1} />
+                    <Quantidade valor={l.usado} onChange={(n, digitado) => mudarQtd(l, n, digitado)}rotulo={`Quantidade usada de ${nome(l)} por estrutura`} emQuilo={ehQuilo(l.unidade)} passo={1} />
                   </td>
                 </tr>
               )

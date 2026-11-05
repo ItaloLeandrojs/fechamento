@@ -148,8 +148,8 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
     setTimeout(() => URL.revokeObjectURL(a.href), 2000)
     // o ajuste baixado vira a sugestão da próxima obra (só neste navegador)
     const { gravar, apagar } = sugestoesAoBaixar(ajustes, tocadas, data)
-    if (gravar.length || apagar.length) {
-      await gravarSugestoes(gravar, apagar)
+    // sem IndexedDB nada foi gravado: a memória também não muda (a sugestão não pode aparecer)
+    if ((gravar.length || apagar.length) && (await gravarSugestoes(gravar, apagar))) {
       setSugestoes((s) => {
         const n = { ...s }
         for (const c of apagar) delete n[c]

@@ -547,6 +547,13 @@ async function ceara() {
     await ajuste.getByLabel('Unidade', { exact: true }).selectOption('UN')
     await ajuste.getByRole('button', { name: 'Adicionar', exact: true }).click()
     await ajuste.getByText('MATERIAL DE TESTE').first().waitFor({ timeout: 5000 })
+    // digitar "0,5" num item novo: o "0" do meio da digitação não pode tirar o item (nem o foco)
+    const rotuloTeste = 'Quantidade usada de MATERIAL DE TESTE por estrutura'
+    const qtdTeste = ajuste.getByRole('textbox', { name: rotuloTeste })
+    await qtdTeste.focus()
+    await qtdTeste.pressSequentially('0,5')
+    if (!(await qtdTeste.count()) || (await qtdTeste.inputValue()) !== '0,5') falhas.push(`[${tag}] digitar 0,5 num item novo não deixou a linha com 0,5`)
+    else if ((await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) !== rotuloTeste) falhas.push(`[${tag}] digitar 0,5 num item novo tirou o foco da quantidade`)
     if (!(await ajuste.getByText('fora do catálogo', { exact: false }).count())) falhas.push(`[${tag}] o material digitado à mão não mostra "fora do catálogo"`)
     if (!(await regiaoEst.getByText('estratificada', { exact: true }).count())) falhas.push(`[${tag}] a estrutura ajustada não mostra o selo "estratificada"`)
     await axe(page, `${tag} ajuste`)

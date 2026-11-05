@@ -116,7 +116,8 @@ export function Quantidade({
   emQuilo = false,
 }: {
   valor: number
-  onChange: (n: number) => void
+  /** `digitado`: o valor veio do campo de texto (pode ser o meio da digitação, como o 0 de "0,5"). */
+  onChange: (n: number, digitado?: boolean) => void
   rotulo?: string
   passo?: number
   grande?: boolean
@@ -143,7 +144,7 @@ export function Quantidade({
           const t = e.target.value.replace(/[^\d,.]/g, '')
           setTexto(t)
           const n = Number(t.replace(',', '.'))
-          if (t !== '' && Number.isFinite(n) && n >= 0) onChange(n)
+          if (t !== '' && Number.isFinite(n) && n >= 0) onChange(n, true)
         }}
         onBlur={() => setTexto(fmt(valor))}
         onFocus={(e) => e.target.select()}

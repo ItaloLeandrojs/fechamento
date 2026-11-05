@@ -53,7 +53,7 @@ describe('banco do navegador', () => {
     expect(await lerBase('enel')).toBeNull()
     await expect(gravarBase({ nome: 'enel', versao: 'a', dados: 1 })).resolves.toBeUndefined()
     expect(await lerSugestoes()).toEqual({})
-    await expect(gravarSugestoes([{ estrutura: 'KITX1', ajuste: { qtd: {}, novos: [] }, data: 'x' }], ['KITX2'])).resolves.toBeUndefined()
+    await expect(gravarSugestoes([{ estrutura: 'KITX1', ajuste: { qtd: {}, novos: [] }, data: 'x' }], ['KITX2'])).resolves.toBe(false)
   })
 
   it('migra da versão 2 sem perder técnicos e bases', async () => {
@@ -83,10 +83,10 @@ describe('banco do navegador', () => {
   it('grava, lê e apaga sugestões', async () => {
     const a = { qtd: { '900001': 1.5 }, novos: [] }
     const b = { qtd: { '900002': 3 }, novos: [] }
-    await gravarSugestoes([
+    expect(await gravarSugestoes([
       { estrutura: 'KITX1', ajuste: a, data: '2026-11-05T12:00:00.000Z' },
       { estrutura: 'KITX2', ajuste: b, data: '2026-11-05T12:00:00.000Z' },
-    ], [])
+    ], [])).toBe(true)
     expect(Object.keys(await lerSugestoes()).sort()).toEqual(['KITX1', 'KITX2'])
     await gravarSugestoes([], ['KITX1'])
     expect(await lerSugestoes()).toEqual({ KITX2: { estrutura: 'KITX2', ajuste: b, data: '2026-11-05T12:00:00.000Z' } })

@@ -113,8 +113,8 @@ export async function lerSugestoes(): Promise<Record<string, SugestaoGuardada>> 
   }
 }
 
-/** Grava e apaga numa transação só, para a sugestão nunca ficar pela metade. */
-export async function gravarSugestoes(gravar: SugestaoGuardada[], apagar: string[]): Promise<void> {
+/** Grava e apaga numa transação só, para a sugestão nunca ficar pela metade. true só se gravou. */
+export async function gravarSugestoes(gravar: SugestaoGuardada[], apagar: string[]): Promise<boolean> {
   try {
     await comBanco((db) => new Promise<void>((ok, erro) => {
       const tx = db.transaction(LOJA_AJUSTES, 'readwrite')
@@ -125,7 +125,9 @@ export async function gravarSugestoes(gravar: SugestaoGuardada[], apagar: string
       tx.onerror = () => erro(tx.error)
       tx.onabort = () => erro(tx.error)
     }))
+    return true
   } catch {
     // sem IndexedDB: segue sem guardar a sugestão
+    return false
   }
 }
