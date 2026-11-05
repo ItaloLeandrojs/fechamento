@@ -143,7 +143,8 @@ function abaEstratificacao(r: ResultadoCeara, base: BaseEnel, ajustes: Ajustes, 
     ])
   })
 
-  const larguras = [30, 34, 14, 52, 16, 16, 18, 20, 16]
+  // largura pelo maior texto da coluna nos dois blocos (cabeçalho ou descrição)
+  const larguras = [30, 50, 14, 52, 22, 30, 24, 20, 16]
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +

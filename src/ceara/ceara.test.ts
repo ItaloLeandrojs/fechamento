@@ -274,6 +274,10 @@ describe('Excel da contagem', () => {
       const lido = await lerOrcamento(await gerarExcelCeara(r, cab, { base, ajustes }))
       expect(lido.adicaoMaterial.get('900002')!.quantidade).toBe(8)
       expect(lido.adicaoMaterial.get('999999')!.quantidade).toBe(2)
+      // fora do catálogo: código em vermelho centralizado (S_CENTRO + S_VERMELHO = 4) nas duas abas
+      const zip = await JSZip.loadAsync(await gerarExcelCeara(r, cab, { base, ajustes }))
+      expect(await zip.file('xl/worksheets/sheet3.xml')!.async('string')).toMatch(/<c r="E\d+" s="4"><v>999999<\/v><\/c>/)
+      expect(await zip.file('xl/worksheets/sheet5.xml')!.async('string')).toMatch(/<c r="C\d+" s="4"><v>999999<\/v><\/c>/)
       for (const b of ['adicaoEstrutura', 'devolucaoEstrutura', 'devolucaoMaterial'] as const) {
         expect([...lido[b].entries()].map(([c, v]) => [c, v.quantidade])).toEqual(r[b].filter((l) => !l.semCodigo).map((l) => [l.codigo, l.quantidade]))
       }
