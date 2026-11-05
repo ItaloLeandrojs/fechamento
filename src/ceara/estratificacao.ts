@@ -65,7 +65,8 @@ export function limpar(ajuste: Ajuste, kit: ItemKit[]): Ajuste | undefined {
     const kitQtd = noKit.get(codigo)
     if (kitQtd !== undefined && arred(valor) !== kitQtd) qtd[codigo] = arred(valor)
   }
-  const novos = ajuste.novos.filter((n) => n.qtd > 0)
+  // novo com código do kit duplicaria a linha do kit: some também
+  const novos = ajuste.novos.filter((n) => n.qtd > 0 && !noKit.has(n.codigo))
   if (Object.keys(qtd).length === 0 && novos.length === 0) return undefined
   return { qtd, novos }
 }
@@ -123,7 +124,9 @@ export function aplicarSugestao(sugerido: Ajuste, base: BaseEnel, chave: string)
   }
   const novos: MaterialNovo[] = []
   for (const n of sugerido.novos) {
-    if (base.materiais[n.codigo]) novos.push({ codigo: n.codigo, qtd: n.qtd })
+    // agora é do kit (base nova): não pode ser novo
+    if (kit.some((i) => i.codigo === n.codigo)) ignorados.push(n.codigo)
+    else if (base.materiais[n.codigo]) novos.push({ codigo: n.codigo, qtd: n.qtd })
     else if (n.foraDoCatalogo) novos.push(n)
     else ignorados.push(n.codigo)
   }

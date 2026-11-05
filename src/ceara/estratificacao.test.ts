@@ -81,6 +81,15 @@ describe('estratificação do material', () => {
     expect(r.ajuste).toEqual({ qtd: { '900001': 1 }, novos: [{ codigo: '999999', qtd: 1, foraDoCatalogo: { descricao: 'M', unidade: 'UN' } }] })
   })
 
+  it('limpar descarta novo cujo código é do kit', () => {
+    expect(limpar({ qtd: {}, novos: [{ codigo: '900002', qtd: 1 }] }, kit)).toBeUndefined()
+  })
+
+  it('sugestão com novo que agora é do kit vai para ignorados', () => {
+    const r = aplicarSugestao({ qtd: {}, novos: [{ codigo: '900002', qtd: 1 }] }, BASE, 'KITX1')
+    expect(r).toEqual({ ajuste: undefined, ignorados: ['900002'] })
+  })
+
   it('mesma obra pela OT', () => {
     expect(mesmaObra('8000001_ASBUILT a.dxf', '8000001_ASBUILT b.dxf')).toBe(true)
     expect(mesmaObra('8000001_a.dxf', '8000002_a.dxf')).toBe(false)
