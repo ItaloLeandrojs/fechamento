@@ -19,7 +19,7 @@ Isso é você quem faz, com o seu e-mail e aceitando os termos.
 4. Preencha:
    - **Name:** `fechamento`.
    - **Database Password:** clique em **Generate a password**. Copie e guarde no seu gerenciador de senhas agora. Depois não dá para ver de novo.
-   - **Region:** **South America (São Paulo)**.
+   - **Region:** **South America (São Paulo)**. Confira antes de criar: o painel pode escolher os EUA sozinho, e a região não muda depois.
    - **Pricing Plan:** **Free**.
 5. Clique em **Create new project** e espere uns 2 minutos.
 
@@ -43,23 +43,27 @@ Pode rodar de novo sem medo. Ele não duplica nada.
 
 Só você cria contas. Ninguém pode se cadastrar sozinho.
 
-1. Menu **Authentication**.
-2. Abra **Sign In / Providers** (em alguns painéis o nome é **Providers**).
-3. Desligue **Allow new users to sign up**. Clique em **Save**.
-4. Ainda ali, clique em **Email**:
-   - Desligue **Confirm email**.
+1. Menu **Authentication**, depois **Sign In / Providers**.
+2. Desligue **Allow new users to sign up** e **Confirm email**. Deixe **Allow anonymous sign-ins** e **Allow manual linking** desligados. Clique em **Save changes**.
+3. Na lista **Auth Providers**, clique em **Email**:
    - Em **Minimum password length**, ponha **8**.
-5. Clique em **Save**.
+   - Deixe desligados **Secure password change** e **Require current password when updating**.
+   - Deixe **Password requirements** em **No required characters (default)**.
+4. Clique em **Save**.
 
-Não ligue **Password requirements** além do mínimo de 8, nem **Secure password change**: o site não sabe lidar com essas regras e a troca de senha falharia.
+Não ligue **Password requirements**, **Secure password change** nem **Require current password when updating**: o site não sabe lidar com essas regras e a troca de senha falharia.
+
+(Conferido no painel real em 04/11/2026.)
 
 ---
 
 ## 4. Pegar as chaves
 
-1. Menu **Project Settings** (a engrenagem), depois **API**. Em painéis novos pode estar em **API Keys**.
-2. Copie a **Project URL**.
-3. Copie a chave `anon` / **publishable**.
+**Copie as chaves no seu Chrome ou Edge, não no navegador de dentro do app do Claude.** Lá o botão de copiar dá "Unable to copy to clipboard" e o que se cola é outra coisa.
+
+1. Menu **Project Settings** (a engrenagem), depois **API Keys**.
+2. A **Project URL** aparece na página inicial do projeto (`https://<código>.supabase.co`).
+3. Copie a **Publishable key** (começa com `sb_publishable_`).
 4. Crie o arquivo `site-fechamento\.env.local` com estas duas linhas, trocando os valores:
 
 ```
@@ -71,7 +75,7 @@ Esse arquivo já é ignorado pelo Git. Não vai para o GitHub.
 
 ### Chave secreta (atenção)
 
-1. Na mesma tela, ache a chave `service_role` / **secret**. Clique em **Reveal** e copie.
+1. Na mesma tela, em **Secret keys**, clique no olho para mostrar a chave (começa com `sb_secret_`) e copie.
 2. Crie o arquivo `AUTOMACAO KIT MATERIAL\supabase.env` (na pasta de fora do site) com:
 
 ```
@@ -82,7 +86,9 @@ SUPABASE_SERVICE_ROLE_KEY=cole_aqui_a_chave_secreta
 **Esta chave só pode estar neste arquivo.** Não cole no `.env.local`, no código, no GitHub, em e-mail nem no chat. Quem tem essa chave apaga e lê tudo. Se vazar, em **Project Settings > API Keys**:
 
 - Com as chaves novas (`sb_secret_...` e `sb_publishable_...`): gere uma chave secreta nova, troque no `supabase.env` e apague/revogue a que vazou.
-- Com as chaves antigas (JWT, `service_role` e `anon`): girar o **JWT secret** troca as duas. Depois é preciso atualizar a chave `anon` no `.env.local` e montar o site de novo.
+- Com as chaves antigas (JWT, `service_role` e `anon`): girar o **JWT secret** troca as duas. Depois é preciso pôr a `service_role` nova no `supabase.env`, a `anon` nova no `.env.local` e montar o site de novo.
+
+O projeto `Fechamento Cosampa` (criado em 04/11/2026) usa as chaves novas.
 
 ---
 
@@ -172,3 +178,22 @@ python scripts/atualizar_base.py enel "<caminho da planilha nova.xlsx>" --seco
 ```
 
 O script usa o arquivo `AUTOMACAO KIT MATERIAL\supabase.env` da seção 4.
+
+---
+
+## 10. Conferir as regras de acesso
+
+Depois de mexer no esquema ou nas configurações de login, rode:
+
+```
+node scripts/conferir-supabase.mjs
+```
+
+Ele usa uma conta de teste (crie como na seção 5) e o arquivo `AUTOMACAO KIT MATERIAL\supabase-teste.env`, fora do site:
+
+```
+EMAIL_TESTE=e-mail da conta de teste
+SENHA_TESTE=senha atual da conta de teste
+```
+
+Deve terminar com **Tudo OK**. Ele confere que a conta lê só o próprio perfil e as bases e não grava nada, e que sem login não se lê nada, não se baixa nada, ninguém se cadastra e não há login anônimo. Se a conta de teste já trocou a senha no site, ponha a senha nova no arquivo.

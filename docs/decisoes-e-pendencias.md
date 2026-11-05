@@ -61,6 +61,13 @@ Feito com a instalação do projeto cosampa-site (nada entra neste): `createRequ
 - Navegador que não guarda nada: entra com um clique, com a foto, e o painel avisa "Este navegador não guarda seus dados; na próxima vez você terá de preencher de novo." (`gravarPessoa` devolve `guardou`). O aviso "a foto não coube" ficou só para a cota estourada.
 - "← Regiões" na EDP pede confirmação também quando só a foto do DP foi posta; só ter escolhido parcial ou final não conta.
 
+## Supabase ligado e conferido (04/11/2026)
+- Projeto `Fechamento Cosampa` em São Paulo (sa-east-1), plano Free, chaves novas (`sb_publishable_` no `.env.local`, `sb_secret_` só no `../supabase.env`). Esquema rodado; cadastro pelo site, confirmação de e-mail e login anônimo desligados; senha mínima de 8, sem exigências extras na troca.
+- Bases no servidor: Enel (13.807 materiais, 6.521 estruturas, 76.626 linhas de kit) e EDP (450 kits, 5.163 itens).
+- `node scripts/conferir-supabase.mjs`: 21 itens OK com a conta de teste e sem login (inclui a rota pública do bucket, o cadastro e o login anônimo recusados).
+- Site montado com o endereço real (`conferir-dist`: limpo) e testado pelo Italo no Chrome/Edge em localhost:4400: entrar, trocar a senha, foto, bases baixadas, uma obra da EDP e uma do Ceará, Sair.
+- Falta: publicar (merge no `main`, push e gh-pages pelo procedimento isolado do dist, com o `conferir-dist.mjs` antes) só com o OK do Italo; criar as contas da equipe (seção 5 do passo a passo); testar o login a partir da rede da empresa; conferir o SQL de senha esquecida (seção 6) na primeira vez que for preciso.
+
 ## Pendências
 1. Ficha de aterramento com mais de 8 pontos: hoje o site avisa e bloqueia; falta criar os blocos extras.
 2. Ficha de equipamento: lugar fixo para os equipamentos da ficha; acima disso o site dá erro claro.
