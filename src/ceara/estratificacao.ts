@@ -38,6 +38,9 @@ export interface LinhaEstrat {
 /** 3 casas em toda conta: 2,45 - 1,23 dá 1,22 e não 1,2200000000000002. */
 export const arred = (n: number) => Math.round(n * 1000) / 1000
 
+/** Pedaço de id do HTML a partir de um código (o digitado à mão pode ter espaço). */
+export const paraId = (codigo: string) => encodeURIComponent(codigo).replace(/%/g, '_')
+
 export function chaveKit(codigoLinha: string): string {
   return codigoLinha.endsWith('_S') ? codigoLinha.slice(0, -2) : codigoLinha
 }
@@ -77,7 +80,8 @@ export function linhasDoKit(base: BaseEnel, chave: string, ajuste: Ajuste | unde
   for (const item of kitDe(base, chave) ?? []) {
     const usado = arred(ajuste?.qtd[item.codigo] ?? item.qtd)
     let situacao: Situacao = 'igual'
-    if (usado === 0) situacao = 'nao-usado'
+    // kit com 0 na base e usado 0: nada mudou (é "igual", não "não usado")
+    if (usado === 0 && item.qtd > 0) situacao = 'nao-usado'
     else if (usado < item.qtd) situacao = 'diminuiu'
     else if (usado > item.qtd) situacao = 'a-mais'
     linhas.push({

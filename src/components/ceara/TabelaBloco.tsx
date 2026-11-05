@@ -4,7 +4,7 @@ import { Botao, Painel, Selo } from '../ui'
 import { formatarQtd } from '../../lib/busca'
 import type { BaseEnel, Linha } from '../../ceara/contagem'
 import type { Bloco, LinhaComparada } from '../../ceara/orcamento'
-import { chaveKit, kitDe, type Ajuste, type Ajustes } from '../../ceara/estratificacao'
+import { chaveKit, kitDe, paraId, type Ajuste, type Ajustes } from '../../ceara/estratificacao'
 import type { SugestaoGuardada } from '../../lib/banco'
 import { AjusteEstrutura } from './AjusteEstrutura'
 
@@ -70,7 +70,9 @@ export function TabelaBloco({ titulo, linhas, comparando, bloco, estrat }: { tit
                 const ajuste = ajustavel ? estrat.ajustes[chave] : undefined
                 const aberta = ajustavel && estrat.aberta === chave
                 const sugere = ajustavel && !ajuste && !!estrat.sugestoes[chave] && !estrat.tocadas.has(chave) && !estrat.recusadas.has(chave)
-                const idAjuste = `${id}-${chave}`
+                const idAjuste = `${id}-${paraId(chave)}`
+                // a linha da sugestão some depois da resposta: o foco vai para o "Ajustar material"
+                const focarAjustar = () => document.getElementById(`${idAjuste}-botao`)?.focus()
                 return (
                   <Fragment key={l.codigo}>
                     <tr>
@@ -86,6 +88,7 @@ export function TabelaBloco({ titulo, linhas, comparando, bloco, estrat }: { tit
                         {l.palpite && <span className="block text-xs font-medium text-text">regra deduzida, a confirmar</span>}
                         {ajustavel && (
                           <Botao
+                            id={`${idAjuste}-botao`}
                             variante="secundario"
                             className="mt-2 text-sm"
                             aria-expanded={aberta}
@@ -112,10 +115,25 @@ export function TabelaBloco({ titulo, linhas, comparando, bloco, estrat }: { tit
                           <div className="sticky left-0 w-[100cqw] flex flex-wrap items-center gap-x-3 gap-y-2 px-4 md:px-5 py-3 bg-bg">
                             <p className="text-sm min-w-0">Na última obra você ajustou esta estrutura</p>
                             <span className="flex gap-2">
-                              <Botao variante="secundario" className="text-sm" onClick={() => estrat.onUsarSugestao(chave)}>
+                              <Botao
+                                variante="secundario"
+                                className="text-sm"
+                                onClick={() => {
+                                  focarAjustar()
+                                  estrat.onUsarSugestao(chave)
+                                }}
+                              >
                                 Usar o mesmo ajuste
                               </Botao>
-                              <Botao variante="fantasma" className="text-sm" aria-label={`Não usar o ajuste da última obra em ${l.codigo}`} onClick={() => estrat.onRecusar(chave)}>
+                              <Botao
+                                variante="fantasma"
+                                className="text-sm"
+                                aria-label={`Não usar o ajuste da última obra em ${l.codigo}`}
+                                onClick={() => {
+                                  focarAjustar()
+                                  estrat.onRecusar(chave)
+                                }}
+                              >
                                 Não
                               </Botao>
                             </span>

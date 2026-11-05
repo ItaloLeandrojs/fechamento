@@ -541,6 +541,8 @@ async function ceara() {
     await ajuste.getByRole('button', { name: 'Aumentar' }).nth(1).click()
     await ajuste.getByLabel('Adicionar material do almoxarifado').fill('conector')
     await ajuste.getByRole('button', { name: /^Adicionar \S/ }).first().click()
+    // a lista da busca some: o foco volta para o campo da busca
+    if ((await page.evaluate(() => document.activeElement?.getAttribute('type'))) !== 'search') falhas.push(`[${tag}] depois de "Adicionar" o foco devia voltar para a busca`)
     await ajuste.getByRole('button', { name: 'Não achei no catálogo: digitar à mão' }).click()
     await ajuste.getByLabel('Código', { exact: true }).fill('999999')
     await ajuste.getByLabel('Descrição', { exact: true }).fill('MATERIAL DE TESTE')
@@ -590,6 +592,14 @@ async function ceara() {
       if (await regiaoEst.getByText('estratificada', { exact: true }).count()) falhas.push(`[${tag}] a sugestão foi aplicada sem clique`)
       await page.getByRole('button', { name: 'Usar o mesmo ajuste' }).first().click()
       await regiaoEst.getByText('estratificada', { exact: true }).first().waitFor({ timeout: 5000 }).catch(() => falhas.push(`[${tag}] "Usar o mesmo ajuste" não deixou a estrutura estratificada`))
+      // a linha da sugestão some: o foco vai para o "Ajustar material" da mesma estrutura
+      if ((await page.evaluate(() => document.activeElement?.textContent?.trim())) !== 'Ajustar material') falhas.push(`[${tag}] depois de "Usar o mesmo ajuste" o foco devia ir para "Ajustar material"`)
+      // "Voltar ao kit original" some com o ajuste: o foco vai para o título do ajuste
+      const botaoSug = regiaoEst.getByRole('button', { name: 'Ajustar material' }).first()
+      if ((await botaoSug.getAttribute('aria-expanded')) !== 'true') await botaoSug.click()
+      const ajusteSug = page.locator(`[id="${await botaoSug.getAttribute('aria-controls')}"]`)
+      await ajusteSug.getByRole('button', { name: 'Voltar ao kit original' }).click()
+      if ((await page.evaluate(() => document.activeElement?.tagName)) !== 'H3') falhas.push(`[${tag}] depois de "Voltar ao kit original" o foco devia ir para o título do ajuste`)
       await axe(page, `${tag} sugestão usada`)
     }
     for (const e of erros) falhas.push(`[${tag}] erro: ${e}`)
@@ -998,7 +1008,8 @@ async function plataforma() {
     // Ceará pronto: abre a tela da contagem pelo CAD e o "← Regiões" volta ao painel
     await page.getByRole('button', { name: 'Ceará', exact: true }).click()
     try {
-      await page.getByRole('heading', { name: 'Fechamento Ceará' }).waitFor({ timeout: 5000 })
+      // com o menu lateral, o título da tela do Ceará é o da ferramenta aberta
+      await page.getByRole('heading', { level: 1, name: 'Leitura do CAD' }).waitFor({ timeout: 5000 })
       await axe(page, `${tag} Ceará pelo painel`)
       await tira('07-ceara-pelo-painel')
       await page.getByRole('button', { name: 'Regiões' }).click()

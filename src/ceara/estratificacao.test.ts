@@ -41,6 +41,15 @@ describe('estratificação do material', () => {
     expect(linhasDoKit(BASE, 'KITX1', ajuste).map((x) => x.codigo)).toEqual(['900001', '900002', '900003', '900005', '900004'])
   })
 
+  it('item com 0 no kit e usado 0 é igual, não "não usado"', () => {
+    const base: BaseEnel = { ...BASE, kits: { KITZ: [['900001', 0], ['900002', 2]] } }
+    const l = Object.fromEntries(linhasDoKit(base, 'KITZ', undefined).map((x) => [x.codigo, x]))
+    expect(l['900001']).toMatchObject({ situacao: 'igual', noKit: 0, usado: 0, retirada: 0, aMais: 0 })
+    // usado a mais num item de kit 0 continua "a mais"
+    const comAjuste = linhasDoKit(base, 'KITZ', { qtd: { '900001': 3 }, novos: [] }).find((x) => x.codigo === '900001')
+    expect(comAjuste).toMatchObject({ situacao: 'a-mais', aMais: 3 })
+  })
+
   it('sem ajuste é tudo igual', () => {
     expect(linhasDoKit(BASE, 'KITX1', undefined).every((l) => l.situacao === 'igual')).toBe(true)
   })

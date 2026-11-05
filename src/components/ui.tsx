@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref } from 'react'
 import { Minus, Plus } from '@phosphor-icons/react'
 import { formatarQtd } from '../lib/busca'
 import { ehQuilo, nomeOperacao } from '../state'
@@ -27,7 +27,8 @@ export function Botao({ variante = 'secundario', icone = false, className = '', 
   )
 }
 
-export function Campo({ rotulo, ajuda, className = '', ...rest }: InputHTMLAttributes<HTMLInputElement> & { rotulo: string; ajuda?: string }) {
+// ref vai direto para o input (React 19: ref é prop comum)
+export function Campo({ rotulo, ajuda, className = '', ...rest }: InputHTMLAttributes<HTMLInputElement> & { rotulo: string; ajuda?: string; ref?: Ref<HTMLInputElement> }) {
   const id = useId()
   return (
     <div className={`grid gap-1.5 ${className}`}>

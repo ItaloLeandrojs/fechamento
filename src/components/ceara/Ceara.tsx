@@ -108,6 +108,9 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
       // mesma obra: fica o ajuste das estruturas que continuam; outra obra: começa do zero
       if (mesmaObra(nomeDxf, f.name)) {
         setAjustes((a) => ajustesValidos(a, r.adicaoEstrutura))
+        // estrutura que sumiu do desenho sai das tocadas: o próximo download não apaga a sugestão dela
+        const chaves = new Set(r.adicaoEstrutura.map((l) => chaveKit(l.codigo)))
+        setTocadas((t) => new Set([...t].filter((c) => chaves.has(c))))
         setAberta((ch) => (ch && r.adicaoEstrutura.some((l) => chaveKit(l.codigo) === ch) ? ch : null))
       } else {
         setAjustes({})
@@ -169,6 +172,8 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
       return n
     })
     tocar(chave)
+    // o Excel baixado ficou velho
+    setBaixado('')
   }
   const usarSugestao = (chave: string) => {
     const s = sugestoes[chave]
