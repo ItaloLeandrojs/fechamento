@@ -1,12 +1,14 @@
 // Banco do navegador (IndexedDB) deste computador: técnicos, bases baixadas e sugestões de ajuste.
-// Versão 1 só tinha 'tecnicos'; a 2 acrescenta 'bases'; a 3 acrescenta 'ajustes'. Nenhuma mexe nas lojas antigas.
+// Versão 1 só tinha 'tecnicos'; a 2 acrescenta 'bases'; a 3 acrescenta 'ajustes'; a 4 acrescenta 'maoDeObra' (respostas por OT). Nenhuma mexe nas lojas antigas.
 import type { Ajuste } from '../ceara/estratificacao'
+import type { RespostasMO } from '../ceara/maoDeObra'
 
 const DB = 'fechamento'
-const VERSAO = 3
+const VERSAO = 4
 export const LOJA_TECNICOS = 'tecnicos'
 export const LOJA_BASES = 'bases'
 export const LOJA_AJUSTES = 'ajustes'
+export const LOJA_MAO_DE_OBRA = 'maoDeObra' // keyPath 'ot'
 
 /** Último ajuste feito numa estrutura (chave sem _S), guardado só neste navegador. */
 export interface SugestaoGuardada { estrutura: string; ajuste: Ajuste; data: string }
@@ -38,6 +40,7 @@ export function abrirBanco(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(LOJA_TECNICOS)) db.createObjectStore(LOJA_TECNICOS, { keyPath: 'registro' })
       if (!db.objectStoreNames.contains(LOJA_BASES)) db.createObjectStore(LOJA_BASES, { keyPath: 'nome' })
       if (!db.objectStoreNames.contains(LOJA_AJUSTES)) db.createObjectStore(LOJA_AJUSTES, { keyPath: 'estrutura' })
+      if (!db.objectStoreNames.contains(LOJA_MAO_DE_OBRA)) db.createObjectStore(LOJA_MAO_DE_OBRA, { keyPath: 'ot' })
     }
     req.onblocked = () => {
       // outra aba ainda tem a versão antiga aberta: não espera para sempre
@@ -128,6 +131,35 @@ export async function gravarSugestoes(gravar: SugestaoGuardada[], apagar: string
     return true
   } catch {
     // sem IndexedDB: segue sem guardar a sugestão
+    return false
+  }
+}
+
+export async function lerRespostasMO(ot: string): Promise<RespostasMO | null> {
+  try {
+    return await comBanco<RespostasMO | null>((db) => new Promise((ok, erro) => {
+      const req = db.transaction(LOJA_MAO_DE_OBRA).objectStore(LOJA_MAO_DE_OBRA).get(ot)
+      req.onsuccess = () => ok((req.result as RespostasMO | undefined) ?? null)
+      req.onerror = () => erro(req.error)
+    }))
+  } catch {
+    return null // navegador sem IndexedDB: não há resposta guardada
+  }
+}
+
+/** true só se gravou. */
+export async function gravarRespostasMO(r: RespostasMO): Promise<boolean> {
+  try {
+    await comBanco((db) => new Promise<void>((ok, erro) => {
+      const tx = db.transaction(LOJA_MAO_DE_OBRA, 'readwrite')
+      tx.objectStore(LOJA_MAO_DE_OBRA).put(r)
+      tx.oncomplete = () => ok()
+      tx.onerror = () => erro(tx.error)
+      tx.onabort = () => erro(tx.error)
+    }))
+    return true
+  } catch {
+    // sem IndexedDB: segue sem guardar as respostas
     return false
   }
 }
