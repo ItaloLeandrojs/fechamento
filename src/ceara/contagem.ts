@@ -26,6 +26,8 @@ export interface Etiqueta {
   linhas: string[]
   itens: ItemEtiqueta[]
   camada: string
+  /** "LINHA VIVA" logo em cima da etiqueta (ou como primeira linha dela): só existe quando é true. */
+  linhaViva?: true
 }
 
 export interface Vao {
@@ -434,6 +436,9 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
   // número do poste escrito à parte (ex.: "01", às vezes junto da coordenada): fica em cima ou embaixo da etiqueta
   const numerosSoltos: { numero: string; caixa: Caixa; usado: boolean }[] = []
   const semNumero: { etiqueta: Etiqueta; caixa: Caixa }[] = []
+  // "LINHA VIVA" escrito à parte, e todas as etiquetas com a caixa, para ligar um ao outro
+  const vivos: { caixa: Caixa; usado: boolean }[] = []
+  const comCaixa: { etiqueta: Etiqueta; caixa: Caixa }[] = []
 
   for (const b of blocos) {
     // etiqueta de poste: tem poste (esforço/altura) ou estrutura, com ou sem prefixo
@@ -441,6 +446,17 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
     if (uteis.length === 1 && NUMERO_POSTE.test(uteis[0])) {
       numerosSoltos.push({ numero: uteis[0].replace(/^P/, ''), caixa: b.caixa, usado: false })
       continue
+    }
+    // "LINHA VIVA" sozinho: marca a etiqueta logo embaixo (ligado depois)
+    if (uteis.length === 1 && ehLinhaViva(uteis[0])) {
+      vivos.push({ caixa: b.caixa, usado: false })
+      continue
+    }
+    // "LINHA VIVA" como primeira linha da etiqueta: sai das linhas e marca a etiqueta
+    let viva = false
+    if (uteis.length > 1 && ehLinhaViva(uteis[0])) {
+      uteis.shift()
+      viva = true
     }
     // o número do poste fecha a etiqueta embaixo ou abre em cima
     let poste = ''
@@ -454,10 +470,13 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
     // texto solto que não é etiqueta (legenda, carimbo, nota): fica de fora
     if (!itens.length || (!temPoste && (reconhecidos === 0 || reconhecidos < itens.length / 2))) continue
     const etiqueta: Etiqueta = { poste, linhas: poste ? [...uteis, poste] : uteis, itens, camada: b.camada }
+    if (viva) etiqueta.linhaViva = true
     etiquetas.push(etiqueta)
+    comCaixa.push({ etiqueta, caixa: b.caixa })
     if (!poste) semNumero.push({ etiqueta, caixa: b.caixa })
   }
   darNumerosSoltos(semNumero, numerosSoltos)
+  ligarLinhaViva(comCaixa, vivos)
 
   // etiqueta repetida do mesmo poste (versão antiga não apagada): conta uma só e avisa
   const vistos = new Map<string, Etiqueta>()
@@ -466,6 +485,7 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
     const chave = JSON.stringify([e.poste, e.linhas])
     if (vistos.has(chave)) {
       etiquetas.splice(etiquetas.indexOf(e), 1)
+      if (e.linhaViva) vistos.get(chave)!.linhaViva = true
       avisos.push(`Etiqueta do poste ${e.poste} aparece duas vezes iguais no desenho: contei uma vez só.`)
     } else vistos.set(chave, e)
   }
@@ -602,6 +622,35 @@ function darNumerosSoltos(semNumero: { etiqueta: Etiqueta; caixa: Caixa }[], num
     ligadas.add(p.e.etiqueta)
     p.e.etiqueta.poste = p.n.numero
     p.e.etiqueta.linhas = [...p.e.etiqueta.linhas, p.n.numero]
+  }
+}
+
+/** Até quantas alturas de letra o "LINHA VIVA" pode ficar acima do topo da etiqueta. */
+const DISTANCIA_LINHA_VIVA = 6
+
+/** O texto é exatamente "LINHA VIVA" (sem espaços extras, maiúsculas ou não). */
+const ehLinhaViva = (l: string) => /^LINHA VIVA$/i.test(l.trim().replace(/\s+/g, ' '))
+
+/**
+ * "LINHA VIVA" escrito à parte marca a etiqueta que está logo embaixo dele, alinhada em x como o
+ * número solto. Texto embaixo da etiqueta ou longe não vale. Cada texto marca uma etiqueta só, a mais perto.
+ */
+function ligarLinhaViva(etiquetas: { etiqueta: Etiqueta; caixa: Caixa }[], vivos: { caixa: Caixa; usado: boolean }[]): void {
+  const pares: { e: (typeof etiquetas)[number]; v: (typeof vivos)[number]; distancia: number }[] = []
+  for (const e of etiquetas) {
+    const folga = e.caixa.h
+    for (const v of vivos) {
+      if (v.caixa.x1 < e.caixa.x0 - folga || v.caixa.x0 > e.caixa.x1 + folga) continue
+      const distancia = v.caixa.base - e.caixa.topo
+      if (distancia < -folga || distancia > DISTANCIA_LINHA_VIVA * e.caixa.h) continue
+      pares.push({ e, v, distancia })
+    }
+  }
+  pares.sort((a, b) => a.distancia - b.distancia)
+  for (const p of pares) {
+    if (p.v.usado || p.e.etiqueta.linhaViva) continue
+    p.v.usado = true
+    p.e.etiqueta.linhaViva = true
   }
 }
 

@@ -118,6 +118,46 @@ describe('contagem pelas etiquetas', () => {
   })
 })
 
+describe('linha viva', () => {
+  const mtextEm = (bruto: string, x: number, y: number): TextoDxf => ({ tipo: 'MTEXT', bruto, camada: 'DESCRICAOPROJETADA', x, y, altura: 2 })
+  const vivas = (r: ReturnType<typeof contarObra>) => r.etiquetas.map((e) => e.linhaViva === true)
+
+  it('LINHA VIVA em cima marca o poste', () => {
+    const r = contarObra(dxfDe([mtextEm('LINHA VIVA', 100, 506), mtextEm('(1)600/12 M1\\P1', 100, 500)]))
+    expect(r.etiquetas).toHaveLength(1)
+    expect(r.etiquetas[0].poste).toBe('1')
+    expect(r.etiquetas[0].linhaViva).toBe(true)
+  })
+
+  it('LINHA VIVA como primeira linha', () => {
+    const r = contarObra(dxfDe(['LINHA VIVA\\P(1)600/12 M1\\P1']))
+    expect(r.etiquetas[0].linhaViva).toBe(true)
+    expect(r.etiquetas[0].linhas).toEqual(['(1)600/12 M1', '1'])
+    expect(r.etiquetas[0].itens.map((i) => i.texto)).toEqual(['600/12', 'M1'])
+  })
+
+  it('legenda e nota não valem', () => {
+    const r = contarObra(dxfDe([mtextEm('ACESSO À LINHA VIVA', 100, 506), mtextEm('LINHA VIVA', 900, 900), mtextEm('(1)600/12 M1\\P1', 100, 500)]))
+    expect(vivas(r)).toEqual([false])
+    expect('linhaViva' in r.etiquetas[0]).toBe(false)
+  })
+
+  it('só a etiqueta de baixo', () => {
+    const r = contarObra(dxfDe([mtextEm('(1)300/9 S2N\\P2', 100, 540), mtextEm('LINHA VIVA', 100, 506), mtextEm('(1)600/12 M1\\P1', 100, 500)]))
+    expect(Object.fromEntries(r.etiquetas.map((e) => [e.poste, e.linhaViva === true]))).toEqual({ '1': true, '2': false })
+  })
+
+  it('texto embaixo da etiqueta não marca', () => {
+    const r = contarObra(dxfDe([mtextEm('(1)600/12 M1\\P1', 100, 500), mtextEm('LINHA VIVA', 100, 480)]))
+    expect(vivas(r)).toEqual([false])
+  })
+
+  it('aceita minúsculas e espaço a mais, mas não texto com mais palavras', () => {
+    expect(vivas(contarObra(dxfDe([mtextEm('Linha  Viva', 100, 506), mtextEm('(1)600/12 M1\\P1', 100, 500)])))).toEqual([true])
+    expect(vivas(contarObra(dxfDe([mtextEm('LINHA VIVA AQUI', 100, 506), mtextEm('(1)600/12 M1\\P1', 100, 500)])))).toEqual([false])
+  })
+})
+
 describe('cabos', () => {
   it('BT novo pelo código da bitola, +5% arredondado ao mais perto; fitas só com BT novo', () => {
     const r = contarObra(dxfDe(['\\A1;(1)AM050T40', '\\A1;(1)AM050T50', '\\A1;(1)AM035T10', '(1)300/9 S2N S2C\\P1']))
