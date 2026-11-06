@@ -6,7 +6,7 @@ import { Workbook } from '../core/workbook'
 import { SheetEditor } from '../core/sheet'
 import { linhasDoTexto } from './mtext'
 import { lerDxf, type TextoDxf } from './dxf'
-import { dxfDe, mtextEm } from './teste-dxf'
+import { cota, dxfDe, mtextEm } from './teste-dxf'
 import JSZip from 'jszip'
 import { codigoDeSucata, contarObra, converterCabos, lerCabo, nomesDeCabo, type BaseEnel, type Catalogo, type Linha } from './contagem'
 import type { Ajustes } from './estratificacao'
@@ -24,7 +24,6 @@ describe('texto do CAD', () => {
 
 const text = (bruto: string, x: number, y: number, camada = '0'): TextoDxf => ({ tipo: 'TEXT', bruto, camada, x, y, altura: 2.24 })
 const qtd = (l: Linha[]) => Object.fromEntries(l.map((x) => [x.codigo, Math.round(x.quantidade * 100) / 100]))
-const cota = (modelo: string, medida: number) => ({ modelo, substituto: '', medida, camada: '' })
 
 // pedaço da base da Enel, só o que os testes usam
 const CATALOGO: Catalogo = {

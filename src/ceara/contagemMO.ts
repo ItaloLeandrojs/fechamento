@@ -1,7 +1,8 @@
 // Mão de obra do Ceará contada pelo DXF já lido (ResultadoCeara): por papel (ex. "poste MT novo",
 // "retirada de cruzeta passante"), poste por poste. A voz real de cada papel vem da tabela de regras
 // (fora do repositório); aqui só os papéis. Regras: docs/2026-11-06-ceara-mao-de-obra-dxf-design.md.
-import type { Etiqueta, ItemEtiqueta, ResultadoCeara } from './contagem'
+import { lerCabo, type Etiqueta, type ItemEtiqueta, type ResultadoCeara, type Vao } from './contagem'
+import { arred } from './estratificacao'
 import type { Aba, BaseMaoDeObra, Papel } from './maoDeObra'
 
 export interface Contagem {
@@ -80,20 +81,98 @@ export function facesBT(armacoes: { codigo: string; quantidade: number }[]): num
   return faces
 }
 
-export function contarDesenhoMO(r: ResultadoCeara, _regras: Pick<BaseMaoDeObra, 'regrasCabo' | 'tensionar'>, resp: RespostasDesenho): DesenhoMO {
+/** Rede do cabo (MT ou BT) pelos vãos: tem vão existente (sem prefixo ou (2))? tem vão novo ou retirado? */
+function redes(vaos: Vao[]): Record<'mt' | 'bt', { existente: boolean; novo: boolean }> {
+  const out = { mt: { existente: false, novo: false }, bt: { existente: false, novo: false } }
+  for (const v of vaos) {
+    const g = lerCabo(v.cabo).grupo
+    const rede = g === 'mt' ? out.mt : g === 'bt-nu' || g === 'bt-multi' ? out.bt : null
+    if (!rede) continue
+    if (v.situacao === 1 || v.situacao === 3) rede.novo = true
+    else rede.existente = true
+  }
+  return out
+}
+
+export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, 'regrasCabo' | 'tensionar'>, resp: RespostasDesenho): DesenhoMO {
   const contagens: Contagem[] = []
+  const perguntas: Pergunta[] = []
+  const chavesPerguntas: string[] = []
+  const naoCobrado: string[] = []
   const semRegra: DesenhoMO['semRegra'] = []
   const linhaViva: DesenhoMO['linhaViva'] = []
 
-  /** Contagens iguais (mesma aba, papel e origem) somam. */
-  const somar = (aba: Aba, papel: Papel, quantidade: number, origem: string, confira = false) => {
-    if (quantidade <= 0) return
-    const ex = contagens.find((c) => c.aba === aba && c.papel === papel && c.origem === origem)
+  /** Contagens iguais (mesma aba, papel ou voz e origem) somam; as que faltam responder ficam cada uma na sua linha. */
+  const juntar = (c: Contagem) => {
+    if (c.falta) return void contagens.push(c)
+    if (c.quantidade <= 0) return
+    const ex = contagens.find((x) => !x.falta && x.aba === c.aba && x.papel === c.papel && x.voz === c.voz && x.origem === c.origem)
     if (ex) {
-      ex.quantidade += quantidade
-      if (confira) ex.confira = true
-    } else contagens.push({ aba, papel, quantidade, origem, ...(confira ? { confira: true } : {}) })
+      ex.quantidade = arred(ex.quantidade + c.quantidade)
+      if (c.confira) ex.confira = true
+    } else contagens.push(c)
   }
+  const somar = (aba: Aba, papel: Papel, quantidade: number, origem: string, confira = false) =>
+    juntar({ aba, papel, quantidade, origem, ...(confira ? { confira: true } : {}) })
+  const perguntar = (p: Pergunta, respondida: boolean) => {
+    if (!chavesPerguntas.includes(p.chave)) chavesPerguntas.push(p.chave)
+    if (!respondida && !perguntas.some((x) => x.chave === p.chave)) perguntas.push(p)
+  }
+  const naoCobra = (texto: string) => {
+    if (!naoCobrado.includes(texto)) naoCobrado.push(texto)
+  }
+
+  // ---------------- cabo, pelos vãos (1) e (3) somados por situação e nome ----------------
+  const porCabo = new Map<string, { situacao: 1 | 3; nome: string; metros: number }>()
+  for (const v of r.vaos) {
+    if (v.situacao !== 1 && v.situacao !== 3) continue // existente ou (2): o tensionar sai dos postes
+    const k = v.situacao + v.cabo
+    const atual = porCabo.get(k) ?? { situacao: v.situacao, nome: v.cabo, metros: 0 }
+    atual.metros = arred(atual.metros + v.metros)
+    porCabo.set(k, atual)
+  }
+  for (const { situacao, nome, metros } of porCabo.values()) {
+    const cabo = lerCabo(nome)
+    const regra =
+      cabo.grupo === 'outro'
+        ? undefined
+        : regras.regrasCabo.find(
+            (g) => g.grupo === cabo.grupo && g.situacao === (situacao === 1 ? 'novo' : 'retirado') && (!g.bitolas || g.bitolas.includes(cabo.bitola)),
+          )
+    if (cabo.grupo === 'outro' || !regra) {
+      semRegra.push({ poste: 'vãos', texto: `(${situacao})${nome}` })
+      continue
+    }
+    const base = { aba: (situacao === 1 ? 'adicao' : 'devolucao') as Aba, voz: regra.voz, origem: cabo.grupo === 'mt' ? 'vãos de MT' : 'vãos de BT' }
+    if (regra.por === 'metro') {
+      juntar({ ...base, quantidade: metros })
+      continue
+    }
+    // por condutor: MT pelas fases do nome (sem elas, pergunta); BT nu pelos condutores do nome; pré-reunido = 1
+    if (cabo.grupo === 'mt') {
+      let fases = cabo.fases
+      if (fases === null) {
+        const chave = 'fases|' + nome
+        const dada = resp.fases[chave]
+        const ok = typeof dada === 'number' && dada > 0
+        perguntar({ tipo: 'fases', chave, cabo: nome, metros }, ok)
+        if (!ok) {
+          contagens.push({ ...base, quantidade: 0, falta: 'falta o número de fases' })
+          continue
+        }
+        fases = dada
+      }
+      juntar({ ...base, quantidade: arred(metros * fases) })
+    } else if (cabo.grupo === 'bt-nu') {
+      juntar({ ...base, quantidade: arred(metros * (cabo.condutores ?? 1)), ...(cabo.condutores === null ? { confira: true } : {}) })
+    } else juntar({ ...base, quantidade: metros })
+  }
+
+  // ---------------- tensionar: as expressões vêm da tabela de regras ----------------
+  const comExpressoes = (rede: 'mt' | 'bt') => regras.tensionar.filter((t) => t.rede === rede).map((t) => ({ qtd: t.qtd, exige: t.exige.map((x) => new RegExp(x)) }))
+  const tensionarMT = comExpressoes('mt')
+  const tensionarBT = comExpressoes('bt')
+  const rede = redes(r.vaos)
 
   for (const e of r.etiquetas) {
     const origem = e.poste ? 'P' + e.poste : 'sem nº'
@@ -187,7 +266,49 @@ export function contarDesenhoMO(r: ResultadoCeara, _regras: Pick<BaseMaoDeObra, 
       if (doTrafo && (c === 'CF' || i.tipo === 'elo' || c === 'ATER-SP')) continue
       semRegra.push({ poste: origem, texto: `(${i.situacao})${i.texto.replace('CAVA_KLC', 'CAVA KLC')}` })
     }
+
+    // tensionar, pelas estruturas (1) (o (2) já desdobrado) que ancoram o cabo
+    // MT: por estrutura reconhecida, cada unidade com a maior qtd das expressões que acham o código
+    const vistos = new Map<string, number>()
+    const ancorasMT = mts
+      .filter((m) => m.item.situacao === 1)
+      .flatMap((m) => {
+        const codigo = codigoLimpo(m.item.codigo)
+        const qtd = Math.max(0, ...tensionarMT.filter((t) => t.exige.every((x) => x.test(codigo))).map((t) => t.qtd))
+        return qtd ? Array.from({ length: m.item.quantidade }, () => ({ codigo, qtd })) : []
+      })
+      .map((a) => {
+        const n = (vistos.get(a.codigo) ?? 0) + 1
+        vistos.set(a.codigo, n)
+        return { ...a, n }
+      })
+    // BT: por poste, a maior qtd das regras em que todas as expressões acham uma estrutura (1) do poste
+    const estruturasBT = itens.filter((i) => i.situacao === 1 && i.tipo === 'estrutura' && !estruturaMT(i)).map((i) => codigoLimpo(i.codigo))
+    let ancoraBT: { qtd: number; codigos: string[] } | null = null
+    for (const t of tensionarBT) {
+      const achados = t.exige.map((x) => estruturasBT.find((c) => x.test(c)))
+      if (achados.every((c) => c !== undefined) && t.qtd > (ancoraBT?.qtd ?? 0)) ancoraBT = { qtd: t.qtd, codigos: [...new Set(achados as string[])] }
+    }
+
+    if (lv) {
+      // a voz da cruzeta de linha viva já leva o tensionar
+      if (ancorasMT.length || ancoraBT) naoCobra(`${origem}: linha viva, o tensionar vai na voz da cruzeta`)
+      continue
+    }
+    /** Certeza pela rede daquele cabo; dos dois tipos de vão, vale a resposta (ou pergunta). */
+    const decidir = (daRede: { existente: boolean; novo: boolean }, chave: string, texto: string, qtd: number, codigos: string) => {
+      const nota = (respondido: boolean) => `${origem}: a ${codigos} ancora cabo novo${respondido ? ' (respondido)' : ''}, tensionar não cobra`
+      if (!daRede.existente) return naoCobra(nota(false))
+      if (!daRede.novo) return somar('adicao', 'tensionar', qtd, origem)
+      const dada = resp.tensionar[chave]
+      perguntar({ tipo: 'tensionar', chave, poste: origem, texto }, typeof dada === 'boolean')
+      if (dada === true) somar('adicao', 'tensionar', qtd, origem)
+      else if (dada === false) naoCobra(nota(true))
+      else contagens.push({ aba: 'adicao', papel: 'tensionar', quantidade: qtd, origem, falta: 'responda o tensionar' })
+    }
+    for (const a of ancorasMT) decidir(rede.mt, `${origem}|mt|${a.codigo}|${a.n}`, `O cabo que a ${a.codigo} do ${origem} ancora é existente?`, a.qtd, a.codigo)
+    if (ancoraBT) decidir(rede.bt, `${origem}|bt`, `O cabo de BT que o ${origem} ancora é existente?`, ancoraBT.qtd, ancoraBT.codigos.join(' + '))
   }
 
-  return { contagens, perguntas: [], chavesPerguntas: [], naoCobrado: [], semRegra, linhaViva }
+  return { contagens, perguntas, chavesPerguntas, naoCobrado, semRegra, linhaViva }
 }

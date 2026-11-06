@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { contarObra } from './contagem'
 import { contarDesenhoMO, desdobrar, facesBT, type DesenhoMO, type RespostasDesenho } from './contagemMO'
-import { dxfDe, mtextEm } from './teste-dxf'
-import type { Papel } from './maoDeObra'
+import { cota, dxfDe, mtextEm } from './teste-dxf'
+import type { BaseMaoDeObra, Papel } from './maoDeObra'
 import type { TextoDxf } from './dxf'
 
 const vazia = (): RespostasDesenho => ({ tensionar: {}, fases: {}, linhaViva: {} })
@@ -169,5 +169,182 @@ describe('mão de obra dos postes', () => {
       { aba: 'adicao', papel: 'cruzeta-nu', quantidade: 1, origem: 'sem nº' },
     ])
     expect(d).toMatchObject({ perguntas: [], chavesPerguntas: [], naoCobrado: [] })
+  })
+})
+
+type Regras = Pick<BaseMaoDeObra, 'regrasCabo' | 'tensionar'>
+const regrasTeste: Regras = {
+  regrasCabo: [
+    { grupo: 'bt-multi', situacao: 'novo', voz: 'XX243', por: 'metro' },
+    { grupo: 'mt', situacao: 'novo', voz: 'XX201', por: 'metro', bitolas: ['004'] },
+    { grupo: 'mt', situacao: 'retirado', voz: 'XX208', por: 'condutor' },
+    { grupo: 'bt-nu', situacao: 'retirado', voz: 'XX211', por: 'condutor' },
+  ],
+  tensionar: [
+    { rede: 'mt', exige: ['^(M|MB|N|NB|B|BB|U|UB)3'], qtd: 1 },
+    { rede: 'mt', exige: ['^(M|MB|N|NB|B|BB|U|UB)4'], qtd: 2 },
+    { rede: 'bt', exige: ['^S2N$', '^S2C$'], qtd: 2 },
+    { rede: 'bt', exige: ['^S2[A-Z]?$'], qtd: 1 },
+  ],
+}
+const contarMO = (textos: (string | TextoDxf)[], cotas: ReturnType<typeof cota>[] = [], resp: RespostasDesenho = vazia(), rg: Regras = regrasTeste) =>
+  contarDesenhoMO(contarObra(dxfDe(textos, cotas)), rg, resp)
+/** Contagens de cabo (com voz), sem as que faltam responder. */
+const porVoz = (d: DesenhoMO) =>
+  d.contagens.filter((c) => c.voz && !c.falta).map(({ aba, voz, quantidade, origem, confira }) => ({ aba, voz, quantidade, origem, ...(confira ? { confira } : {}) }))
+const tensionar = (d: DesenhoMO) => porPapel(d).tensionar ?? 0
+const mtExistente = cota('P3AN004<>', 50)
+const mtNovo = cota('(1)P3AN004<>', 50)
+
+describe('mão de obra do cabo', () => {
+  it('cabo por metro de rede', () => {
+    expect(porVoz(contarMO([], [cota('(1)P3AN004<>', 100)]))).toEqual([{ aba: 'adicao', voz: 'XX201', quantidade: 100, origem: 'vãos de MT' }])
+    // pré-reunido novo, também por metro
+    expect(porVoz(contarMO([], [cota('(1)AM035T<>', 40)]))).toEqual([{ aba: 'adicao', voz: 'XX243', quantidade: 40, origem: 'vãos de BT' }])
+  })
+
+  it('retirada por condutor', () => {
+    expect(porVoz(contarMO([], [cota('(3)P3AN004<>', 100)]))).toEqual([{ aba: 'devolucao', voz: 'XX208', quantidade: 300, origem: 'vãos de MT' }])
+    expect(porVoz(contarMO(['\\A1;(3)2AN00438']))).toEqual([{ aba: 'devolucao', voz: 'XX211', quantidade: 76, origem: 'vãos de BT' }])
+    // pré-reunido retirado conta 1 condutor
+    const comMulti: Regras = { ...regrasTeste, regrasCabo: [...regrasTeste.regrasCabo, { grupo: 'bt-multi', situacao: 'retirado', voz: 'XX211', por: 'condutor' }] }
+    expect(porVoz(contarMO(['\\A1;(3)AM035T50'], [], vazia(), comMulti))).toEqual([{ aba: 'devolucao', voz: 'XX211', quantidade: 50, origem: 'vãos de BT' }])
+    // BT nu sem o número de condutores: 1 e confira
+    expect(porVoz(contarMO(['\\A1;(3)AN00438']))).toEqual([{ aba: 'devolucao', voz: 'XX211', quantidade: 38, origem: 'vãos de BT', confira: true }])
+  })
+
+  it('vãos somam por situação e nome; existente e (2) não cobram cabo', () => {
+    const d = contarMO(
+      [],
+      [cota('(1)P3AN004<>', 50), cota('(1)P3AN004<>', 30), cota('(3)P3AN004<>', 10), cota('(3)P2AN004<>', 20), cota('P3AN004<>', 99), cota('(2)P3AN004<>', 99)],
+    )
+    expect(porVoz(d)).toEqual([
+      { aba: 'adicao', voz: 'XX201', quantidade: 80, origem: 'vãos de MT' },
+      { aba: 'devolucao', voz: 'XX208', quantidade: 70, origem: 'vãos de MT' },
+    ])
+  })
+
+  it('MT retirado sem fases pergunta', () => {
+    const r = { ...contarObra(dxfDe([])), vaos: [{ situacao: 3 as const, cabo: 'PAN004', metros: 100, origem: 'cota' as const }] }
+    const d = contarDesenhoMO(r, regrasTeste, vazia())
+    expect(d.perguntas).toEqual([{ tipo: 'fases', chave: 'fases|PAN004', cabo: 'PAN004', metros: 100 }])
+    expect(d.chavesPerguntas).toEqual(['fases|PAN004'])
+    expect(d.contagens).toEqual([{ aba: 'devolucao', voz: 'XX208', quantidade: 0, origem: 'vãos de MT', falta: 'falta o número de fases' }])
+    const respondida = contarDesenhoMO(r, regrasTeste, { ...vazia(), fases: { 'fases|PAN004': 2 } })
+    expect(respondida.perguntas).toEqual([])
+    expect(respondida.chavesPerguntas).toEqual(['fases|PAN004'])
+    expect(respondida.contagens).toEqual([{ aba: 'devolucao', voz: 'XX208', quantidade: 200, origem: 'vãos de MT' }])
+    // a instalação é por metro de rede: não pergunta
+    const novo = contarDesenhoMO({ ...r, vaos: [{ ...r.vaos[0], situacao: 1 }] }, regrasTeste, vazia())
+    expect(novo).toMatchObject({ perguntas: [], chavesPerguntas: [] })
+    expect(porVoz(novo)).toEqual([{ aba: 'adicao', voz: 'XX201', quantidade: 100, origem: 'vãos de MT' }])
+  })
+
+  it('cabo sem regra vai para a nota', () => {
+    // bitola sem regra e cabo de outro grupo
+    const d = contarMO(['\\A1;(1)CN03550'], [cota('(1)P3AN266<>', 100)])
+    expect(porVoz(d)).toEqual([])
+    expect(d.semRegra).toEqual([
+      { poste: 'vãos', texto: '(1)P3AN266' },
+      { poste: 'vãos', texto: '(1)CN035' },
+    ])
+  })
+})
+
+describe('tensionar', () => {
+  it('tensionar só com cabo existente', () => {
+    const d = contarMO(['600/12\\P(1)M3\\P1'], [mtExistente])
+    expect(d.contagens.filter((c) => c.papel === 'tensionar')).toEqual([{ aba: 'adicao', papel: 'tensionar', quantidade: 1, origem: 'P1' }])
+    expect(d).toMatchObject({ perguntas: [], chavesPerguntas: [], naoCobrado: [] })
+    const novo = contarMO(['600/12\\P(1)M3\\P1'], [mtNovo])
+    expect(tensionar(novo)).toBe(0)
+    expect(novo.naoCobrado).toEqual(['P1: a M3 ancora cabo novo, tensionar não cobra'])
+    expect(contarMO(['(1)600/12 MB1\\P(1)MB3.1\\P1'], [mtNovo]).naoCobrado).toEqual(['P1: a MB3.1 ancora cabo novo, tensionar não cobra'])
+    // passante nunca; tipo 4 = 2
+    const passante = contarMO(['600/12\\P(1)M1\\P1'], [mtExistente])
+    expect(tensionar(passante)).toBe(0)
+    expect(passante.naoCobrado).toEqual([])
+    expect(tensionar(contarMO(['600/12\\P(1)M4\\P1'], [mtExistente]))).toBe(2)
+    // estrutura existente ou retirada não tensiona
+    expect(tensionar(contarMO(['600/12 M3\\P(3)M4\\P1'], [mtExistente]))).toBe(0)
+  })
+
+  it('o (2) desdobrado tensiona como um (1)', () => {
+    expect(tensionar(contarMO(['600/12\\P(2)M3\\P1'], [mtExistente]))).toBe(1)
+  })
+
+  it('só a estrutura de MT reconhecida entra no tensionar de MT', () => {
+    // um kit que não é cruzeta não tensiona, mesmo que a expressão ache o código
+    const kit: Regras = { ...regrasTeste, tensionar: [{ rede: 'mt', exige: ['^B2'], qtd: 1 }] }
+    expect(tensionar(contarMO(['600/12\\P(1)B2TRAFO225AL\\P1'], [mtExistente], vazia(), kit))).toBe(0)
+    expect(tensionar(contarMO(['600/12\\P(1)B2\\P1'], [mtExistente], vazia(), kit))).toBe(1)
+  })
+
+  it('rede misturada pergunta', () => {
+    const cotas = [mtExistente, mtNovo]
+    const d = contarMO(['600/12\\P(1)M3\\P1'], cotas)
+    expect(d.perguntas).toEqual([{ tipo: 'tensionar', chave: 'P1|mt|M3|1', poste: 'P1', texto: 'O cabo que a M3 do P1 ancora é existente?' }])
+    expect(d.contagens.filter((c) => c.papel === 'tensionar')).toEqual([{ aba: 'adicao', papel: 'tensionar', quantidade: 1, origem: 'P1', falta: 'responda o tensionar' }])
+    const sim = contarMO(['600/12\\P(1)M3\\P1'], cotas, { ...vazia(), tensionar: { 'P1|mt|M3|1': true } })
+    expect(sim.contagens.filter((c) => c.papel === 'tensionar')).toEqual([{ aba: 'adicao', papel: 'tensionar', quantidade: 1, origem: 'P1' }])
+    expect(sim.perguntas).toEqual([])
+    const nao = contarMO(['600/12\\P(1)M3\\P1'], cotas, { ...vazia(), tensionar: { 'P1|mt|M3|1': false } })
+    expect(nao.contagens.filter((c) => c.papel === 'tensionar')).toEqual([])
+    expect(nao.naoCobrado).toEqual(['P1: a M3 ancora cabo novo (respondido), tensionar não cobra'])
+  })
+
+  it('duas estruturas iguais têm chaves diferentes', () => {
+    const cotas = [mtExistente, mtNovo]
+    const d = contarMO(['600/12\\P(1)2xM3\\P1'], cotas)
+    expect(d.perguntas.map((p) => p.chave)).toEqual(['P1|mt|M3|1', 'P1|mt|M3|2'])
+    const uma = contarMO(['600/12\\P(1)2xM3\\P1'], cotas, { ...vazia(), tensionar: { 'P1|mt|M3|2': true } })
+    expect(uma.perguntas.map((p) => p.chave)).toEqual(['P1|mt|M3|1'])
+    expect(uma.chavesPerguntas).toEqual(['P1|mt|M3|1', 'P1|mt|M3|2'])
+    expect(uma.contagens.filter((c) => c.papel === 'tensionar')).toEqual([
+      { aba: 'adicao', papel: 'tensionar', quantidade: 1, origem: 'P1', falta: 'responda o tensionar' },
+      { aba: 'adicao', papel: 'tensionar', quantidade: 1, origem: 'P1' },
+    ])
+    // tudo certo pela rede: soma numa linha só por poste
+    expect(contarMO(['600/12\\P(1)2xM3 (1)M4\\P1'], [mtExistente]).contagens.filter((c) => c.papel === 'tensionar')).toEqual([
+      { aba: 'adicao', papel: 'tensionar', quantidade: 4, origem: 'P1' },
+    ])
+  })
+
+  it('BT: par S2N + S2C = 2, ancoragem sozinha = 1, alça não soma', () => {
+    const btExistente = cota('AM035T<>', 30)
+    const btNovo = cota('(1)AM035T<>', 30)
+    expect(tensionar(contarMO(['300/9\\P(1)S2N (1)S2C (1)SPALÇA50\\P3'], [btExistente]))).toBe(2)
+    expect(tensionar(contarMO(['300/9\\P(1)S2B\\P3'], [btExistente]))).toBe(1)
+    expect(tensionar(contarMO(['300/9\\P(1)S1B\\P3'], [btExistente]))).toBe(0)
+    // a rede da BT não olha os vãos de MT
+    const soMT = contarMO(['300/9\\P(1)S2B\\P3'], [mtExistente])
+    expect(tensionar(soMT)).toBe(0)
+    expect(soMT.naoCobrado).toEqual(['P3: a S2B ancora cabo novo, tensionar não cobra'])
+    // misturada: uma pergunta por poste
+    const mist = contarMO(['300/9\\P(1)S2N (1)S2C\\P3'], [btExistente, btNovo])
+    expect(mist.perguntas).toEqual([{ tipo: 'tensionar', chave: 'P3|bt', poste: 'P3', texto: 'O cabo de BT que o P3 ancora é existente?' }])
+    expect(mist.contagens.filter((c) => c.papel === 'tensionar')).toEqual([{ aba: 'adicao', papel: 'tensionar', quantidade: 2, origem: 'P3', falta: 'responda o tensionar' }])
+    const nao = contarMO(['300/9\\P(1)S2N (1)S2C\\P3'], [btExistente, btNovo], { ...vazia(), tensionar: { 'P3|bt': false } })
+    expect(nao.naoCobrado).toEqual(['P3: a S2N + S2C ancora cabo novo (respondido), tensionar não cobra'])
+    // MT e BT no mesmo poste somam
+    expect(tensionar(contarMO(['600/12\\P(1)M3 (1)S2B\\P3'], [mtExistente, btExistente]))).toBe(2)
+  })
+
+  it('linha viva não tensiona', () => {
+    const d = contarMO(vivo('600/12\\P(1)M3\\P10'), [mtExistente])
+    expect(tensionar(d)).toBe(0)
+    expect(d.naoCobrado).toEqual(['P10: linha viva, o tensionar vai na voz da cruzeta'])
+    // nem pergunta na rede misturada
+    expect(contarMO(vivo('600/12\\P(1)M3\\P10'), [mtExistente, mtNovo])).toMatchObject({ perguntas: [], chavesPerguntas: [] })
+    // desligada à mão, volta a tensionar
+    expect(tensionar(contarMO(vivo('600/12\\P(1)M3\\P10'), [mtExistente], { ...vazia(), linhaViva: { P10: false } }))).toBe(1)
+  })
+
+  it('chavesPerguntas tem as respondidas', () => {
+    const cotas = [mtExistente, mtNovo]
+    expect(contarMO(['600/12\\P(1)M3\\P1'], cotas).chavesPerguntas).toEqual(['P1|mt|M3|1'])
+    const depois = contarMO(['600/12\\P(1)M3\\P1'], cotas, { ...vazia(), tensionar: { 'P1|mt|M3|1': true } })
+    expect(depois.chavesPerguntas).toEqual(['P1|mt|M3|1'])
+    expect(depois.perguntas).toEqual([])
   })
 })
