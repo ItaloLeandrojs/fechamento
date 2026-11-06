@@ -37,43 +37,48 @@ const numeroDoPoste = (origem: string) => (/^P\d+$/.test(origem) ? Number(origem
  * - Sair de uma OT (OT inválida ou outra OT): grava a anterior se a pessoa mudou algo nela e limpa
  *   a tela; as emprestadas voltam a ser sem OT, sem gravar (digitar uma OT de 11 dígitos passa por
  *   uma de 7 e não deixa registro nela).
+ * - `obra` muda quando o DXF lido é de outra obra (Ceara.tsx, `mesmaObra`): as respostas sem OT ou
+ *   emprestadas são daquela obra e saem (sem isso, duas obras sem OT no nome dividiriam as respostas).
+ *   Um DXF corrigido da mesma obra não muda `obra` e as respostas ficam.
  * - `versao` sobe a cada mudança; `gravada` é a última versão confirmada no banco: a mudança só
- *   conta como gravada quando o banco confirma.
+ *   conta como gravada quando o banco confirma. Gravação que falhou fica pendente (e com a cópia no
+ *   localStorage) e é tentada de novo na próxima mudança.
  */
-export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeObra | null, area: Area, ot: string) {
+export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeObra | null, area: Area, ot: string, obra: number) {
   const chaveOt = OT_VALIDA.test(ot.trim()) ? ot.trim() : ''
   const [resp, setResp] = useState<RespostasMO>(() => respostasVazias(''))
-  const [semBanco, setSemBanco] = useState(() => typeof indexedDB === 'undefined')
+  // só um navegador sem IndexedDB não guarda; uma gravação que falhou não desliga a gravação
+  const [semBanco] = useState(() => typeof indexedDB === 'undefined')
   // conta as leituras do banco: cada uma aplica a limpeza pelo desenho de novo
   const [lidas, setLidas] = useState(0)
   const versao = useRef(0)
   const gravada = useRef(0)
   const provisorio = useRef(false)
   const respRef = useRef(resp)
-  const semBancoRef = useRef(semBanco)
+  const obraRef = useRef(obra)
   useEffect(() => {
     respRef.current = resp
-    semBancoRef.current = semBanco
-  }, [resp, semBanco])
+  }, [resp])
 
   /** Grava o que está na tela, se mudou e tem OT. `fechando`: a página (ou a tela) vai embora: grava
    *  também as emprestadas e guarda a cópia síncrona. */
   const gravarAgora = useCallback((fechando = false) => {
     const r = respRef.current
-    if (!r.ot || semBancoRef.current) return
+    if (!r.ot || semBanco) return
     const emprestadas = fechando && provisorio.current && temConteudo(r)
     if (versao.current === gravada.current && !emprestadas) return
     if (emprestadas) provisorio.current = false
     if (fechando) guardarPendenteMO(r)
     const v = versao.current
     void gravarRespostasMO(r).then((ok) => {
-      if (!ok) return setSemBanco(true)
+      // falhou: a versão continua pendente e a cópia guarda a mais nova até a próxima tentativa
+      if (!ok) return guardarPendenteMO(r)
       // a tela já está em outra OT: esta foi a última versão daquela OT
       if (respRef.current.ot !== r.ot) return tirarPendenteMO(r.ot)
       gravada.current = Math.max(gravada.current, v)
       if (gravada.current === versao.current) tirarPendenteMO(r.ot)
     })
-  }, [])
+  }, [semBanco])
 
   const mudar = useCallback((f: (r: RespostasMO) => RespostasMO) => {
     versao.current++
@@ -86,6 +91,20 @@ export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeOb
     const p = lerPendenteMO()
     if (p) void gravarRespostasMO(p).then((ok) => ok && tirarPendenteMO(p.ot))
   }, [])
+
+  // outra obra (declarado antes da troca de OT, que roda depois no mesmo DXF): as respostas sem OT
+  // ou emprestadas eram da obra de antes e saem; as de uma OT de verdade saem pela troca de OT
+  useEffect(() => {
+    if (obra === obraRef.current) return
+    obraRef.current = obra
+    const r = respRef.current
+    if (r.ot === '' || provisorio.current) {
+      provisorio.current = false
+      // emprestadas: a OT delas não tem nada guardado, então fica vazia e é dela
+      setResp(respostasVazias(r.ot))
+      gravada.current = ++versao.current
+    }
+  }, [obra])
 
   // troca de OT
   useEffect(() => {

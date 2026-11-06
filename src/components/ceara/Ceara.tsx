@@ -11,7 +11,7 @@ import { BLOCOS, comparar, lerOrcamento, type Orcamento } from '../../ceara/orca
 import { AREAS, gerarExcelCeara, nomeDoExcel, otDoNome, type Area } from '../../ceara/excel'
 import { ajustesValidos, aplicarSugestao, chaveKit, estruturasAjustadas, mesmaObra, somarNaAdicao, sugestoesAoBaixar, type Ajuste, type Ajustes } from '../../ceara/estratificacao'
 import { gravarSugestoes, lerSugestoes, type SugestaoGuardada } from '../../lib/banco'
-import type { BaseMaoDeObra, RespostasMO } from '../../ceara/maoDeObra'
+import { areaDaCidade, type BaseMaoDeObra, type RespostasMO } from '../../ceara/maoDeObra'
 import { TabelaBloco, type Estratificar, type LinhaTela } from './TabelaBloco'
 import { MaoDeObra } from './MaoDeObra'
 import { useMaoDeObra } from './useMaoDeObra'
@@ -80,10 +80,17 @@ export function Ceara({ base, maoDeObra, onVoltar }: { base: BaseEnel; maoDeObra
   const [sugestoes, setSugestoes] = useState<Record<string, SugestaoGuardada>>({})
   const [recusadas, setRecusadas] = useState<Set<string>>(() => new Set())
   const [avisoSugestao, setAvisoSugestao] = useState('')
+  // sobe a cada DXF de outra obra (mesmaObra): a mão de obra sem OT não passa de uma obra para outra
+  const [obra, setObra] = useState(0)
   const inDxf = useRef<HTMLInputElement>(null)
   const inOrc = useRef<HTMLInputElement>(null)
   const idArea = useId()
-  const mo = useMaoDeObra(resultado, maoDeObra, area, ot)
+  const mo = useMaoDeObra(resultado, maoDeObra, area, ot, obra)
+  // a área não fica guardada com a OT: a cidade A guardada diz qual é (outra cidade deixa a área como está)
+  const areaDaObra = areaDaCidade(mo.resp.cidade)
+  useEffect(() => {
+    if (areaDaObra) setArea(areaDaObra)
+  }, [areaDaObra])
   // mudança na mão de obra: o Excel baixado ficou velho
   const estadoMO = {
     ...mo,
@@ -120,7 +127,8 @@ export function Ceara({ base, maoDeObra, onVoltar }: { base: BaseEnel; maoDeObra
       setResultado(r)
       setAvisoSugestao('')
       // mesma obra: fica o ajuste das estruturas que continuam; outra obra: começa do zero
-      if (mesmaObra(nomeDxf, f.name)) {
+      const mesma = mesmaObra(nomeDxf, f.name)
+      if (mesma) {
         setAjustes((a) => ajustesValidos(a, r.adicaoEstrutura))
         // estrutura que sumiu do desenho sai das tocadas: o próximo download não apaga a sugestão dela
         const chaves = new Set(r.adicaoEstrutura.map((l) => chaveKit(l.codigo)))
@@ -131,9 +139,11 @@ export function Ceara({ base, maoDeObra, onVoltar }: { base: BaseEnel; maoDeObra
         setTocadas(new Set())
         setRecusadas(new Set())
         setAberta(null)
+        setObra((n) => n + 1)
       }
       setNomeDxf(f.name)
-      setOt(otDoNome(f.name))
+      // mesma obra sem OT no nome (o mesmo arquivo corrigido): fica a OT digitada
+      setOt((atual) => otDoNome(f.name) || (mesma ? atual : ''))
       if (!r.etiquetas.length) setErro('Não achei nenhuma etiqueta de poste nesse desenho. Confira se é o asbuilt da obra.')
     } catch (e) {
       setErro('Não consegui ler esse DXF: ' + ((e as Error).message || 'arquivo diferente do esperado.'))

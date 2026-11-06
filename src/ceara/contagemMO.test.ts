@@ -297,6 +297,8 @@ describe('tensionar', () => {
     const cotas = [mtExistente, mtNovo]
     const d = contarMO(['600/12\\P(1)2xM3\\P1'], cotas)
     expect(d.perguntas.map((p) => p.chave)).toEqual(['P1|mt|M3|1', 'P1|mt|M3|2'])
+    // textos diferentes para as duas (o leitor de tela e a pessoa sabem qual é qual)
+    expect(d.perguntas.map((p) => p.tipo === 'tensionar' && p.texto)).toEqual(['O cabo que a 1ª de 2 M3 do P1 ancora é existente?', 'O cabo que a 2ª de 2 M3 do P1 ancora é existente?'])
     const uma = contarMO(['600/12\\P(1)2xM3\\P1'], cotas, { ...vazia(), tensionar: { 'P1|mt|M3|2': true } })
     expect(uma.perguntas.map((p) => p.chave)).toEqual(['P1|mt|M3|1'])
     expect(uma.chavesPerguntas).toEqual(['P1|mt|M3|1', 'P1|mt|M3|2'])

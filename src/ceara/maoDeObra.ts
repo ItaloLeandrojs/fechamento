@@ -30,6 +30,12 @@ export const CIDADES_A: Record<Area, string[]> = {
 }
 export const OUTRA_CIDADE = 'OUTRA'
 
+/** Área de uma cidade A (cada uma está numa área só); null para OUTRA_CIDADE ou sem cidade. */
+export function areaDaCidade(cidade: string | null): Area | null {
+  if (!cidade) return null
+  return (Object.keys(CIDADES_A) as Area[]).find((a) => CIDADES_A[a].includes(cidade)) ?? null
+}
+
 /** A se a cidade é uma das da área; B com OUTRA_CIDADE; null sem cidade ou com cidade de outra área. */
 export function letraDaCidade(area: Area, cidade: string | null): Letra | null {
   if (!cidade) return null
@@ -68,6 +74,8 @@ export interface LinhaMO {
 }
 
 const juntarTextos = (textos: string[]) => [...new Set(textos)].join('; ')
+/** Sem letra, a descrição da lista (que começa com `<voz>_A_` ou `<voz>_B_`) sai sem o sufixo, como a voz. */
+const semSufixo = (voz: string, descricao: string) => (descricao.startsWith(`${voz}_A_`) || descricao.startsWith(`${voz}_B_`) ? descricao.slice(voz.length + 3) : descricao)
 
 /** Número, descrição e unidade da voz pela letra da cidade; o que faltar vira texto de `falta`. */
 function dadosDaVoz(base: BaseMaoDeObra, voz: string, letra: Letra | null): { numero: string | null; descricao: string; unidade: string; falta: string[] } {
@@ -79,7 +87,7 @@ function dadosDaVoz(base: BaseMaoDeObra, voz: string, letra: Letra | null): { nu
     return { numero: null, descricao: qualquer?.descricao ?? '', unidade: qualquer?.unidade ?? '', falta: ['voz fora da lista'] }
   }
   const e = daVoz.find((x) => !x.variante && x.letra === 'A') ?? daVoz.find((x) => !x.variante && x.letra === 'B') ?? daVoz[0]
-  return { numero: null, descricao: e?.descricao ?? '', unidade: e?.unidade ?? '', falta: e ? ['escolha a cidade da obra'] : ['escolha a cidade da obra', 'voz fora da lista'] }
+  return { numero: null, descricao: semSufixo(voz, e?.descricao ?? ''), unidade: e?.unidade ?? '', falta: e ? ['escolha a cidade da obra'] : ['escolha a cidade da obra', 'voz fora da lista'] }
 }
 
 export function montarLinhas(d: DesenhoMO, base: BaseMaoDeObra, resp: RespostasMO, area: Area): LinhaMO[] {

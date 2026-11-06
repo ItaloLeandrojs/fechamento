@@ -26,6 +26,21 @@ const escolha = (marcado: boolean) =>
 const ACAO = 'press inline-flex items-center min-h-8 px-1 -mx-1 rounded-md text-xs text-muted underline underline-offset-2 hover:text-text'
 
 const vozNaTela = (voz: string, letra: Letra | null) => (letra ? `${voz}_${letra}` : voz)
+
+// o que falta numa linha (textos de `falta`, separados por "; "): as perguntas sem resposta viram
+// "falta responder: ..."; o resto ("voz fora da lista") vira "confira: ..."
+const PERGUNTA_DA_FALTA: Record<string, string> = {
+  'responda o tensionar': 'tensionar',
+  'falta o número de fases': 'fases do cabo',
+  'responda se teve desligamento': 'teve desligamento?',
+  'escolha a cidade da obra': 'cidade da obra',
+}
+function textosDaFalta(falta: string): string[] {
+  const partes = falta.split('; ')
+  const perguntas = partes.filter((p) => p in PERGUNTA_DA_FALTA).map((p) => PERGUNTA_DA_FALTA[p])
+  const outras = partes.filter((p) => !(p in PERGUNTA_DA_FALTA))
+  return [...(perguntas.length ? [`falta responder: ${perguntas.join(', ')}`] : []), ...(outras.length ? [`confira: ${outras.join(', ')}`] : [])]
+}
 const origens = (o: string[]) => o.slice(0, 12).join(', ') + (o.length > 12 ? ` e mais ${o.length - 12}` : '')
 
 /**
@@ -374,7 +389,12 @@ function TabelaMO({ aba, titulo, vazio, nome, linhas, base, desenho, resp, mudar
                       <td className="px-2 py-2 align-top min-w-[15rem]">
                         <span className={`num block font-semibold ${vermelha ? 'text-danger' : ''}`}>{vt}</span>
                         {l.descricao && <span className="block text-xs text-muted break-words">{l.descricao}</span>}
-                        {l.falta && <span className="block text-xs font-medium text-danger">falta responder: {l.falta}</span>}
+                        {l.falta &&
+                          textosDaFalta(l.falta).map((t) => (
+                            <span key={t} className="block text-xs font-medium text-danger">
+                              {t}
+                            </span>
+                          ))}
                         {(l.confira || l.somada) && (
                           <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                             {l.confira && <Selo tom="aviso">confira</Selo>}

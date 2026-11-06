@@ -750,17 +750,41 @@ async function maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara }) {
   await bloco.screenshot({ path: path.join(PRINTS, `${largura}-${tema}-12-ceara-mao-de-obra.png`), style: 'header.sticky { visibility: hidden }' })
   placar.telas++
 
-  // outra obra: ler um DXF sem OT no nome tira a OT; a cidade da obra anterior não pode ficar na tela
+  // trocar de desenho. Cópias do ceara.dxf com outro nome (em e2e/saida, fora do git) são "outra obra"
+  // (sem OT no nome, só o mesmo nome é a mesma obra)
   const campoOt = page.getByLabel('OT', { exact: true })
   const esperar = async (cond, ms = 5000) => {
     for (const fim = Date.now() + ms; Date.now() < fim; await page.waitForTimeout(100)) if (await cond()) return true
     return false
   }
-  await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
-  if (!(await esperar(async () => (await campoOt.inputValue()) === ''))) falhas.push(`[${tag}] ler o DXF sem OT no nome não limpou a OT`)
-  await page.waitForTimeout(300)
-  if (await cidade.locator('button[aria-pressed="true"]').count()) falhas.push(`[${tag}] outro DXF sem OT mostrou a cidade da obra anterior`)
-  if (await desligamento.locator('button[aria-pressed="true"]').count()) falhas.push(`[${tag}] outro DXF sem OT mostrou o desligamento da obra anterior`)
+  const lerDesenho = async (arquivo) => {
+    await page.locator('input[accept=".dxf"]').setInputFiles(arquivo)
+    await page.waitForTimeout(150)
+    await page.getByText('Lendo o desenho…').waitFor({ state: 'detached', timeout: 60000 })
+    await page.waitForTimeout(300)
+  }
+  const nadaMarcado = async (quando) => {
+    if (await cidade.locator('button[aria-pressed="true"]').count()) falhas.push(`[${tag}] ${quando}: ficou a cidade da obra anterior`)
+    if (await desligamento.locator('button[aria-pressed="true"]').count()) falhas.push(`[${tag}] ${quando}: ficou o desligamento da obra anterior`)
+  }
+  const obraB = path.join(SAIDA, 'obra-b-teste.dxf')
+  const obraC = path.join(SAIDA, 'obra-c-teste.dxf')
+  for (const f of [obraB, obraC]) fs.copyFileSync(dxf, f)
+  // o mesmo arquivo de novo (DXF corrigido da mesma obra): a OT digitada e as respostas ficam
+  await lerDesenho(dxf)
+  if ((await campoOt.inputValue()) !== '1234567') falhas.push(`[${tag}] ler o mesmo DXF de novo tirou a OT digitada`)
+  if ((await outra.getAttribute('aria-pressed')) !== 'true' || (await sim.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] ler o mesmo DXF de novo tirou as respostas`)
+  // outra obra sem OT no nome: a OT sai e nada da obra anterior fica marcado
+  await lerDesenho(obraB)
+  if ((await campoOt.inputValue()) !== '') falhas.push(`[${tag}] DXF de outra obra sem OT no nome não limpou a OT`)
+  await nadaMarcado('DXF de outra obra depois de uma com OT')
+  // duas obras sem OT: as respostas da primeira ficam no mesmo arquivo e não passam para a segunda
+  await outra.click()
+  await sim.click()
+  await lerDesenho(obraB)
+  if ((await outra.getAttribute('aria-pressed')) !== 'true' || (await sim.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] sem OT, ler o mesmo DXF de novo tirou as respostas`)
+  await lerDesenho(obraC)
+  await nadaMarcado('outra obra sem OT depois de uma sem OT')
   // respondida sem OT e a OT de 11 dígitos digitada aos poucos (pausas maiores que o atraso da gravação):
   // a resposta passa para a OT de 11 dígitos e nada fica gravado na de 7 do meio do caminho
   const otsGuardadas = () =>

@@ -189,7 +189,8 @@ describe('lista de mão de obra (base opcional)', () => {
     })
     const r = await garantirBases(fonte, guarda)
     expect(r.maoDeObra).toBeNull()
-    expect(r.avisos.some((a) => a.includes('ainda não está no servidor'))).toBe(true)
+    expect(r.avisos).toContain('Não deu para baixar a lista de mão de obra. Na Leitura do CAD, a mão de obra fica de fora.')
+    expect(r.avisos.some((a) => a.includes('ainda não está no servidor'))).toBe(false)
   })
 
   it('lista com formato errado no servidor não é guardada', async () => {
@@ -203,10 +204,12 @@ describe('lista de mão de obra (base opcional)', () => {
     expect(guardado.has('mao-de-obra')).toBe(false)
   })
 
-  it('sem internet e sem cópia da lista: não lança por causa dela', async () => {
+  it('sem internet e sem cópia da lista: não lança por causa dela e avisa a falta de conexão', async () => {
     const { fonte, guarda } = montar({ versoes: new Error('offline'), guardado: { enel: 'v1', edp: 'v1' } })
     const r = await garantirBases(fonte, guarda)
     expect(r.maoDeObra).toBeNull()
+    expect(r.avisos).toContain('Sem conexão com o servidor: a lista de mão de obra não foi baixada. Na Leitura do CAD, a mão de obra fica de fora.')
+    expect(r.avisos.some((a) => a.includes('ainda não está no servidor'))).toBe(false)
   })
 })
 

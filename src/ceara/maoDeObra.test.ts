@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Contagem, DesenhoMO } from './contagemMO'
 import {
   PAPEIS,
+  areaDaCidade,
   buscarVozes,
   letraDaCidade,
   limparRespostas,
@@ -39,6 +40,22 @@ describe('linhas da mão de obra', () => {
     expect(letraDaCidade('SUL', 'OUTRA')).toBe('B')
     expect(letraDaCidade('SUL', 'Icó')).toBeNull()
     expect(letraDaCidade('SUL', null)).toBeNull()
+  })
+
+  it('área pela cidade A; outra cidade não diz a área', () => {
+    expect(areaDaCidade('Crato')).toBe('SUL')
+    expect(areaDaCidade('Russas')).toBe('LESTE')
+    expect(areaDaCidade('Iguatu')).toBe('CENTRO SUL')
+    expect(areaDaCidade('OUTRA')).toBeNull()
+    expect(areaDaCidade(null)).toBeNull()
+  })
+
+  it('sem cidade, a descrição sai sem o sufixo (como a voz)', () => {
+    const comSufixo: BaseMaoDeObra = { ...base, lista: [item('XX110', 'A', '9000000001', 'XX110_A_Servico teste'), item('XX110', 'B', '9000000002', 'XX110_B_Servico teste')] }
+    const [l] = montarLinhas(desenho([posteMT]), comSufixo, resp(), 'SUL')
+    expect(l.descricao).toBe('Servico teste')
+    // com a cidade, fica a descrição da lista, com o sufixo da letra
+    expect(montarLinhas(desenho([posteMT]), comSufixo, resp({ cidade: 'OUTRA' }), 'SUL')[0].descricao).toBe('XX110_B_Servico teste')
   })
 
   it('linha com número e sufixo', () => {

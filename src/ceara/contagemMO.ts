@@ -306,7 +306,12 @@ export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, '
       else if (dada === false) naoCobra(nota(true))
       else contagens.push({ aba: 'adicao', papel: 'tensionar', quantidade: qtd, origem, falta: 'responda o tensionar' })
     }
-    for (const a of ancorasMT) decidir(rede.mt, `${origem}|mt|${a.codigo}|${a.n}`, `O cabo que a ${a.codigo} do ${origem} ancora é existente?`, a.qtd, a.codigo)
+    for (const a of ancorasMT) {
+      // mais de uma unidade igual no poste: o texto diz qual (a chave já tem o número)
+      const total = vistos.get(a.codigo) ?? 1
+      const qual = total > 1 ? `${a.n}ª de ${total} ` : ''
+      decidir(rede.mt, `${origem}|mt|${a.codigo}|${a.n}`, `O cabo que a ${qual}${a.codigo} do ${origem} ancora é existente?`, a.qtd, a.codigo)
+    }
     if (ancoraBT) decidir(rede.bt, `${origem}|bt`, `O cabo de BT que o ${origem} ancora é existente?`, ancoraBT.qtd, ancoraBT.codigos.join(' + '))
   }
 

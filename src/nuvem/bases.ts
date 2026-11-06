@@ -50,6 +50,9 @@ export function conferirKitsEdp(x: unknown): Kit[] {
 const eTexto = (x: unknown): x is string => typeof x === 'string'
 const AVISO_SEM_LISTA = 'A lista de mão de obra ainda não está no servidor. Na Leitura do CAD, a mão de obra fica de fora.'
 const AVISO_LISTA_ANTIGA = 'Não deu para atualizar a lista de mão de obra: usando a cópia guardada neste computador.'
+// a lista está no servidor (ou pode estar), mas não chegou: sem conexão ou o download caiu
+const AVISO_LISTA_SEM_CONEXAO = 'Sem conexão com o servidor: a lista de mão de obra não foi baixada. Na Leitura do CAD, a mão de obra fica de fora.'
+const AVISO_LISTA_NAO_BAIXOU = 'Não deu para baixar a lista de mão de obra. Na Leitura do CAD, a mão de obra fica de fora.'
 
 export function conferirBaseMaoDeObra(x: unknown): BaseMaoDeObra {
   const erro = (m: string) => new Error(`A lista de mão de obra veio em formato inesperado: ${m}.`)
@@ -138,7 +141,7 @@ export async function garantirBases(
     const atual = versoes?.['mao-de-obra']
     if (!atual) {
       // sem linha no servidor (ou sem conexão): a cópia vale em silêncio; sem cópia, segue sem a lista
-      if (!guardada) avisos.push(AVISO_SEM_LISTA)
+      if (!guardada) avisos.push(versoes ? AVISO_SEM_LISTA : AVISO_LISTA_SEM_CONEXAO)
       return guardada?.dados ?? null
     }
     if (guardada && guardada.versao === atual.versao) return guardada.dados
@@ -148,7 +151,7 @@ export async function garantirBases(
       return dados
     } catch {
       if (!guardada) {
-        avisos.push(AVISO_SEM_LISTA)
+        avisos.push(AVISO_LISTA_NAO_BAIXOU)
         return null
       }
       avisos.push(AVISO_LISTA_ANTIGA)
