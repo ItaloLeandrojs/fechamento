@@ -238,6 +238,23 @@ def _vozes_nao_variantes(base):
     return m
 
 
+# O Python aceita e o JavaScript do site (new RegExp) recusa ou lê diferente.
+_SO_PYTHON = (
+    (re.compile(r'\(\?P[<=]'), 'grupo com nome no jeito do Python'),
+    (re.compile(r'(?<!\\)(?:\\\\)*\\[AZ]'), r'\A ou \Z'),
+    (re.compile(r'\(\?[aiLmsux-]+[:)]'), 'opção dentro da expressão, como (?i)'),
+    (re.compile(r'\(\?#'), 'comentário (?#'),
+)
+
+
+def _fora_do_js(expressao):
+    """O motivo, se a expressão usa algo que só o Python aceita; senão None."""
+    for padrao, motivo in _SO_PYTHON:
+        if padrao.search(expressao):
+            return motivo
+    return None
+
+
 def conferir_mao_de_obra(base, anterior=None):
     """Lista de textos: 'PARA:' = problema que para o script; 'AVISO:' = só avisa. `anterior` = contagens anteriores."""
     saida = []
@@ -283,8 +300,9 @@ def conferir_mao_de_obra(base, anterior=None):
         if not isinstance(r.get('voz'), str):
             saida.append(f'PARA: a regra de cabo {i + 1} está sem voz.')
             continue
+        # sem bitolas = a chave não existe; "bitolas": null o site recusa
         b = r.get('bitolas')
-        if b is not None and not (isinstance(b, list) and all(isinstance(x, str) for x in b)):
+        if 'bitolas' in r and not (isinstance(b, list) and all(isinstance(x, str) for x in b)):
             saida.append(f'PARA: a regra de cabo {i + 1} tem bitolas inválidas.')
         usadas.setdefault(r['voz'], f'a regra de cabo {i + 1} ({r["grupo"]} {r["situacao"]})')
     tensionar = base.get('tensionar')
@@ -307,6 +325,10 @@ def conferir_mao_de_obra(base, anterior=None):
                 re.compile(x)
             except re.error:
                 saida.append(f'PARA: {n} tem uma expressão que não compila: {x}')
+                continue
+            fora = _fora_do_js(x)
+            if fora:
+                saida.append(f'PARA: {n} tem uma expressão que o site (JavaScript) não lê ({fora}): {x}')
         q = t.get('qtd')
         if isinstance(q, bool) or not isinstance(q, (int, float)) or not q > 0:
             saida.append(f'PARA: {n} tem quantidade inválida.')

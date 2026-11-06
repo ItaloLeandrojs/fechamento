@@ -287,6 +287,28 @@ class MaoDeObra(unittest.TestCase):
         b = ab.montar_mao_de_obra(r, regras_teste())
         self.assertTrue(any('XX110' in x and x.startswith('PARA:') for x in ab.conferir_mao_de_obra(b)))
 
+    def test_bitolas_null_para(self):
+        cabo = [{'grupo': 'mt', 'situacao': 'novo', 'voz': 'XX212', 'por': 'metro', 'bitolas': None}]
+        self.assertTrue(any('bitolas' in x for x in paradas(ab.conferir_mao_de_obra(base_mo(regrasCabo=cabo)))))
+        # sem a chave continua valendo (todas as bitolas)
+        sem = [{'grupo': 'mt', 'situacao': 'novo', 'voz': 'XX212', 'por': 'metro'}]
+        self.assertEqual(paradas(ab.conferir_mao_de_obra(base_mo(regrasCabo=sem))), [])
+
+    def _expressao_para(self, x):
+        b = base_mo(tensionar=[{'rede': 'mt', 'exige': [x], 'qtd': 1}])
+        return [p for p in paradas(ab.conferir_mao_de_obra(b)) if 'JavaScript' in p]
+
+    def test_expressao_so_python_para(self):
+        for x in ('(?P<tipo>M)3', '(?P<t>M)(?P=t)', r'M3\Z', r'\AM3', '(?i)m3', '(?i:m)3', '(?#nota)M3'):
+            with self.subTest(x=x):
+                self.assertTrue(self._expressao_para(x))
+
+    def test_expressao_comum_passa(self):
+        # r'M3\\Z' é uma barra de verdade seguida de Z: vale nos dois
+        for x in ('^M3', '^(M|N)B?3', '^S2[NC]$', '(?:CCN|CSR)', '(?=M)M3', r'M3\\Z'):
+            with self.subTest(x=x):
+                self.assertEqual(self._expressao_para(x), [])
+
     def test_papel_com_voz_fora_para(self):
         b = base_mo(papeis={**papeis_teste(), 'caixa': 'XX999'})
         self.assertTrue(any('XX999' in x for x in paradas(ab.conferir_mao_de_obra(b))))
