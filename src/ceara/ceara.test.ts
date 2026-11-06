@@ -10,6 +10,8 @@ import { cota, dxfDe, mtextEm } from './teste-dxf'
 import JSZip from 'jszip'
 import { codigoDeSucata, contarObra, converterCabos, lerCabo, nomesDeCabo, type BaseEnel, type Catalogo, type Linha } from './contagem'
 import type { Ajustes } from './estratificacao'
+import type { LinhaMO } from './maoDeObra'
+import { createHash } from 'node:crypto'
 import { comparar, lerOrcamento } from './orcamento'
 import { gerarExcelCeara, nomeDoExcel, otDoNome, serialExcel } from './excel'
 
@@ -222,6 +224,19 @@ describe('materiais e base da Enel', () => {
   })
 })
 
+// sha256 de cada parte do .xlsx de hoje (sem mão de obra, data fixa), tirados antes da mudança do Passo 3
+const HASHES_SEM_MO = {
+  '[Content_Types].xml': '9491938844e97c51682d1d6d72a6c2829201820731421d83444fe8233843baae',
+  '_rels/.rels': 'f2f3948a1b6f661f2a5169a86b7029166acd4b79d7abfd37fa2b646fe302bfd6',
+  'xl/_rels/workbook.xml.rels': '1992cdfccdd761eda1111f609f77eccb1942c975ce2d29a2f30cfbfe08c4c10e',
+  'xl/styles.xml': '9c3f514eb7618545349710dd91171dc9692008b5a0901028d78440f3a9df47eb',
+  'xl/workbook.xml': '412a26638f94003756e62a273a427906f58c6b1724fd54dd45d71e3364f99cb8',
+  'xl/worksheets/sheet1.xml': '6293f436f764b3414e701407604ced4cac5293becf059f5e90621b7b8cb7caf2',
+  'xl/worksheets/sheet2.xml': 'bd12d0ab4202374dfbf07d29ac1edda25d46dc1d81efd9d5abad9daab1d86e3e',
+  'xl/worksheets/sheet3.xml': 'b15c51bda2978f9ba0fcba0bff487fe7cd23e7c00344d81cf330c756e94a39c4',
+  'xl/worksheets/sheet4.xml': '5981a20bdc8f6ade1d0971ba42eac5792a59265a885113055a22940b3c6c8c43',
+}
+
 describe('Excel da contagem', () => {
   it('OT pelo nome do arquivo', () => {
     expect(otDoNome('8000000_ASBUILT 0000000000 Cosampa.dxf')).toBe('8000000')
@@ -252,6 +267,68 @@ describe('Excel da contagem', () => {
       const comCodigo = r[b].filter((l) => !l.semCodigo)
       expect([...lido[b].entries()].map(([c, v]) => [c, v.quantidade])).toEqual(comCodigo.map((l) => [l.codigo, l.quantidade]))
     }
+  })
+
+  describe('com mão de obra', () => {
+    const cab = { ot: '1234567', area: 'LESTE' as const, data: new Date(2026, 10, 4) }
+    const linhaMO = (o: Partial<LinhaMO>): LinhaMO => ({ chave: 'adicao|XX110', aba: 'adicao', voz: 'XX110', numero: '9000000001', descricao: 'SERVIÇO TESTE', unidade: 'UN', automatico: 2, quantidade: 2, mudada: false, somada: false, origem: [], ...o })
+    const mo: LinhaMO[] = [linhaMO({}), linhaMO({ chave: 'devolucao|XX212', aba: 'devolucao', voz: 'XX212', numero: null, descricao: 'OUTRO TESTE', quantidade: 1, falta: 'voz fora da lista' })]
+    const sha = (t: Uint8Array) => createHash('sha256').update(t).digest('hex')
+    const obraMO = () => contarObra(dxfDe(['(1)600/9 S2N\\P(1)2xSPALÇA50_S\\P(3)300/9 S2N\\P1', '(1)400/9 S5C\\P2', '\\A1;(1)AM050T40']), CATALOGO)
+
+    it('Excel sem mão de obra igual ao de hoje', async () => {
+      const zip = await JSZip.loadAsync(await gerarExcelCeara(obraMO(), cab))
+      const hashes: Record<string, string> = {}
+      for (const n of Object.keys(zip.files).filter((k) => !zip.files[k].dir).sort()) hashes[n] = sha(await zip.file(n)!.async('uint8array'))
+      expect(hashes).toEqual(HASHES_SEM_MO)
+    })
+
+    it('abas da mão de obra', async () => {
+      const bytes = await gerarExcelCeara(obraMO(), cab, undefined, mo)
+      const wb = await Workbook.open(bytes)
+      expect(wb.sheets.map((s) => s.name)).toEqual(['ADIÇÃO ESTRUTURA', 'DEVOLUÇÃO ESTRUTURA', 'ADIÇÃO MATÉRIAL', 'DEVOLUÇÃO MATÉRIAL', 'MÃO DE OBRA ADIÇÃO', 'MÃO DE OBRA DEVOLUÇÃO'])
+      const add = new SheetEditor(await wb.sheetDoc('MÃO DE OBRA ADIÇÃO'), wb.sharedStrings)
+      expect(['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1'].map((c) => add.value(c))).toEqual(['DATA', 'ÁREA', 'EMPRESA', 'OT', 'CÓDIGO', 'DESCRIÇÃO', 'QTD'])
+      expect(['D2', 'E2', 'F2', 'G2'].map((c) => add.value(c))).toEqual([1234567, 9000000001, 'SERVIÇO TESTE', 2])
+      const dev = new SheetEditor(await wb.sheetDoc('MÃO DE OBRA DEVOLUÇÃO'), wb.sharedStrings)
+      expect(['E2', 'F2', 'G2'].map((c) => dev.value(c))).toEqual(['XX212', 'OUTRO TESTE', 1])
+      const zip = await JSZip.loadAsync(bytes)
+      // linha normal sem estilo vermelho; a da devolução (falta e sem número) com o estilo vermelho (centro 4)
+      expect(await zip.file('xl/worksheets/sheet5.xml')!.async('string')).toMatch(/<c r="E2" s="2"><v>9000000001<\/v><\/c>/)
+      expect(await zip.file('xl/worksheets/sheet6.xml')!.async('string')).toMatch(/<c r="E2" s="4" t="inlineStr">/)
+      // falta com número também fica vermelha
+      const so = await JSZip.loadAsync(await gerarExcelCeara(obraMO(), cab, undefined, [linhaMO({ falta: 'x' })]))
+      expect(await so.file('xl/worksheets/sheet5.xml')!.async('string')).toMatch(/<c r="E2" s="4"><v>9000000001<\/v><\/c>/)
+      expect(await so.file('xl/workbook.xml')!.async('string')).toMatch(/localSheetId="5"/)
+    })
+
+    it('mão de obra vazia cria as duas abas só com o cabeçalho', async () => {
+      const wb = await Workbook.open(await gerarExcelCeara(obraMO(), cab, undefined, []))
+      expect(wb.sheets.map((s) => s.name).slice(4)).toEqual(['MÃO DE OBRA ADIÇÃO', 'MÃO DE OBRA DEVOLUÇÃO'])
+    })
+
+    it('com estratificação e mão de obra', async () => {
+      const base: BaseEnel = { ...CATALOGO, materiais: { ...CATALOGO.materiais, '900001': ['CABO TESTE', 'M'] }, estruturas: { ...CATALOGO.estruturas, KITX1: 'ESTRUTURA TESTE' }, kits: { KITX1: [['900001', 2]] } }
+      const r = { ...obraMO(), adicaoEstrutura: [{ codigo: 'KITX1_S', descricao: 'ESTRUTURA TESTE', quantidade: 2, origem: ['P1'] }] }
+      const ajustes: Ajustes = { KITX1: { qtd: { '900001': 3 }, novos: [] } }
+      const bytes = await gerarExcelCeara(r, cab, { base, ajustes }, mo)
+      const wb = await Workbook.open(bytes)
+      expect(wb.sheets.map((s) => s.name)).toEqual(['ADIÇÃO ESTRUTURA', 'DEVOLUÇÃO ESTRUTURA', 'ADIÇÃO MATÉRIAL', 'DEVOLUÇÃO MATÉRIAL', 'MÃO DE OBRA ADIÇÃO', 'MÃO DE OBRA DEVOLUÇÃO', 'ESTRATIFICAÇÃO'])
+      const ed = new SheetEditor(await wb.sheetDoc('ESTRATIFICAÇÃO'), wb.sharedStrings)
+      expect(ed.value('A1')).toBe('ESTRUTURA')
+      const lido = await lerOrcamento(bytes)
+      expect(lido.adicaoEstrutura.size).toBe(1)
+      expect([...lido.adicaoMaterial.keys()]).toContain('900001')
+    })
+
+    it('lerOrcamento continua lendo as 4 abas com mão de obra', async () => {
+      const sem = await lerOrcamento(await gerarExcelCeara(obraMO(), cab))
+      const com = await lerOrcamento(await gerarExcelCeara(obraMO(), cab, undefined, mo))
+      for (const b of ['adicaoEstrutura', 'devolucaoEstrutura', 'adicaoMaterial', 'devolucaoMaterial'] as const) {
+        expect(JSON.stringify([...com[b]])).toBe(JSON.stringify([...sem[b]]))
+      }
+      expect(com.adicaoEstrutura.size).toBeGreaterThan(0)
+    })
   })
 
   describe('com estratificação', () => {

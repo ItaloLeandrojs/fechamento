@@ -7,6 +7,7 @@ import { indexToCol } from '../core/sheet'
 import type { BaseEnel, Linha, ResultadoCeara } from './contagem'
 import { chaveKit, estruturasAjustadas, linhasDoKit, somarNaAdicao, type Ajustes, type Situacao, type Somado } from './estratificacao'
 import { BLOCOS, type Bloco } from './orcamento'
+import type { LinhaMO } from './maoDeObra'
 
 export const AREAS = ['SUL', 'LESTE', 'CENTRO SUL'] as const
 export type Area = (typeof AREAS)[number]
@@ -53,8 +54,8 @@ export function serialExcel(d: Date): number {
 /** Código numérico vai como número (como no modelo); estrutura e OT com letra vão como texto. */
 const numeroOuTexto = (s: string): Valor => (/^\d{1,15}$/.test(s) ? Number(s) : s)
 
-function aba(bloco: Bloco, linhas: Linha[], cab: Cabecalho): string {
-  const material = bloco === 'adicaoMaterial' || bloco === 'devolucaoMaterial'
+function aba(bloco: Bloco | 'mao-de-obra', linhas: Linha[], cab: Cabecalho): string {
+  const material = bloco === 'adicaoMaterial' || bloco === 'devolucaoMaterial' || bloco === 'mao-de-obra'
   const titulos = material ? ['DATA', 'ÁREA', 'EMPRESA', 'OT', 'CÓDIGO', 'DESCRIÇÃO', 'QTD'] : ['DATA', 'ÁREA', 'EMPRESA', 'OT', 'CÓDIGO', 'QTD']
   const ultima = 1 + Math.max(linhas.length, 1)
   const rows: string[] = []
@@ -83,7 +84,7 @@ function aba(bloco: Bloco, linhas: Linha[], cab: Cabecalho): string {
     linha(2 + i, material ? [...comeco, { v: descricao, s: S_ESQUERDA + versao }, qtd] : [...comeco, qtd], ' ht="18" customHeight="1"')
   })
 
-  const larguras = material ? [12, 12, 12, 12, 12, 52, 10, 16, 16] : [12, 12, 12, 12, 22, 10]
+  const larguras = bloco === 'mao-de-obra' ? [12, 12, 12, 12, 12, 52, 10] : material ? [12, 12, 12, 12, 12, 52, 10, 16, 16] : [12, 12, 12, 12, 22, 10]
   const fim = indexToCol(titulos.length)
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -101,6 +102,11 @@ function aba(bloco: Bloco, linhas: Linha[], cab: Cabecalho): string {
     '</worksheet>'
   )
 }
+
+const ABAS_MO = { adicao: 'MÃO DE OBRA ADIÇÃO', devolucao: 'MÃO DE OBRA DEVOLUÇÃO' } as const
+
+/** Linha da mão de obra no molde das linhas de material: o número como código (ou a voz); vermelha sem número ou com pendência. */
+const linhaDaMO = (l: LinhaMO): Linha => ({ codigo: l.numero ?? l.voz, descricao: l.descricao, quantidade: l.quantidade, origem: l.origem, foraDaBase: !l.numero || !!l.falta })
 
 const PALAVRA: Record<Situacao, string> = { igual: 'igual', 'nao-usado': 'não usado', diminuiu: 'diminuiu', 'a-mais': 'a mais', novo: 'novo' }
 const ABA_ESTRAT = 'ESTRATIFICAÇÃO'
@@ -206,12 +212,13 @@ const ESTILOS =
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
   '</styleSheet>'
 
-/** Monta o .xlsx com as abas Adição/Devolução de estrutura e de material; com ajuste de estratificação, ganha a 5ª aba. */
-export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho, estrat?: { base: BaseEnel; ajustes: Ajustes }): Promise<Uint8Array> {
+/** Monta o .xlsx com as abas Adição/Devolução de estrutura e de material; com a mão de obra, ganha as abas MÃO DE OBRA ADIÇÃO e DEVOLUÇÃO; com ajuste de estratificação, a ESTRATIFICAÇÃO vem por último. */
+export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho, estrat?: { base: BaseEnel; ajustes: Ajustes }, mo?: LinhaMO[]): Promise<Uint8Array> {
   const zip = new JSZip()
   const comEstrat = !!estrat && estruturasAjustadas(r.adicaoEstrutura, estrat.ajustes).length > 0
   const soma = comEstrat ? somarNaAdicao(r, estrat!.base, estrat!.ajustes) : undefined
-  const n = BLOCOS.length + (comEstrat ? 1 : 0)
+  const nomesMO: string[] = mo ? [ABAS_MO.adicao, ABAS_MO.devolucao] : []
+  const n = BLOCOS.length + nomesMO.length + (comEstrat ? 1 : 0)
   const folhas = Array.from({ length: n }, (_, i) => i + 1)
   zip.file(
     '[Content_Types].xml',
@@ -236,8 +243,8 @@ export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho, estrat?
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       '<bookViews><workbookView/></bookViews>' +
-      `<sheets>${[...BLOCOS.map((b) => b.aba), ...(comEstrat ? [ABA_ESTRAT] : [])].map((nome, i) => `<sheet name="${esc(nome)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>` +
-      `<definedNames>${BLOCOS.map((b, i) => `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${esc(b.aba)}'!$A$1:$${indexToCol(b.id.endsWith('Material') ? 7 : 6)}$${1 + Math.max((b.id === 'adicaoMaterial' && soma ? soma.adicaoMaterial : r[b.id]).length, 1)}</definedName>`).join('')}</definedNames>` +
+      `<sheets>${[...BLOCOS.map((b) => b.aba), ...nomesMO, ...(comEstrat ? [ABA_ESTRAT] : [])].map((nome, i) => `<sheet name="${esc(nome)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>` +
+      `<definedNames>${BLOCOS.map((b, i) => `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${esc(b.aba)}'!$A$1:$${indexToCol(b.id.endsWith('Material') ? 7 : 6)}$${1 + Math.max((b.id === 'adicaoMaterial' && soma ? soma.adicaoMaterial : r[b.id]).length, 1)}</definedName>`).join('')}${nomesMO.map((nome, i) => `<definedName name="_xlnm._FilterDatabase" localSheetId="${BLOCOS.length + i}" hidden="1">'${esc(nome)}'!$A$1:$G$${1 + Math.max((mo ?? []).filter((l) => l.aba === (i ? 'devolucao' : 'adicao')).length, 1)}</definedName>`).join('')}</definedNames>` +
       '<calcPr calcId="191029" fullCalcOnLoad="1"/>' +
       '</workbook>',
   )
@@ -251,6 +258,9 @@ export async function gerarExcelCeara(r: ResultadoCeara, cab: Cabecalho, estrat?
   )
   zip.file('xl/styles.xml', ESTILOS)
   BLOCOS.forEach((b, i) => zip.file(`xl/worksheets/sheet${i + 1}.xml`, aba(b.id, b.id === 'adicaoMaterial' && soma ? soma.adicaoMaterial : r[b.id], cab)))
+  if (mo) {
+    ;(['adicao', 'devolucao'] as const).forEach((a, i) => zip.file(`xl/worksheets/sheet${BLOCOS.length + i + 1}.xml`, aba('mao-de-obra', mo.filter((l) => l.aba === a).map(linhaDaMO), cab)))
+  }
   if (comEstrat && soma) zip.file(`xl/worksheets/sheet${n}.xml`, abaEstratificacao(r, estrat!.base, estrat!.ajustes, soma.somados))
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
