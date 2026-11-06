@@ -63,6 +63,15 @@ describe('mão de obra dos postes', () => {
     expect(porPapel(contar(['600/12\\P(1)NM3\\P5']))).toEqual({ 'cruzeta-nu': 1 })
     expect(porPapel(contar(['600/12\\P(3)MM1\\P5']))).toEqual({ 'retirada-cruzeta-passante': 1 })
     expect(porPapel(contar(['(1)600/12 BM1\\P5']))).toEqual({ 'poste-mt': 1 })
+    expect(porPapel(contar(['600/12\\P(1)NM3.1CCN25\\P5']))).toEqual({ 'cruzeta-isolado': 1 })
+  })
+
+  it('kit de MT que não é cruzeta (banco de trafo, regulador, afastamento) não conta', () => {
+    expect(porPapel(contar(['600/12\\P(1)B2TRAFO225AL (1)B2REG100CCN25 (1)B2AFTCAA4-266\\P5']))).toEqual({})
+    // não faz o poste ser de MT
+    expect(porPapel(contar(['(1)300/9 S2N\\P(1)B2REG100CCN25\\P5']))).toEqual({ 'poste-bt': 1 })
+    // e, sem prefixo, não segura a primeira cruzeta do poste novo
+    expect(porPapel(contar(['(1)600/12\\PB2TRAFO225AL\\P(1)M1\\P5']))).toEqual({ 'poste-mt': 1 })
   })
 
   it('trafo não conta como cruzeta', () => {

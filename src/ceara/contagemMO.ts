@@ -49,13 +49,17 @@ export const codigoLimpo = (codigo: string) => codigo.replace(/§(mt|tr)$/, '').
 
 /** Estrutura de MT: N, M, B, U ou D, bifásica (B) ou monofásica (M) ou não, e o tipo (1 a 4). TR, SPTR e PR não entram. */
 const MT = /^[NMBUD][BM]?(\d)/
+/** Monofásica inteira: tipo e o mesmo resto que `classificar` aceita (nada, CAA..., CCN..., CSR ou CAL...). */
+const MONOFASICA = /^[NMBUD]M\d(?:\.\d)?(?:CAA[\d/]+S?|CCN\d+(?:\/\d+)?|CSR|CAL\d+)?$/
 const ARMACAO_BT = /^S[1-5]([A-Z]?)$/
 
 /** Tipo da estrutura de MT (passante = tipo 1 e 2; o resto é encabeçamento ou derivação) e se é de rede compacta. */
 export function estruturaMT(i: Pick<ItemEtiqueta, 'tipo' | 'codigo'>): { encabecamento: boolean; isolada: boolean } | null {
-  // a monofásica (MM1, NM3...) ainda não é lida como estrutura pela contagem de hoje: vem como não reconhecida
   if (i.tipo !== 'estrutura' && i.tipo !== 'nao-reconhecido') return null
   const c = codigoLimpo(i.codigo)
+  // a monofásica (MM1, NM3...) ainda não é lida como estrutura pela contagem de hoje: vem como não reconhecida.
+  // Do não reconhecido, só ela, com o resto que a contagem aceita (banco de trafo, regulador e afastamento não são cruzeta)
+  if (i.tipo === 'nao-reconhecido' && !MONOFASICA.test(c)) return null
   const m = MT.exec(c)
   if (!m) return null
   return { encabecamento: m[1] !== '1' && m[1] !== '2', isolada: /CCN|CSR/.test(c) }
@@ -135,6 +139,7 @@ export function contarDesenhoMO(r: ResultadoCeara, _regras: Pick<BaseMaoDeObra, 
     for (const m of mts) tratados.add(m.item)
     const unidades = mts.filter((m) => m.item.situacao === 1).flatMap((m) => Array.from({ length: m.item.quantidade }, () => m))
     // poste novo: a primeira cruzeta (a de cima) já está na voz do poste, se nenhuma passa do poste velho
+    // (uma unidade só por etiqueta, mesmo com 2x no poste novo)
     if (postes1.length && !mts.some((m) => m.item.situacao === null)) unidades.shift()
     for (const m of unidades) {
       const papel: Papel = lv ? (m.encabecamento ? 'lv-instalacao-encabecamento' : 'lv-instalacao-passante') : m.isolada ? 'cruzeta-isolado' : 'cruzeta-nu'
