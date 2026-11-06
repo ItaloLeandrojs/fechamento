@@ -34,6 +34,8 @@ for (const d of [SAIDA, PRINTS]) fs.mkdirSync(d, { recursive: true })
 const BASES = path.join(PROJ, '..', 'bases')
 const BASE_ENEL = path.join(BASES, 'enel.json')
 const BASE_EDP = path.join(BASES, 'kits-edp.json')
+// a lista de mão de obra é opcional: sem o arquivo, o Supabase falso não tem a 3ª linha
+const BASE_MAO_DE_OBRA = fs.existsSync(path.join(BASES, 'mao-de-obra.json')) ? path.join(BASES, 'mao-de-obra.json') : undefined
 for (const b of [BASE_ENEL, BASE_EDP]) if (!fs.existsSync(b)) throw new Error(`Falta a base local ${b}: o teste precisa dela.`)
 const URL_SUPABASE = urlDoSupabase(PROJ)
 const KITS = JSON.parse(fs.readFileSync(BASE_EDP, 'utf8'))
@@ -65,7 +67,7 @@ const falsos = []
 
 // Supabase de mentira na página (antes de abrir o site), com as bases locais
 async function simular(page, opcoes = {}) {
-  const falso = await simularSupabase(page, { url: URL_SUPABASE, enel: BASE_ENEL, edp: BASE_EDP, ...opcoes })
+  const falso = await simularSupabase(page, { url: URL_SUPABASE, enel: BASE_ENEL, edp: BASE_EDP, maoDeObra: BASE_MAO_DE_OBRA, ...opcoes })
   falsos.push(falso)
   return falso
 }

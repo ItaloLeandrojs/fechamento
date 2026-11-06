@@ -25,16 +25,17 @@ function gz(arquivo) {
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
 
 /**
- * `enel` e `edp`: caminhos dos JSON locais. `perfil`: muda a linha de "perfis" (id, nome, cargo, matrícula).
+ * `enel` e `edp`: caminhos dos JSON locais; `maoDeObra` (opcional): caminho do JSON da lista de mão de obra
+ * (com ele a tabela "bases" tem a 3ª linha e o balde serve mao-de-obra.json.gz). `perfil`: muda a linha de "perfis" (id, nome, cargo, matrícula).
  * Devolve o estado do falso; a cena pode mudar estes campos no meio:
  * - `senhaErrada`: o login responde 400 invalid_credentials;
  * - `negarToken`: /auth/v1/user responde 401 e a renovação do token responde 400 (sessão vencida);
  * - `abortarBases`: o pedido à tabela "bases" cai como se não houvesse internet;
  * e lê: `descargas` (arquivos baixados do balde), `senhaTrocada` (rpc chamado) e `naoSimuladas`.
  */
-export async function simularSupabase(page, { url, enel, edp, senhaInicial = false, perfil = {} }) {
+export async function simularSupabase(page, { url, enel, edp, maoDeObra, senhaInicial = false, perfil = {} }) {
   const linha = { id: 'maria-teste', nome: 'Maria Souza', cargo: 'Técnica de campo', matricula: '1234', ...perfil }
-  const arquivos = { 'enel.json.gz': enel, 'kits-edp.json.gz': edp }
+  const arquivos = { 'enel.json.gz': enel, 'kits-edp.json.gz': edp, ...(maoDeObra ? { 'mao-de-obra.json.gz': maoDeObra } : {}) }
   const estado = { senhaInicial, senhaErrada: false, negarToken: false, abortarBases: false, descargas: 0, senhaTrocada: false, naoSimuladas: [] }
   const usuario = { id: linha.id, aud: 'authenticated', role: 'authenticated', email: 'maria.souza@exemplo.com.br', app_metadata: { provider: 'email' }, user_metadata: {}, created_at: '2026-11-04T00:00:00Z' }
   let n = 0
@@ -86,7 +87,7 @@ export async function simularSupabase(page, { url, enel, edp, senhaInicial = fal
     }
     if (u.pathname.endsWith('/rest/v1/bases')) {
       if (estado.abortarBases) return route.abort('internetdisconnected')
-      return json(route, Object.keys(arquivos).map((arquivo) => ({ nome: arquivo.startsWith('enel') ? 'enel' : 'edp', versao: 'teste-1', arquivo })))
+      return json(route, Object.keys(arquivos).map((arquivo) => ({ nome: arquivo.startsWith('enel') ? 'enel' : arquivo.startsWith('mao-de-obra') ? 'mao-de-obra' : 'edp', versao: 'teste-1', arquivo })))
     }
     return naoSimulada(route)
   })

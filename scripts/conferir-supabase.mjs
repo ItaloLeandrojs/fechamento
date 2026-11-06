@@ -65,7 +65,8 @@ item(!perfis.error && perfis.data.length === 1 && perfis.data[0].id === uid,
 
 const bases = await logado.from('bases').select('nome, arquivo, versao')
 const nomes = (bases.data ?? []).map((b) => b.nome).sort().join(',')
-item(!bases.error && nomes === 'edp,enel', 'lê as 2 linhas de bases', bases.error?.message ?? nomes)
+// a lista de mão de obra é opcional: 2 linhas (sem ela) ou 3 (com ela)
+item(!bases.error && (nomes === 'edp,enel' || nomes === 'edp,enel,mao-de-obra'), 'lê as linhas de bases (edp, enel e, se já subiu, mao-de-obra)', bases.error?.message ?? nomes)
 
 const arquivos = (bases.data ?? []).map((b) => b.arquivo)
 for (const arquivo of arquivos) {

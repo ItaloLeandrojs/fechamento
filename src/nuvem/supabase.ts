@@ -30,7 +30,8 @@ export function fonteSupabase(c: SupabaseClient): FonteBases {
         if (!l) throw new Error(`Falta a base "${nome}" no servidor.`)
         return { versao: l.versao, arquivo: l.arquivo }
       }
-      return { enel: achar('enel'), edp: achar('edp') }
+      const mao = linhas.find((x) => x.nome === 'mao-de-obra')
+      return { enel: achar('enel'), edp: achar('edp'), ...(mao ? { 'mao-de-obra': { versao: mao.versao, arquivo: mao.arquivo } } : {}) }
     },
     async baixar(arquivo) {
       const { data, error } = await c.storage.from('bases').download(arquivo)

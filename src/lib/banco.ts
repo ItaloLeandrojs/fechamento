@@ -11,7 +11,7 @@ export const LOJA_AJUSTES = 'ajustes'
 /** Último ajuste feito numa estrutura (chave sem _S), guardado só neste navegador. */
 export interface SugestaoGuardada { estrutura: string; ajuste: Ajuste; data: string }
 
-export type NomeBase = 'enel' | 'edp'
+export type NomeBase = 'enel' | 'edp' | 'mao-de-obra'
 
 /** Base baixada do servidor e guardada aqui; 'versao' é o carimbo que diz se mudou. */
 export interface BaseGuardada<T = unknown> {

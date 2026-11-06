@@ -32,12 +32,16 @@ grant select on public.perfis to authenticated;
 -- 2. Bases: qual versao de cada base esta no bucket
 -- ---------------------------------------------------------------
 create table if not exists public.bases (
-  nome          text primary key check (nome in ('enel', 'edp')),
+  nome          text primary key check (nome in ('enel', 'edp', 'mao-de-obra')),
   versao        text not null,
   arquivo       text not null,
   atualizado_em timestamptz not null default now(),
   contagens     jsonb not null
 );
+
+-- Terceira base, opcional: a lista de mao de obra do Ceara. Troca o check de bases ja criadas.
+alter table public.bases drop constraint if exists bases_nome_check;
+alter table public.bases add constraint bases_nome_check check (nome in ('enel', 'edp', 'mao-de-obra'));
 
 alter table public.bases enable row level security;
 

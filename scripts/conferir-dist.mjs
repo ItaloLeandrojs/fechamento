@@ -1,5 +1,6 @@
 // `node scripts/conferir-dist.mjs`: confere que nenhuma base privada foi parar dentro do site montado (dist/).
 // Tira 20 descrições da base da Enel (../bases/enel.json) e 20 dos kits da EDP (../bases/kits-edp.json),
+// (e, se existir ../bases/mao-de-obra.json, 20 números e 20 descrições da lista de mão de obra),
 // as 3 mais compridas de cada uma e o resto ao acaso (semente fixa: sempre as mesmas), e procura cada uma
 // em todos os arquivos de dist/ (os .gz e .br são abertos antes). As frases vêm das bases na hora: nunca
 // ficam escritas aqui. Sai com código 1 e lista o que achou, ou imprime "dist limpo: nenhuma base dentro".
@@ -35,6 +36,11 @@ function sorteador(semente) {
   }
 }
 
+function lerBaseOpcional(nome) {
+  const arq = path.join(BASES, nome)
+  return fs.existsSync(arq) ? JSON.parse(fs.readFileSync(arq, 'utf8')) : null
+}
+
 function lerBase(nome) {
   const arq = path.join(BASES, nome)
   if (!fs.existsSync(arq)) sair(`Falta a base local ${arq}: sem ela não dá para conferir.`)
@@ -42,9 +48,9 @@ function lerBase(nome) {
 }
 
 // as mais compridas primeiro (são as que mais denunciam a base inteira), depois o sorteio
-function amostra(frases, sorteio) {
-  const unicas = [...new Set(frases.map((f) => f.trim()).filter((f) => f.length >= MINIMO))].sort()
-  if (unicas.length < POR_BASE) sair(`A base tem só ${unicas.length} descrições com ${MINIMO} letras ou mais.`)
+function amostra(frases, sorteio, minimo = MINIMO) {
+  const unicas = [...new Set(frases.map((f) => f.trim()).filter((f) => f.length >= minimo))].sort()
+  if (unicas.length < POR_BASE) sair(`A base tem só ${unicas.length} descrições com ${minimo} letras ou mais.`)
   const escolhidas = [...unicas].sort((a, b) => b.length - a.length || (a < b ? -1 : 1)).slice(0, COMPRIDAS)
   const resto = unicas.filter((f) => !escolhidas.includes(f))
   while (escolhidas.length < POR_BASE) escolhidas.push(resto.splice(Math.floor(sorteio() * resto.length), 1)[0])
@@ -53,12 +59,19 @@ function amostra(frases, sorteio) {
 
 const enel = lerBase('enel.json')
 const edp = lerBase('kits-edp.json')
+const maoDeObra = lerBaseOpcional('mao-de-obra.json')
+if (!maoDeObra) console.log('Aviso: sem ../bases/mao-de-obra.json, a lista de mão de obra não foi conferida.')
 const sorteio = sorteador(SEMENTE)
 const procuradas = [
   // Enel: descrição dos materiais (texto mais comprido de cada linha) e das estruturas
   ...amostra([...Object.values(enel.materiais ?? {}).map((m) => [].concat(m).sort((a, b) => String(b).length - String(a).length)[0]), ...Object.values(enel.estruturas ?? {})].map(String), sorteio).map((frase) => ({ base: 'Enel', frase })),
   // EDP: descrição dos kits e dos materiais de cada kit
   ...amostra(edp.flatMap((k) => [k.descricao, ...(k.itens ?? []).map((i) => i.desc)]).filter((f) => typeof f === 'string'), sorteio).map((frase) => ({ base: 'EDP', frase })),
+  // mão de obra: número de 10 dígitos e descrição de cada voz da lista
+  ...(maoDeObra ? [
+    ...amostra((maoDeObra.lista ?? []).map((v) => String(v.numero)), sorteio, 10).map((frase) => ({ base: 'Mão de obra (número)', frase })),
+    ...amostra((maoDeObra.lista ?? []).map((v) => String(v.descricao)), sorteio).map((frase) => ({ base: 'Mão de obra (descrição)', frase })),
+  ] : []),
 ]
 
 // a mesma frase como ela pode aparecer num arquivo: crua, escapada em JSON e com \uXXXX no lugar dos acentos
@@ -93,10 +106,10 @@ for (const arq of lista) {
   })
 }
 
-console.log(`${procuradas.length} descrições procuradas (${POR_BASE} da Enel, ${POR_BASE} da EDP) em ${lista.length} arquivos de ${PASTA.startsWith(PROJ + path.sep) ? path.relative(PROJ, PASTA) : PASTA}.`)
+console.log(`${procuradas.length} frases procuradas (${POR_BASE} da Enel, ${POR_BASE} da EDP${maoDeObra ? `, ${POR_BASE} números e ${POR_BASE} descrições da mão de obra` : ''}) em ${lista.length} arquivos de ${PASTA.startsWith(PROJ + path.sep) ? path.relative(PROJ, PASTA) : PASTA}.`)
 if (achados.length) {
   console.log(`\nBASE DENTRO DO SITE: ${achados.length} achado(s):`)
-  for (const a of achados) console.log(`- ${a.arq}: descrição ${a.n} da ${a.base} ("${a.inicio}...")`)
+  for (const a of achados) console.log(`- ${a.arq}: frase ${a.n} de ${a.base} ("${a.inicio}...")`)
   process.exit(1)
 }
 console.log('dist limpo: nenhuma base dentro')
