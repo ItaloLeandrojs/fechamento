@@ -1,6 +1,7 @@
 // Excel da contagem do Ceará, com as colunas da "Solicitação de acréscimos de material - Enel"
-// (o arquivo "<OT> - ORÇAMENTO.xlsx" das obras de setembro), só com as 4 abas de estrutura e
-// material, sem o título e o TOTAL do modelo. A mão de obra fica de fora até o Italo ensinar. O arquivo é montado do zero
+// (o arquivo "<OT> - ORÇAMENTO.xlsx" das obras de setembro): as 4 abas de estrutura e material, sem
+// o título e o TOTAL do modelo; com a lista de mão de obra, mais MÃO DE OBRA ADIÇÃO e DEVOLUÇÃO (sem
+// ela, o arquivo sai igual ao de antes). O arquivo é montado do zero
 // (sem modelo guardado), para não levar nome de colega nem vínculo com planilha externa.
 import JSZip from 'jszip'
 import { indexToCol } from '../core/sheet'

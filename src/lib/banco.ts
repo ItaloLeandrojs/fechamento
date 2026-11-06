@@ -163,3 +163,37 @@ export async function gravarRespostasMO(r: RespostasMO): Promise<boolean> {
     return false
   }
 }
+
+// Cópia das respostas da mão de obra no localStorage, gravada na hora em que a página fecha: o
+// IndexedDB não termina de gravar com a página indo embora (a conexão é fechada e a gravação cai),
+// o localStorage grava na mesma hora. Uma cópia só (a da última página fechada); na próxima abertura
+// ela vai para o banco e sai daqui.
+const PENDENTE_MO = 'fechamento-mao-de-obra-pendente'
+
+export function guardarPendenteMO(r: RespostasMO): void {
+  try {
+    localStorage.setItem(PENDENTE_MO, JSON.stringify(r))
+  } catch {
+    // sem localStorage: fica só a gravação no banco
+  }
+}
+
+/** A cópia guardada ao fechar; com `ot`, só se for dessa OT. */
+export function lerPendenteMO(ot?: string): RespostasMO | null {
+  try {
+    const t = localStorage.getItem(PENDENTE_MO)
+    const r = t ? (JSON.parse(t) as RespostasMO) : null
+    return r && typeof r.ot === 'string' && r.ot && (ot === undefined || r.ot === ot) ? r : null
+  } catch {
+    return null
+  }
+}
+
+/** Tira a cópia depois de gravada no banco, se ela ainda é essa (uma mais nova fica). */
+export function tirarPendenteMO(r: RespostasMO): void {
+  try {
+    if (localStorage.getItem(PENDENTE_MO) === JSON.stringify(r)) localStorage.removeItem(PENDENTE_MO)
+  } catch {
+    // sem localStorage: nada a tirar
+  }
+}

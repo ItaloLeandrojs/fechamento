@@ -11,7 +11,10 @@ import { BLOCOS, comparar, lerOrcamento, type Orcamento } from '../../ceara/orca
 import { AREAS, gerarExcelCeara, nomeDoExcel, otDoNome, type Area } from '../../ceara/excel'
 import { ajustesValidos, aplicarSugestao, chaveKit, estruturasAjustadas, mesmaObra, somarNaAdicao, sugestoesAoBaixar, type Ajuste, type Ajustes } from '../../ceara/estratificacao'
 import { gravarSugestoes, lerSugestoes, type SugestaoGuardada } from '../../lib/banco'
+import type { BaseMaoDeObra, RespostasMO } from '../../ceara/maoDeObra'
 import { TabelaBloco, type Estratificar, type LinhaTela } from './TabelaBloco'
+import { MaoDeObra } from './MaoDeObra'
+import { useMaoDeObra } from './useMaoDeObra'
 
 type Ferramenta = 'cad' | 'sucata' | 'correcoes' | 'nomeacao' | 'aro'
 
@@ -52,11 +55,13 @@ const EM_TESTE: Record<Exclude<Ferramenta, 'cad'>, { titulo: string; passos: str
  * Fechamento Ceará: menu lateral com as ferramentas. Pronta só a Leitura do CAD: lê o DXF do
  * asbuilt, conta estruturas e materiais pelas etiquetas dos postes e pelos vãos e baixa o Excel
  * da Solicitação de acréscimos (abas de estrutura e material). Com um orçamento feito à mão,
- * mostra o que bateu. Mão de obra ainda fica de fora. As outras (sucata, correções, nomeação e
- * ARO) estão em teste: abrem uma página curta com o que vão fazer.
- * A base da Enel (material e kits de estrutura) chega pronta, baixada depois do login.
+ * mostra o que bateu. Com a lista de mão de obra, o bloco Mão de obra (MaoDeObra.tsx) conta as
+ * vozes pelo mesmo desenho e o Excel ganha as abas MÃO DE OBRA ADIÇÃO e DEVOLUÇÃO; sem ela, só
+ * um aviso e o resto igual. As outras (sucata, correções, nomeação e ARO) estão em teste: abrem
+ * uma página curta com o que vão fazer.
+ * A base da Enel (material e kits de estrutura) e a lista de mão de obra chegam prontas, baixadas depois do login.
  */
-export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void }) {
+export function Ceara({ base, maoDeObra, onVoltar }: { base: BaseEnel; maoDeObra: BaseMaoDeObra | null; onVoltar: () => void }) {
   const [nomeDxf, setNomeDxf] = useState('')
   const [resultado, setResultado] = useState<ResultadoCeara | null>(null)
   const [orcamento, setOrcamento] = useState<Orcamento | null>(null)
@@ -78,6 +83,15 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
   const inDxf = useRef<HTMLInputElement>(null)
   const inOrc = useRef<HTMLInputElement>(null)
   const idArea = useId()
+  const mo = useMaoDeObra(resultado, maoDeObra, area, ot)
+  // mudança na mão de obra: o Excel baixado ficou velho
+  const estadoMO = {
+    ...mo,
+    mudar: (f: (r: RespostasMO) => RespostasMO) => {
+      mo.mudar(f)
+      setBaixado('')
+    },
+  }
 
   // sugestões do último ajuste, guardadas só neste navegador
   useEffect(() => {
@@ -143,7 +157,7 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
     if (!resultado) return
     const nome = nomeDoExcel(ot)
     const data = new Date()
-    const bytes = await gerarExcelCeara(resultado, { ot: ot.trim(), area, data }, { base, ajustes })
+    const bytes = await gerarExcelCeara(resultado, { ot: ot.trim(), area, data }, { base, ajustes }, mo.linhas ?? undefined)
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
     a.download = nome
@@ -203,7 +217,9 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
   const comEstrat = !!resultado && estruturasAjustadas(resultado.adicaoEstrutura, ajustes).length > 0
   // com ajuste, a Adição de material do Excel soma o a mais e os novos; o fora do catálogo sai em vermelho
   const adicaoFinal = resultado && comEstrat ? somarNaAdicao(resultado, base, ajustes).adicaoMaterial : resultado?.adicaoMaterial ?? []
-  const vermelhas = resultado ? BLOCOS.flatMap((b) => (b.id === 'adicaoMaterial' ? adicaoFinal : resultado[b.id])).filter((l) => l.semCodigo || l.foraDaBase).length : 0
+  // a mão de obra sai em vermelho sem número ou com pergunta sem resposta (como em gerarExcelCeara)
+  const vermelhasMO = (mo.linhas ?? []).filter((l) => !l.numero || l.falta).length
+  const vermelhas = (resultado ? BLOCOS.flatMap((b) => (b.id === 'adicaoMaterial' ? adicaoFinal : resultado[b.id])).filter((l) => l.semCodigo || l.foraDaBase).length : 0) + vermelhasMO
   const otValida = /^\d{7}$|^\d{11}$/.test(ot.trim())
 
   const ferramentas: ItemMenu<Ferramenta>[] = [
@@ -302,9 +318,13 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
                 <Painel className="p-4 md:p-5">
                   <h2 className="text-xl font-semibold tracking-[-0.02em]">Excel da obra</h2>
                   <p className="mt-1 text-sm text-muted">
-                    {comEstrat
-                      ? '5 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel, e a ESTRATIFICAÇÃO. O material a mais e os códigos novos somam na Adição de material. Data de hoje e empresa COSAMPA.'
-                      : '4 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel. Data de hoje e empresa COSAMPA.'}
+                    {mo.linhas
+                      ? comEstrat
+                        ? '7 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel, MÃO DE OBRA ADIÇÃO e DEVOLUÇÃO e a ESTRATIFICAÇÃO. O material a mais e os códigos novos somam na Adição de material. Data de hoje e empresa COSAMPA.'
+                        : '6 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel, e MÃO DE OBRA ADIÇÃO e DEVOLUÇÃO. Data de hoje e empresa COSAMPA.'
+                      : comEstrat
+                        ? '5 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel, e a ESTRATIFICAÇÃO. O material a mais e os códigos novos somam na Adição de material. Data de hoje e empresa COSAMPA.'
+                        : '4 abas: adição e devolução de estrutura e de material, no modelo da Solicitação de acréscimos da Enel. Data de hoje e empresa COSAMPA.'}
                   </p>
                   <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,220px)_auto] lg:grid-cols-[minmax(0,220px)_auto_minmax(0,1fr)] sm:items-start">
                     <Campo
@@ -340,7 +360,7 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
                   </div>
                   {vermelhas > 0 && (
                     <p className="mt-3 text-sm text-text">
-                      <span className="num font-semibold">{vermelhas}</span> {vermelhas === 1 ? 'linha sai' : 'linhas saem'} em vermelho no Excel (sem código, fora da base da Enel ou fora do catálogo): preencha ou corrija à mão.
+                      <span className="num font-semibold">{vermelhas}</span> {vermelhas === 1 ? 'linha sai' : 'linhas saem'} em vermelho no Excel ({vermelhasMO > 0 ? 'sem código, fora da base da Enel, fora do catálogo ou mão de obra sem número ou sem resposta' : 'sem código, fora da base da Enel ou fora do catálogo'}): preencha ou corrija à mão.
                     </p>
                   )}
                   {baixado && (
@@ -382,6 +402,8 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
                   ))}
                 </div>
 
+                <MaoDeObra base={maoDeObra} area={area} estado={estadoMO} />
+
                 {resultado.naoReconhecidos.length > 0 && (
                   <ListaPedacos
                     titulo="Itens que o site não reconheceu"
@@ -390,7 +412,15 @@ export function Ceara({ base, onVoltar }: { base: BaseEnel; onVoltar: () => void
                   />
                 )}
                 {resultado.ignorados.length > 0 && (
-                  <ListaPedacos titulo="Fora da contagem de propósito" texto="A CAVA KLC só marca que teve cava no poste: entra na mão de obra, não no material." itens={resultado.ignorados} />
+                  <ListaPedacos
+                    titulo="Fora da contagem de propósito"
+                    texto={
+                      maoDeObra
+                        ? 'A CAVA KLC não é material: só marca que teve cava na rocha no poste e entra no bloco Mão de obra.'
+                        : 'A CAVA KLC só marca que teve cava no poste: entra na mão de obra, não no material.'
+                    }
+                    itens={resultado.ignorados}
+                  />
                 )}
 
                 <Painel className="overflow-clip">

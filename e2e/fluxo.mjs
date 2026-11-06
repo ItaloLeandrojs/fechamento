@@ -585,6 +585,8 @@ async function ceara() {
     // largura medida com o ajuste ainda aberto (ele não é fechado no teste)
     const sw = await page.evaluate(() => document.documentElement.scrollWidth)
     if (sw > largura + 1) falhas.push(`[${tag}] página mais larga que a tela (${sw}px)`)
+    if (BASE_MAO_DE_OBRA) await maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara })
+    else if (largura === 1366) console.log('AVISO: sem ../bases/mao-de-obra.json o teste pulou o bloco Mão de obra do Ceará')
     if (largura === 1366) {
       // sugestão do último ajuste: sai do Ceará, volta pelo painel e carrega o mesmo desenho
       await page.getByRole('button', { name: 'Regiões' }).click()
@@ -609,6 +611,117 @@ async function ceara() {
     for (const e of erros) falhas.push(`[${tag}] erro: ${e}`)
     await ctx.close()
   }
+}
+
+// Bloco "Mão de obra" da Leitura do CAD (com a lista de ../bases no Supabase falso): responde a obra,
+// muda uma quantidade, recarrega logo em seguida (dentro do atraso da gravação) e confere que tudo volta
+// pela OT; o Excel ganha as 2 abas de mão de obra. Nenhum valor real fica escrito aqui: tudo é lido da tela.
+async function maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara }) {
+  const bloco = page.getByRole('region', { name: 'Mão de obra', exact: true })
+  try {
+    await bloco.waitFor({ timeout: 10000 })
+  } catch {
+    falhas.push(`[${tag}] o bloco Mão de obra não apareceu depois de ler o DXF`)
+    return
+  }
+  const instalacao = bloco.getByRole('region', { name: /^Instalação/ })
+  const retirada = bloco.getByRole('region', { name: /^Retirada/ })
+  for (const [nome, loc] of [['Instalação', instalacao], ['Retirada', retirada]]) {
+    if (!(await bloco.getByRole('heading', { name: new RegExp('^' + nome) }).count())) falhas.push(`[${tag}] o bloco Mão de obra não tem a tabela ${nome}`)
+    else if (!(await loc.count()) && !(await bloco.getByText(`Nada na ${nome.toLowerCase()}.`).count())) falhas.push(`[${tag}] a tabela ${nome} não aparece`)
+  }
+
+  const cidade = bloco.getByRole('group', { name: 'Cidade da obra' })
+  const desligamento = bloco.getByRole('group', { name: 'Teve desligamento?' })
+  const outra = cidade.getByRole('button', { name: 'Outra cidade (B)' })
+  const sim = desligamento.getByRole('button', { name: 'Sim', exact: true })
+  const equipamentos = bloco.getByRole('group', { name: 'Equipamentos operados' })
+  const perguntasTensionar = bloco.getByRole('group', { name: / é existente\?$/ })
+  const conferirObra = async (quando) => {
+    if ((await outra.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] ${quando}: "Outra cidade (B)" não está marcada`)
+    if (!(await bloco.getByText('sufixo B', { exact: true }).count())) falhas.push(`[${tag}] ${quando}: a letra "sufixo B" não aparece ao lado da cidade`)
+    if ((await sim.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] ${quando}: "Teve desligamento?" não ficou em Sim`)
+    if (!(await equipamentos.count()) || (await equipamentos.getByRole('status').innerText()).trim() !== '1') falhas.push(`[${tag}] ${quando}: "Equipamentos operados" devia mostrar 1`)
+    if (await perguntasTensionar.count()) falhas.push(`[${tag}] ${quando}: ainda há ${await perguntasTensionar.count()} pergunta(s) de tensionar`)
+    if (await bloco.getByText(/^falta responder/).count()) falhas.push(`[${tag}] ${quando}: ainda há linha com "falta responder" (${(await bloco.getByText(/^falta responder/).first().innerText()).trim()})`)
+  }
+
+  // cidade e desligamento
+  await outra.click()
+  await sim.click()
+  await equipamentos.waitFor({ timeout: 3000 }).catch(() => falhas.push(`[${tag}] "Equipamentos operados" não apareceu com desligamento Sim`))
+  // tensionar: todas com "Não" (cada resposta tira a pergunta da tela)
+  let respondidas = 0
+  while ((await perguntasTensionar.count()) && respondidas < 200) {
+    await perguntasTensionar.first().getByRole('button', { name: 'Não', exact: true }).click()
+    respondidas++
+  }
+  // fases do MT (quando o nome do vão não diz): 3
+  const fases = bloco.getByRole('textbox', { name: /^Fases do cabo/ })
+  for (let i = 0; i < (await fases.count()); i++) await fases.nth(i).fill('3')
+  console.log(`[${tag}] mão de obra: ${respondidas} pergunta(s) de tensionar respondida(s), ${await fases.count()} de fases`)
+  await conferirObra('depois de responder')
+
+  // muda a primeira quantidade da Instalação e recarrega logo em seguida (a gravação ainda estaria no atraso)
+  const linha = instalacao.locator('tbody tr[data-chave]').first()
+  const chave = await linha.getAttribute('data-chave')
+  await linha.getByRole('button', { name: 'Aumentar' }).click()
+  const valor = await linha.getByRole('textbox').first().inputValue()
+  if (!(await linha.getByText('mudado à mão', { exact: true }).count())) falhas.push(`[${tag}] mudar a quantidade não mostrou "mudado à mão"`)
+  if (!(await linha.getByRole('button', { name: /^voltar ao automático/ }).count())) falhas.push(`[${tag}] a linha mudada não tem "voltar ao automático"`)
+  await page.reload()
+  const telaFoto = page.getByRole('heading', { name: 'Sua foto no crachá' })
+  await telaFoto.or(telaCeara).first().waitFor({ timeout: 20000 })
+  if (await telaFoto.count()) await page.getByRole('button', { name: /^Continuar/ }).click()
+  await telaCeara.waitFor({ timeout: 30000 })
+  await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
+  await page.getByRole('heading', { name: /^Etiquetas lidas/ }).waitFor({ timeout: 60000 })
+  // o ceara.dxf não tem OT no nome: sem OT válida o bloco avisa que não guarda; com a OT, as respostas voltam
+  if (!(await bloco.getByText('Sem OT válida: as respostas não ficam guardadas.', { exact: true }).count())) falhas.push(`[${tag}] sem OT o bloco não avisou que não guarda`)
+  await page.getByLabel('OT', { exact: true }).fill('1234567')
+  await page.getByRole('group', { name: 'Área' }).getByRole('button', { name: 'LESTE' }).click()
+  // as respostas são lidas do banco do navegador: espera a cidade voltar marcada
+  await cidade.locator('button[aria-pressed="true"]', { hasText: 'Outra cidade (B)' }).waitFor({ timeout: 5000 }).catch(() => {})
+  await conferirObra('depois de recarregar')
+  const linhaDepois = instalacao.locator(`tr[data-chave="${chave}"]`)
+  if (!(await linhaDepois.count())) falhas.push(`[${tag}] depois de recarregar a linha mudada à mão sumiu`)
+  else {
+    if (!(await linhaDepois.getByText('mudado à mão', { exact: true }).count())) falhas.push(`[${tag}] depois de recarregar a linha perdeu o "mudado à mão"`)
+    const agora = await linhaDepois.getByRole('textbox').first().inputValue()
+    if (agora !== valor) falhas.push(`[${tag}] depois de recarregar a quantidade mudada à mão voltou ${agora} (era ${valor})`)
+  }
+
+  // Excel: as 2 abas de mão de obra, número de 10 dígitos e a OT em cada linha
+  const painelExcel = page.getByRole('heading', { name: 'Excel da obra' }).locator('..')
+  if (!(await painelExcel.getByText(/^6 abas: /).count())) falhas.push(`[${tag}] o texto do Excel não conta as 6 abas com a mão de obra`)
+  const [baixa] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.getByRole('button', { name: 'Baixar Excel' }).click()])
+  const xlsx = path.join(SAIDA, `ceara-mao-de-obra-${largura}.xlsx`)
+  await baixa.saveAs(xlsx)
+  const zip = await JSZip.loadAsync(fs.readFileSync(xlsx))
+  const livro = await zip.file('xl/workbook.xml').async('string')
+  for (const [i, nome] of ['MÃO DE OBRA ADIÇÃO', 'MÃO DE OBRA DEVOLUÇÃO'].entries()) {
+    if (!livro.includes(`name="${nome}"`)) {
+      falhas.push(`[${tag}] o Excel não tem a aba ${nome}`)
+      continue
+    }
+    const folha = await zip.file(`xl/worksheets/sheet${5 + i}.xml`)?.async('string')
+    const linhas = [...(folha ?? '').matchAll(/<row r="(\d+)"[^>]*>(.*?)<\/row>/g)].filter((m) => Number(m[1]) > 1)
+    if (i === 0 && !linhas.length) falhas.push(`[${tag}] a aba ${nome} saiu sem linhas`)
+    for (const [, n, cels] of linhas) {
+      const codigo = /<c r="E\d+"[^>]*>(?:<v>([^<]*)<\/v>|<is><t[^>]*>([^<]*)<\/t><\/is>)<\/c>/.exec(cels)
+      const valorCodigo = codigo?.[1] ?? codigo?.[2] ?? ''
+      if (!/^\d{10}$/.test(valorCodigo)) falhas.push(`[${tag}] ${nome} linha ${n}: CÓDIGO devia ter 10 dígitos`)
+      if (!/<c r="D\d+"[^>]*><v>1234567<\/v><\/c>/.test(cels)) falhas.push(`[${tag}] ${nome} linha ${n}: a OT não está na linha`)
+    }
+  }
+
+  await axe(page, `${tag} mão de obra`, { topo: false })
+  const sw = await page.evaluate(() => document.documentElement.scrollWidth)
+  if (sw > largura + 1) falhas.push(`[${tag}] mão de obra: página mais larga que a tela (${sw}px)`)
+  await bloco.scrollIntoViewIfNeeded()
+  // o cabeçalho preso some só no print do bloco (senão ele cobre um pedaço no meio)
+  await bloco.screenshot({ path: path.join(PRINTS, `${largura}-${tema}-12-ceara-mao-de-obra.png`), style: 'header.sticky { visibility: hidden }' })
+  placar.telas++
 }
 
 // PNG gerado aqui mesmo (quatro quadrantes de cor, sem foto de ninguém), para o teste de foto da entrada:

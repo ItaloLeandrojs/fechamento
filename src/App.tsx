@@ -231,8 +231,8 @@ export default function App() {
 
   const { pessoa, bases } = acesso
   if (acesso.tela || !pessoa || !bases) return acesso.tela
-  if (!obra && ceara) return <Ceara base={bases.enel} onVoltar={() => setCeara(false)} />
-  if (regiao === 'ceara') return <Ceara base={bases.enel} onVoltar={() => setRegiao(null)} />
+  if (!obra && ceara) return <Ceara base={bases.enel} maoDeObra={bases.maoDeObra} onVoltar={() => setCeara(false)} />
+  if (regiao === 'ceara') return <Ceara base={bases.enel} maoDeObra={bases.maoDeObra} onVoltar={() => setRegiao(null)} />
   if (regiao !== 'edp')
     return (
       <Painel

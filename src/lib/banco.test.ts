@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { abrirBanco, gravarBase, gravarRespostasMO, gravarSugestoes, lerBase, lerRespostasMO, lerSugestoes } from './banco'
+import { abrirBanco, gravarBase, guardarPendenteMO, lerPendenteMO, tirarPendenteMO, gravarRespostasMO, gravarSugestoes, lerBase, lerRespostasMO, lerSugestoes } from './banco'
 import { respostasVazias } from '../ceara/maoDeObra'
 import { listarTecnicos } from './tecnicos'
 
@@ -142,6 +142,46 @@ describe('banco do navegador', () => {
     expect((await listarTecnicos())[0].registro).toBe(7)
     expect(await lerBase('enel')).toEqual({ nome: 'enel', versao: 'abc', dados: { x: 1 } })
     expect(await lerSugestoes()).toEqual({ KITX1: ajuste })
+  })
+
+  it('cópia ao fechar a página: guarda, lê pela OT e só tira a mesma', () => {
+    const memoria = new Map<string, string>()
+    const antes = globalThis.localStorage
+    globalThis.localStorage = {
+      getItem: (k: string) => memoria.get(k) ?? null,
+      setItem: (k: string, v: string) => void memoria.set(k, v),
+      removeItem: (k: string) => void memoria.delete(k),
+    } as Storage
+    try {
+      const r = { ...respostasVazias('8000001'), cidade: 'OUTRA' }
+      expect(lerPendenteMO()).toBeNull()
+      guardarPendenteMO(r)
+      expect(lerPendenteMO('8000001')).toEqual(r)
+      expect(lerPendenteMO()).toEqual(r)
+      expect(lerPendenteMO('8000002')).toBeNull()
+      // uma cópia mais nova não sai quando a gravação de uma mais velha termina
+      const nova = { ...r, desligamento: true }
+      guardarPendenteMO(nova)
+      tirarPendenteMO(r)
+      expect(lerPendenteMO('8000001')).toEqual(nova)
+      tirarPendenteMO(nova)
+      expect(lerPendenteMO()).toBeNull()
+    } finally {
+      globalThis.localStorage = antes
+    }
+  })
+
+  it('sem localStorage: a cópia não quebra nada', () => {
+    const antes = globalThis.localStorage
+    // @ts-expect-error simula navegador sem localStorage
+    globalThis.localStorage = undefined
+    try {
+      expect(() => guardarPendenteMO(respostasVazias('8000001'))).not.toThrow()
+      expect(lerPendenteMO('8000001')).toBeNull()
+      expect(() => tirarPendenteMO(respostasVazias('8000001'))).not.toThrow()
+    } finally {
+      globalThis.localStorage = antes
+    }
   })
 
   it('sem IndexedDB: respostas da mão de obra', async () => {
