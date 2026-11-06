@@ -5,7 +5,8 @@ import { setXmlImpl } from '../core/xml'
 import { Workbook } from '../core/workbook'
 import { SheetEditor } from '../core/sheet'
 import { linhasDoTexto } from './mtext'
-import { lerDxf, type Dxf, type TextoDxf } from './dxf'
+import { lerDxf, type TextoDxf } from './dxf'
+import { dxfDe, mtextEm } from './teste-dxf'
 import JSZip from 'jszip'
 import { codigoDeSucata, contarObra, converterCabos, lerCabo, nomesDeCabo, type BaseEnel, type Catalogo, type Linha } from './contagem'
 import type { Ajustes } from './estratificacao'
@@ -21,9 +22,7 @@ describe('texto do CAD', () => {
   })
 })
 
-const mtext = (bruto: string): TextoDxf => ({ tipo: 'MTEXT', bruto, camada: 'DESCRICAOPROJETADA', x: 0, y: 0, altura: 2.5 })
 const text = (bruto: string, x: number, y: number, camada = '0'): TextoDxf => ({ tipo: 'TEXT', bruto, camada, x, y, altura: 2.24 })
-const dxfDe = (textos: (string | TextoDxf)[], cotas: Dxf['cotas'] = []): Dxf => ({ versao: 'AC1024', textos: textos.map((t) => (typeof t === 'string' ? mtext(t) : t)), cotas })
 const qtd = (l: Linha[]) => Object.fromEntries(l.map((x) => [x.codigo, Math.round(x.quantidade * 100) / 100]))
 const cota = (modelo: string, medida: number) => ({ modelo, substituto: '', medida, camada: '' })
 
@@ -34,7 +33,6 @@ const CATALOGO: Catalogo = {
 }
 
 describe('contagem pelas etiquetas', () => {
-  const mtextEm = (bruto: string, x: number, y: number): TextoDxf => ({ tipo: 'MTEXT', bruto, camada: 'DESCRICAOPROJETADA', x, y, altura: 2 })
 
   it('número do poste na primeira linha da etiqueta (em cima)', () => {
     const r = contarObra(dxfDe(['P7\\P(1)300/9 S2N']))
@@ -119,7 +117,6 @@ describe('contagem pelas etiquetas', () => {
 })
 
 describe('linha viva', () => {
-  const mtextEm = (bruto: string, x: number, y: number): TextoDxf => ({ tipo: 'MTEXT', bruto, camada: 'DESCRICAOPROJETADA', x, y, altura: 2 })
   const vivas = (r: ReturnType<typeof contarObra>) => r.etiquetas.map((e) => e.linhaViva === true)
 
   it('LINHA VIVA em cima marca o poste', () => {
