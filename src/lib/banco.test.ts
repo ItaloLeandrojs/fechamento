@@ -144,7 +144,7 @@ describe('banco do navegador', () => {
     expect(await lerSugestoes()).toEqual({ KITX1: ajuste })
   })
 
-  it('cópia ao fechar a página: guarda, lê pela OT e só tira a mesma', () => {
+  it('cópia ao fechar a página: guarda, lê pela OT e só tira a da mesma OT', () => {
     const memoria = new Map<string, string>()
     const antes = globalThis.localStorage
     globalThis.localStorage = {
@@ -159,12 +159,10 @@ describe('banco do navegador', () => {
       expect(lerPendenteMO('8000001')).toEqual(r)
       expect(lerPendenteMO()).toEqual(r)
       expect(lerPendenteMO('8000002')).toBeNull()
-      // uma cópia mais nova não sai quando a gravação de uma mais velha termina
-      const nova = { ...r, desligamento: true }
-      guardarPendenteMO(nova)
-      tirarPendenteMO(r)
-      expect(lerPendenteMO('8000001')).toEqual(nova)
-      tirarPendenteMO(nova)
+      // gravação de outra OT não tira a cópia; a da mesma OT tira
+      tirarPendenteMO('8000002')
+      expect(lerPendenteMO('8000001')).toEqual(r)
+      tirarPendenteMO('8000001')
       expect(lerPendenteMO()).toBeNull()
     } finally {
       globalThis.localStorage = antes
@@ -178,7 +176,7 @@ describe('banco do navegador', () => {
     try {
       expect(() => guardarPendenteMO(respostasVazias('8000001'))).not.toThrow()
       expect(lerPendenteMO('8000001')).toBeNull()
-      expect(() => tirarPendenteMO(respostasVazias('8000001'))).not.toThrow()
+      expect(() => tirarPendenteMO('8000001')).not.toThrow()
     } finally {
       globalThis.localStorage = antes
     }

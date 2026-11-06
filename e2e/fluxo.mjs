@@ -637,12 +637,16 @@ async function maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara }) {
   const sim = desligamento.getByRole('button', { name: 'Sim', exact: true })
   const equipamentos = bloco.getByRole('group', { name: 'Equipamentos operados' })
   const perguntasTensionar = bloco.getByRole('group', { name: / é existente\?$/ })
+  const naoMarcado = perguntasTensionar.getByRole('button', { name: 'Não', exact: true, pressed: true })
+  let totalTensionar = 0
   const conferirObra = async (quando) => {
     if ((await outra.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] ${quando}: "Outra cidade (B)" não está marcada`)
     if (!(await bloco.getByText('sufixo B', { exact: true }).count())) falhas.push(`[${tag}] ${quando}: a letra "sufixo B" não aparece ao lado da cidade`)
     if ((await sim.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] ${quando}: "Teve desligamento?" não ficou em Sim`)
     if (!(await equipamentos.count()) || (await equipamentos.getByRole('status').innerText()).trim() !== '1') falhas.push(`[${tag}] ${quando}: "Equipamentos operados" devia mostrar 1`)
-    if (await perguntasTensionar.count()) falhas.push(`[${tag}] ${quando}: ainda há ${await perguntasTensionar.count()} pergunta(s) de tensionar`)
+    // as respondidas ficam na tela (para trocar), com o "Não" marcado
+    if ((await perguntasTensionar.count()) !== totalTensionar) falhas.push(`[${tag}] ${quando}: devia ter ${totalTensionar} pergunta(s) de tensionar na tela, tem ${await perguntasTensionar.count()}`)
+    if ((await naoMarcado.count()) !== totalTensionar) falhas.push(`[${tag}] ${quando}: só ${await naoMarcado.count()} de ${totalTensionar} pergunta(s) de tensionar com "Não" marcado`)
     if (await bloco.getByText(/^falta responder/).count()) falhas.push(`[${tag}] ${quando}: ainda há linha com "falta responder" (${(await bloco.getByText(/^falta responder/).first().innerText()).trim()})`)
   }
 
@@ -650,24 +654,47 @@ async function maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara }) {
   await outra.click()
   await sim.click()
   await equipamentos.waitFor({ timeout: 3000 }).catch(() => falhas.push(`[${tag}] "Equipamentos operados" não apareceu com desligamento Sim`))
-  // tensionar: todas com "Não" (cada resposta tira a pergunta da tela)
-  let respondidas = 0
-  while ((await perguntasTensionar.count()) && respondidas < 200) {
-    await perguntasTensionar.first().getByRole('button', { name: 'Não', exact: true }).click()
-    respondidas++
+  // linha viva à mão num poste sem o texto no desenho: aparece na lista, "mudado à mão", e sai de novo
+  const outroPoste = bloco.getByLabel('Pôr linha viva em outro poste')
+  if (!(await outroPoste.count())) falhas.push(`[${tag}] falta o "Pôr linha viva em outro poste"`)
+  else {
+    const poste = await outroPoste.inputValue()
+    await bloco.getByRole('button', { name: 'Pôr linha viva', exact: true }).click()
+    const listaLv = bloco.getByRole('list', { name: 'Postes com linha viva' })
+    const tirarLv = listaLv.getByRole('button', { name: `Tirar a linha viva do ${poste}`, exact: true })
+    if (!(await tirarLv.count())) falhas.push(`[${tag}] pôr linha viva no ${poste} não mostrou o poste com linha viva`)
+    else {
+      const itemLv = listaLv.getByRole('listitem').filter({ has: page.getByRole('button', { name: `Tirar a linha viva do ${poste}`, exact: true }) })
+      if (!(await itemLv.getByText('mudado à mão', { exact: true }).count())) falhas.push(`[${tag}] linha viva posta à mão sem "mudado à mão"`)
+      await tirarLv.click()
+      if (await tirarLv.count()) falhas.push(`[${tag}] tirar a linha viva do ${poste} não tirou`)
+      if (!(await outroPoste.locator('option', { hasText: new RegExp(`^${poste}$`) }).count())) falhas.push(`[${tag}] o ${poste} não voltou para "Pôr linha viva em outro poste"`)
+    }
+  }
+
+  // tensionar: todas com "Não"; a resposta pode ser trocada (Sim e de novo Não) e a pergunta fica no lugar
+  totalTensionar = await perguntasTensionar.count()
+  for (let i = 0; i < totalTensionar; i++) await perguntasTensionar.nth(i).getByRole('button', { name: 'Não', exact: true }).click()
+  const respondidas = await naoMarcado.count()
+  if (totalTensionar) {
+    const primeira = perguntasTensionar.first()
+    await primeira.getByRole('button', { name: 'Sim', exact: true }).click()
+    if ((await primeira.getByRole('button', { name: 'Sim', exact: true }).getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] trocar a resposta do tensionar para Sim não marcou o Sim`)
+    if ((await perguntasTensionar.count()) !== totalTensionar) falhas.push(`[${tag}] responder o tensionar tirou pergunta da tela`)
+    await primeira.getByRole('button', { name: 'Não', exact: true }).click()
   }
   // fases do MT (quando o nome do vão não diz): 3
   const fases = bloco.getByRole('textbox', { name: /^Fases do cabo/ })
   for (let i = 0; i < (await fases.count()); i++) await fases.nth(i).fill('3')
-  console.log(`[${tag}] mão de obra: ${respondidas} pergunta(s) de tensionar respondida(s), ${await fases.count()} de fases`)
+  console.log(`[${tag}] mão de obra: ${respondidas} de ${totalTensionar} pergunta(s) de tensionar com "Não", ${await fases.count()} de fases`)
   await conferirObra('depois de responder')
 
   // muda a primeira quantidade da Instalação e recarrega logo em seguida (a gravação ainda estaria no atraso)
   const linha = instalacao.locator('tbody tr[data-chave]').first()
   const chave = await linha.getAttribute('data-chave')
   await linha.getByRole('button', { name: 'Aumentar' }).click()
+  await linha.getByText('mudado à mão', { exact: true }).waitFor({ timeout: 2000 }).catch(() => falhas.push(`[${tag}] mudar a quantidade não mostrou "mudado à mão"`))
   const valor = await linha.getByRole('textbox').first().inputValue()
-  if (!(await linha.getByText('mudado à mão', { exact: true }).count())) falhas.push(`[${tag}] mudar a quantidade não mostrou "mudado à mão"`)
   if (!(await linha.getByRole('button', { name: /^voltar ao automático/ }).count())) falhas.push(`[${tag}] a linha mudada não tem "voltar ao automático"`)
   await page.reload()
   const telaFoto = page.getByRole('heading', { name: 'Sua foto no crachá' })
@@ -722,6 +749,44 @@ async function maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara }) {
   // o cabeçalho preso some só no print do bloco (senão ele cobre um pedaço no meio)
   await bloco.screenshot({ path: path.join(PRINTS, `${largura}-${tema}-12-ceara-mao-de-obra.png`), style: 'header.sticky { visibility: hidden }' })
   placar.telas++
+
+  // outra obra: ler um DXF sem OT no nome tira a OT; a cidade da obra anterior não pode ficar na tela
+  const campoOt = page.getByLabel('OT', { exact: true })
+  const esperar = async (cond, ms = 5000) => {
+    for (const fim = Date.now() + ms; Date.now() < fim; await page.waitForTimeout(100)) if (await cond()) return true
+    return false
+  }
+  await page.locator('input[accept=".dxf"]').setInputFiles(dxf)
+  if (!(await esperar(async () => (await campoOt.inputValue()) === ''))) falhas.push(`[${tag}] ler o DXF sem OT no nome não limpou a OT`)
+  await page.waitForTimeout(300)
+  if (await cidade.locator('button[aria-pressed="true"]').count()) falhas.push(`[${tag}] outro DXF sem OT mostrou a cidade da obra anterior`)
+  if (await desligamento.locator('button[aria-pressed="true"]').count()) falhas.push(`[${tag}] outro DXF sem OT mostrou o desligamento da obra anterior`)
+  // respondida sem OT e a OT de 11 dígitos digitada aos poucos (pausas maiores que o atraso da gravação):
+  // a resposta passa para a OT de 11 dígitos e nada fica gravado na de 7 do meio do caminho
+  const otsGuardadas = () =>
+    page.evaluate(
+      () =>
+        new Promise((ok) => {
+          const r = indexedDB.open('fechamento')
+          r.onerror = () => ok([])
+          r.onsuccess = () => {
+            const db = r.result
+            const q = db.transaction('maoDeObra').objectStore('maoDeObra').getAllKeys()
+            q.onsuccess = () => ok(q.result)
+            q.onerror = () => ok([])
+            q.transaction.oncomplete = () => db.close()
+          }
+        }),
+    )
+  await outra.click()
+  await campoOt.click()
+  await campoOt.pressSequentially('17220000001', { delay: 450 })
+  await page.waitForTimeout(600)
+  if ((await otsGuardadas()).includes('1722000')) falhas.push(`[${tag}] digitar a OT de 11 dígitos deixou um registro na de 7 dígitos do meio do caminho`)
+  if ((await outra.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] a cidade respondida sem OT não passou para a OT digitada`)
+  await sim.click()
+  if (!(await esperar(async () => (await otsGuardadas()).includes('17220000001')))) falhas.push(`[${tag}] a resposta na OT de 11 dígitos não foi gravada`)
+  if ((await otsGuardadas()).includes('1722000')) falhas.push(`[${tag}] ficou registro na OT de 7 dígitos do meio do caminho`)
 }
 
 // PNG gerado aqui mesmo (quatro quadrantes de cor, sem foto de ninguém), para o teste de foto da entrada:

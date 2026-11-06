@@ -189,10 +189,11 @@ export function lerPendenteMO(ot?: string): RespostasMO | null {
   }
 }
 
-/** Tira a cópia depois de gravada no banco, se ela ainda é essa (uma mais nova fica). */
-export function tirarPendenteMO(r: RespostasMO): void {
+/** Tira a cópia da OT depois que o banco confirmou a versão mais nova dela (uma cópia velha nunca
+ *  pode valer mais que o banco). Cópia de outra OT fica. */
+export function tirarPendenteMO(ot: string): void {
   try {
-    if (localStorage.getItem(PENDENTE_MO) === JSON.stringify(r)) localStorage.removeItem(PENDENTE_MO)
+    if (lerPendenteMO(ot)) localStorage.removeItem(PENDENTE_MO)
   } catch {
     // sem localStorage: nada a tirar
   }

@@ -1,9 +1,9 @@
 // Estado do bloco "Mão de obra" da Leitura do CAD: as respostas da obra, guardadas por OT neste
-// computador (IndexedDB, com uma cópia no localStorage ao fechar a página), a contagem do desenho e as linhas finais. Separado da tela para ir depois
-// para a aba "Mão de obra" do visual novo sem reescrever nada.
+// computador (IndexedDB, com uma cópia no localStorage ao fechar a página), a contagem do desenho e as
+// linhas finais. Separado da tela para ir depois para a aba "Mão de obra" do visual novo sem reescrever nada.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ResultadoCeara } from '../../ceara/contagem'
-import { contarDesenhoMO, type DesenhoMO } from '../../ceara/contagemMO'
+import { contarDesenhoMO, desdobrar, estruturaMT, type DesenhoMO, type Pergunta } from '../../ceara/contagemMO'
 import type { Area } from '../../ceara/excel'
 import { limparRespostas, montarLinhas, respostasVazias, type BaseMaoDeObra, type LinhaMO, type RespostasMO } from '../../ceara/maoDeObra'
 import { gravarRespostasMO, guardarPendenteMO, lerPendenteMO, lerRespostasMO, tirarPendenteMO } from '../../lib/banco'
@@ -13,13 +13,32 @@ const OT_VALIDA = /^\d{7}$|^\d{11}$/
 /** Cada mudança espera este tempo antes de gravar (várias seguidas viram uma gravação só). */
 const ATRASO = 400
 
+export type PerguntaTensionar = Extract<Pergunta, { tipo: 'tensionar' }>
+
 const mesmas = (a: RespostasMO, b: RespostasMO) =>
   JSON.stringify([a.tensionar, a.fases, a.linhaViva, a.mudancas]) === JSON.stringify([b.tensionar, b.fases, b.linhaViva, b.mudancas])
 
+/** Alguma coisa foi respondida ou mudada. */
+const temConteudo = (r: RespostasMO) =>
+  r.cidade !== null ||
+  r.desligamento !== null ||
+  r.equipamentos !== 1 ||
+  r.somadas.length > 0 ||
+  [r.tensionar, r.fases, r.linhaViva, r.mudancas].some((o) => Object.keys(o).length > 0)
+
+const numeroDoPoste = (origem: string) => (/^P\d+$/.test(origem) ? Number(origem.slice(1)) : Infinity)
+
 /**
- * `resp.ot` diz de qual OT são as respostas na tela ('' = feitas sem OT válida, ainda sem lugar no banco).
- * Com OT válida: lê o que está guardado; sem nada guardado, começa do zero, a não ser que as respostas
- * na tela ainda não tenham OT (aí passam a ser dessa OT, para não perder o que já foi respondido).
+ * `resp.ot` diz de qual OT são as respostas na tela ('' = sem OT). Regras:
+ * - OT válida: lê o que está guardado (a cópia de quando a página fechou vale mais que o banco).
+ *   Sem nada guardado, as respostas que nasceram sem OT passam para ela como "emprestadas"
+ *   (`provisorio`): só viram registro dessa OT quando a pessoa mexe em algo ou a página fecha.
+ *   As de outra OT nunca passam.
+ * - Sair de uma OT (OT inválida ou outra OT): grava a anterior se a pessoa mudou algo nela e limpa
+ *   a tela; as emprestadas voltam a ser sem OT, sem gravar (digitar uma OT de 11 dígitos passa por
+ *   uma de 7 e não deixa registro nela).
+ * - `versao` sobe a cada mudança; `gravada` é a última versão confirmada no banco: a mudança só
+ *   conta como gravada quando o banco confirma.
  */
 export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeObra | null, area: Area, ot: string) {
   const chaveOt = OT_VALIDA.test(ot.trim()) ? ot.trim() : ''
@@ -27,7 +46,9 @@ export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeOb
   const [semBanco, setSemBanco] = useState(() => typeof indexedDB === 'undefined')
   // conta as leituras do banco: cada uma aplica a limpeza pelo desenho de novo
   const [lidas, setLidas] = useState(0)
-  const sujo = useRef(false)
+  const versao = useRef(0)
+  const gravada = useRef(0)
+  const provisorio = useRef(false)
   const respRef = useRef(resp)
   const semBancoRef = useRef(semBanco)
   useEffect(() => {
@@ -35,55 +56,73 @@ export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeOb
     semBancoRef.current = semBanco
   }, [resp, semBanco])
 
-  /** Grava o que está na tela, se mudou e tem OT. `fechando`: a página vai embora, guarda também a cópia síncrona. */
+  /** Grava o que está na tela, se mudou e tem OT. `fechando`: a página (ou a tela) vai embora: grava
+   *  também as emprestadas e guarda a cópia síncrona. */
   const gravarAgora = useCallback((fechando = false) => {
     const r = respRef.current
-    if (!sujo.current || !r.ot || semBancoRef.current) return
-    sujo.current = false
+    if (!r.ot || semBancoRef.current) return
+    const emprestadas = fechando && provisorio.current && temConteudo(r)
+    if (versao.current === gravada.current && !emprestadas) return
+    if (emprestadas) provisorio.current = false
     if (fechando) guardarPendenteMO(r)
+    const v = versao.current
     void gravarRespostasMO(r).then((ok) => {
-      if (ok) tirarPendenteMO(r)
-      else setSemBanco(true)
+      if (!ok) return setSemBanco(true)
+      // a tela já está em outra OT: esta foi a última versão daquela OT
+      if (respRef.current.ot !== r.ot) return tirarPendenteMO(r.ot)
+      gravada.current = Math.max(gravada.current, v)
+      if (gravada.current === versao.current) tirarPendenteMO(r.ot)
     })
   }, [])
 
   const mudar = useCallback((f: (r: RespostasMO) => RespostasMO) => {
-    sujo.current = true
+    versao.current++
+    provisorio.current = false
     setResp(f)
   }, [])
 
   // a cópia da última página fechada vai para o banco
   useEffect(() => {
     const p = lerPendenteMO()
-    if (p) void gravarRespostasMO(p).then((ok) => ok && tirarPendenteMO(p))
+    if (p) void gravarRespostasMO(p).then((ok) => ok && tirarPendenteMO(p.ot))
   }, [])
 
-  // troca de OT: grava a anterior antes de ler a nova; OT inválida solta as respostas da OT de antes
+  // troca de OT
   useEffect(() => {
     const atual = respRef.current.ot
     if (chaveOt === atual) return
-    if (atual) gravarAgora()
-    if (!chaveOt) {
-      setResp((r) => ({ ...r, ot: '' }))
-      return
+    if (atual) {
+      if (provisorio.current) {
+        // emprestadas e sem mudança: voltam a ser sem OT, nada fica gravado na OT de antes
+        setResp((r) => ({ ...r, ot: '' }))
+      } else {
+        gravarAgora() // só grava se a pessoa mudou algo nela
+        setResp(respostasVazias(''))
+      }
+      provisorio.current = false
+      gravada.current = ++versao.current
     }
+    if (!chaveOt) return
     let vivo = true
     void lerRespostasMO(chaveOt).then((noBanco) => {
       if (!vivo) return
-      // a cópia de quando a página fechou é mais nova que o banco
-      const guardada = lerPendenteMO(chaveOt) ?? noBanco
+      // a cópia de quando a página fechou é mais nova que o banco: ainda precisa ir para ele
+      const pendente = lerPendenteMO(chaveOt)
+      const guardada = pendente ?? noBanco
       setResp((r) => {
         if (guardada) {
-          sujo.current = false
+          provisorio.current = false
           return { ...respostasVazias(chaveOt), ...guardada, ot: chaveOt }
         }
-        if (r.ot === '') {
-          sujo.current = true // as respostas sem OT passam a ser desta: grava
+        if (r.ot === '' && temConteudo(r)) {
+          provisorio.current = true
           return { ...r, ot: chaveOt }
         }
-        sujo.current = false
+        provisorio.current = false
         return respostasVazias(chaveOt)
       })
+      gravada.current = ++versao.current
+      if (pendente) versao.current++
       setLidas((n) => n + 1)
     })
     return () => {
@@ -98,20 +137,21 @@ export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeOb
       const d = contarDesenhoMO(resultado, base, r)
       const limpa = limparRespostas(r, d, montarLinhas(d, base, r, area))
       if (mesmas(limpa, r)) return r
-      sujo.current = true
+      // registro da OT mudou: grava; emprestadas continuam só emprestadas
+      if (r.ot && !provisorio.current) versao.current++
       return limpa
     })
     // a área não muda as chaves das linhas (a limpeza ao trocar de área não tira nada)
   }, [resultado, base, area, lidas])
 
-  // gravação com atraso, só quando as respostas são da OT do campo
+  // gravação com atraso, só quando as respostas são da OT do campo e mudaram
   useEffect(() => {
-    if (!sujo.current || !resp.ot || resp.ot !== chaveOt || semBanco) return
+    if (!resp.ot || resp.ot !== chaveOt || semBanco || versao.current === gravada.current) return
     const t = setTimeout(() => gravarAgora(), ATRASO)
     return () => clearTimeout(t)
   }, [resp, chaveOt, semBanco, gravarAgora])
 
-  // fechar ou recarregar a página e esconder a aba gravam na hora (com a cópia síncrona); sair da tela também
+  // fechar ou recarregar a página, esconder a aba e sair da tela gravam na hora (com a cópia síncrona)
   useEffect(() => {
     const fechando = () => gravarAgora(true)
     const escondeu = () => document.visibilityState === 'hidden' && fechando()
@@ -120,13 +160,29 @@ export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeOb
     return () => {
       window.removeEventListener('pagehide', fechando)
       document.removeEventListener('visibilitychange', escondeu)
-      gravarAgora()
+      fechando()
     }
   }, [gravarAgora])
 
   const desenho = useMemo<DesenhoMO | null>(() => (resultado && base ? contarDesenhoMO(resultado, base, resp) : null), [resultado, base, resp])
   const linhas = useMemo<LinhaMO[] | null>(() => (desenho && base ? montarLinhas(desenho, base, resp, area) : null), [desenho, base, resp, area])
+  // todas as perguntas de tensionar, respondidas ou não (as respondidas ficam na tela para trocar)
+  const tensionar = useMemo<PerguntaTensionar[]>(() => {
+    if (!resultado || !base) return []
+    return contarDesenhoMO(resultado, base, { tensionar: {}, fases: resp.fases, linhaViva: resp.linhaViva }).perguntas.filter((p): p is PerguntaTensionar => p.tipo === 'tensionar')
+  }, [resultado, base, resp.fases, resp.linhaViva])
+  // postes com estrutura de MT e sem linha viva: dá para pôr a linha viva à mão (o texto pode faltar no desenho)
+  const postesSemLinhaViva = useMemo<string[]>(() => {
+    if (!resultado || !desenho) return []
+    const comLv = new Set(desenho.linhaViva.map((p) => p.poste))
+    const out = new Set<string>()
+    for (const e of resultado.etiquetas) {
+      const origem = e.poste ? 'P' + e.poste : 'sem nº'
+      if (!comLv.has(origem) && desdobrar(e).some((i) => estruturaMT(i))) out.add(origem)
+    }
+    return [...out].sort((a, b) => numeroDoPoste(a) - numeroDoPoste(b))
+  }, [resultado, desenho])
   const guardando = !!chaveOt && !semBanco
 
-  return { resp, mudar, desenho, linhas, guardando }
+  return { resp, mudar, desenho, linhas, guardando, tensionar, postesSemLinhaViva }
 }
