@@ -36,6 +36,8 @@ const BASE_ENEL = path.join(BASES, 'enel.json')
 const BASE_EDP = path.join(BASES, 'kits-edp.json')
 // a lista de mão de obra é opcional: sem o arquivo, o Supabase falso não tem a 3ª linha
 const BASE_MAO_DE_OBRA = fs.existsSync(path.join(BASES, 'mao-de-obra.json')) ? path.join(BASES, 'mao-de-obra.json') : undefined
+// quantas bases o site baixa na primeira entrada: enel, edp e (se o arquivo existir) a lista de mão de obra
+const BASES_ESPERADAS = 2 + (BASE_MAO_DE_OBRA ? 1 : 0)
 for (const b of [BASE_ENEL, BASE_EDP]) if (!fs.existsSync(b)) throw new Error(`Falta a base local ${b}: o teste precisa dela.`)
 const URL_SUPABASE = urlDoSupabase(PROJ)
 const KITS = JSON.parse(fs.readFileSync(BASE_EDP, 'utf8'))
@@ -949,7 +951,7 @@ async function plataforma() {
     await noPainel('depois da foto')
     const fotoGuardada = await page.evaluate(() => Object.entries(localStorage).find(([k]) => k.startsWith('fechamento-foto:'))?.[1] ?? '')
     if (!/^data:image\/jpeg;base64,/.test(fotoGuardada)) falhas.push(`[${tag}] a foto não ficou guardada (JPEG reduzido)`)
-    if (falso.descargas !== 2) falhas.push(`[${tag}] a primeira entrada devia baixar as 2 bases, baixou ${falso.descargas}`)
+    if (falso.descargas !== BASES_ESPERADAS) falhas.push(`[${tag}] a primeira entrada devia baixar as ${BASES_ESPERADAS} bases, baixou ${falso.descargas}`)
     if ((await page.evaluate(() => document.activeElement?.tagName)) !== 'H1') falhas.push(`[${tag}] painel: o foco devia estar na saudação`)
     if (!(await page.getByText('Escolha a região que você vai fechar hoje.', { exact: true }).count())) falhas.push(`[${tag}] painel: falta "Escolha a região que você vai fechar hoje."`)
     for (const rotulo of ['Trocar foto', 'Trocar senha', 'Sair', 'EDP', 'Ceará', 'Sergipe']) {
@@ -1039,7 +1041,7 @@ async function plataforma() {
     await page.reload()
     await noPainel('depois de recarregar')
     if (await page.getByRole('button', { name: 'Entrar' }).count()) falhas.push(`[${tag}] recarregar voltou para a entrada`)
-    if (falso.descargas !== 2) falhas.push(`[${tag}] recarregar baixou as bases de novo (${falso.descargas} descargas no total)`)
+    if (falso.descargas !== BASES_ESPERADAS) falhas.push(`[${tag}] recarregar baixou as bases de novo (${falso.descargas} descargas no total)`)
     await tira('08-recarregado')
 
     // ---- EDP dentro da plataforma: "← Regiões" com lançamento pede confirmação
@@ -1266,11 +1268,11 @@ async function cenasDoLogin() {
         if (c.falso.descargas) falhas.push(`[${c.tag}] sem a tabela das bases não devia baixar nada (${c.falso.descargas} descargas)`)
         await axe(c.page, c.tag)
         await c.tira('05-sem-internet')
-        // a internet volta: "Tentar de novo" baixa as duas bases e abre o painel
+        // a internet volta: "Tentar de novo" baixa as bases e abre o painel
         c.falso.abortarBases = false
         await tentar.click()
         if (await c.esperar(saudacaoDaMaria(c.page), '"Tentar de novo" com internet não abriu o painel', 30000)) {
-          if (c.falso.descargas !== 2) falhas.push(`[${c.tag}] "Tentar de novo" devia baixar as 2 bases, baixou ${c.falso.descargas}`)
+          if (c.falso.descargas !== BASES_ESPERADAS) falhas.push(`[${c.tag}] "Tentar de novo" devia baixar as ${BASES_ESPERADAS} bases, baixou ${c.falso.descargas}`)
         }
       }
       await c.fechar()
