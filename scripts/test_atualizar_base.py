@@ -180,5 +180,218 @@ class SubidaComRedeFalsa(unittest.TestCase):
         self.assertIn('supabase.env', str(e.exception))
 
 
+# ---------- mão de obra ----------
+
+CAB_PRECIFICACAO = ['Código Serviço', 'Descrição Serviço', 'TOTAL(R$)', 'Unidade', 'Grupo', 'Departamento', 'Zona']
+PAPEIS_TESTE = ['poste-mt', 'poste-bt', 'retirada-poste-mt', 'retirada-poste-bt',
+                'retirada-poste-lv-passante', 'retirada-poste-lv-encabecamento', 'cava-rocha',
+                'cruzeta-nu', 'cruzeta-isolado', 'retirada-cruzeta-passante', 'retirada-cruzeta-encabecamento',
+                'lv-instalacao-passante', 'lv-retirada-passante', 'lv-instalacao-encabecamento', 'lv-retirada-encabecamento',
+                'armacao-bt', 'retirada-armacao-bt',
+                'trafo', 'estrutura-trafo', 'retirada-trafo', 'retirada-estrutura-trafo',
+                'caixa', 'conector-4-saidas', 'tensionar', 'operacao-equipamento']
+
+
+def montar_precificacao(pasta, linhas, cabecalho=None):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Sheet1'
+    ws.append(cabecalho or CAB_PRECIFICACAO)
+    for l in linhas:
+        ws.append(l)
+    caminho = os.path.join(pasta, 'preco.xlsx')
+    wb.save(caminho)
+    return caminho
+
+
+def linha(numero, desc, dep='MULTISERVICOS SUL', zona='Urbana', unidade='UN'):
+    return [numero, desc, 1.5, unidade, 'GRUPO', dep, zona]
+
+
+def papeis_teste(voz='XX110'):
+    p = {k: voz for k in PAPEIS_TESTE}
+    p['tensionar'] = 'XX212'
+    return p
+
+
+def regras_teste(**mudar):
+    r = {'papeis': papeis_teste(),
+         'regrasCabo': [{'grupo': 'mt', 'situacao': 'novo', 'voz': 'XX212', 'por': 'metro', 'bitolas': ['004']}],
+         'tensionar': [{'rede': 'mt', 'exige': ['^M3'], 'qtd': 1}]}
+    r.update(mudar)
+    return r
+
+
+def lista_teste():
+    return [{'voz': 'XX110', 'letra': 'A', 'numero': '9000000001', 'descricao': 'Servico um', 'unidade': 'UN', 'variante': False},
+            {'voz': 'XX212', 'letra': 'A', 'numero': '9000000002', 'descricao': 'Servico dois', 'unidade': 'UN', 'variante': False},
+            {'voz': 'XX110', 'letra': 'B', 'numero': '9000000003', 'descricao': 'Servico tres', 'unidade': 'UN', 'variante': False}]
+
+
+def base_mo(lista=None, **regras):
+    return ab.montar_mao_de_obra(lista if lista is not None else lista_teste(), regras_teste(**regras))
+
+
+def paradas(r):
+    return [x for x in r if x.startswith('PARA:')]
+
+
+class MaoDeObra(unittest.TestCase):
+    def ler(self, linhas, **kw):
+        with tempfile.TemporaryDirectory() as pasta:
+            return ab.ler_precificacao(montar_precificacao(pasta, linhas, **kw))
+
+    def test_le_precificacao_uma_por_numero(self):
+        r = self.ler([linha(9000000001, 'XX110_A_Descricao C.SUL', 'MULTISERVICOS C.SUL'),
+                      linha(9000000001, 'XX110_A_Descricao LESTE', 'MULTISERVICOS LESTE'),
+                      linha(9000000001, 'XX110_A_Descricao SUL', 'MULTISERVICOS SUL')])
+        self.assertEqual(r, [{'voz': 'XX110', 'letra': 'A', 'numero': '9000000001',
+                              'descricao': 'XX110_A_Descricao SUL', 'unidade': 'UN', 'variante': False, 'zona': 'A'}])
+
+    def test_sem_sul_fica_a_primeira(self):
+        r = self.ler([linha(9000000001, 'XX110_A_Primeira', 'MULTISERVICOS LESTE'),
+                      linha(9000000001, 'XX110_A_Segunda', 'MULTISERVICOS C.SUL')])
+        self.assertEqual([x['descricao'] for x in r], ['XX110_A_Primeira'])
+
+    def test_variantes_marcadas(self):
+        r = self.ler([linha(9000000010, 'XX212_A_GRP A - Descricao'),
+                      linha(9000000011, 'XX212_A_(TELECONT) Descricao'),
+                      linha(9000000012, 'XX212_A_TENSIONAR coisa')])
+        self.assertEqual({x['numero']: x['variante'] for x in r},
+                         {'9000000010': True, '9000000011': True, '9000000012': False})
+
+    def test_linha_sem_prefixo_pulada(self):
+        r = self.ler([linha(9000000001, 'XX110_A_Boa'), linha(9000000002, 'Descricao sem prefixo'),
+                      linha(9000000003, 'XX11_A_curto')])
+        self.assertEqual(len(r), 1)
+        self.assertEqual(r.puladas, 2)
+
+    def test_cabecalho_mudou_para(self):
+        cab = list(CAB_PRECIFICACAO)
+        cab[6] = 'Outra'
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = montar_precificacao(pasta, [linha(9000000001, 'XX110_A_Boa')], cabecalho=cab)
+            with self.assertRaises(ab.ErroBase) as e:
+                ab.ler_precificacao(caminho)
+        self.assertIn('coluna G', str(e.exception))
+        self.assertIn('zona', str(e.exception))
+
+    def test_base_valida_nao_para(self):
+        self.assertEqual(paradas(ab.conferir_mao_de_obra(base_mo())), [])
+
+    def test_lista_vazia_para(self):
+        self.assertTrue(paradas(ab.conferir_mao_de_obra(base_mo(lista=[]))))
+
+    def test_letra_diferente_da_zona_para(self):
+        r = self.ler([linha(9000000001, 'XX110_A_Boa', zona='Rural'), linha(9000000002, 'XX212_A_Boa')])
+        b = ab.montar_mao_de_obra(r, regras_teste())
+        self.assertTrue(any('XX110' in x and x.startswith('PARA:') for x in ab.conferir_mao_de_obra(b)))
+
+    def test_papel_com_voz_fora_para(self):
+        b = base_mo(papeis={**papeis_teste(), 'caixa': 'XX999'})
+        self.assertTrue(any('XX999' in x for x in paradas(ab.conferir_mao_de_obra(b))))
+
+    def test_papel_so_com_variante_para(self):
+        lista = lista_teste()
+        lista[0]['variante'] = True
+        lista[2]['variante'] = True
+        b = base_mo(lista=lista)
+        self.assertTrue(any('XX110' in x for x in paradas(ab.conferir_mao_de_obra(b))))
+
+    def test_papel_com_voz_ambigua_para(self):
+        lista = lista_teste() + [{'voz': 'XX110', 'letra': 'A', 'numero': '9000000004', 'descricao': 'Outra', 'unidade': 'UN', 'variante': False}]
+        r = ab.conferir_mao_de_obra(base_mo(lista=lista))
+        self.assertTrue(any('XX110' in x and 'mais de uma' in x for x in paradas(r)), r)
+
+    def test_voz_ambigua_fora_de_papel_so_avisa(self):
+        lista = lista_teste() + [{'voz': 'XX300', 'letra': 'A', 'numero': '9000000005', 'descricao': 'a', 'unidade': 'UN', 'variante': False},
+                                 {'voz': 'XX300', 'letra': 'A', 'numero': '9000000006', 'descricao': 'b', 'unidade': 'UN', 'variante': False}]
+        r = ab.conferir_mao_de_obra(base_mo(lista=lista))
+        self.assertEqual(paradas(r), [])
+        self.assertTrue(any(x.startswith('AVISO') and 'XX300' in x for x in r), r)
+
+    def test_regra_com_voz_fora_para(self):
+        b = base_mo(regrasCabo=[{'grupo': 'mt', 'situacao': 'novo', 'voz': 'XX999', 'por': 'metro'}])
+        self.assertTrue(any('XX999' in x for x in paradas(ab.conferir_mao_de_obra(b))))
+
+    def test_regra_de_cabo_valor_invalido_para(self):
+        b = base_mo(regrasCabo=[{'grupo': 'mt', 'situacao': 'novo', 'voz': 'XX212', 'por': 'litro'}])
+        self.assertTrue(paradas(ab.conferir_mao_de_obra(b)))
+
+    def test_tensionar_expressao_invalida_para(self):
+        b = base_mo(tensionar=[{'rede': 'mt', 'exige': ['^(M'], 'qtd': 1}])
+        self.assertTrue(any('tensionar' in x for x in paradas(ab.conferir_mao_de_obra(b))))
+
+    def test_tensionar_mt_com_duas_expressoes_para(self):
+        b = base_mo(tensionar=[{'rede': 'mt', 'exige': ['^M3', '^M4'], 'qtd': 1}])
+        self.assertTrue(paradas(ab.conferir_mao_de_obra(b)))
+
+    def test_tensionar_qtd_invalida_para(self):
+        b = base_mo(tensionar=[{'rede': 'bt', 'exige': ['^S2N$'], 'qtd': 0}])
+        self.assertTrue(paradas(ab.conferir_mao_de_obra(b)))
+
+    def test_papel_faltando_para(self):
+        p = papeis_teste()
+        del p['caixa']
+        self.assertTrue(any('caixa' in x for x in paradas(ab.conferir_mao_de_obra(base_mo(papeis=p)))))
+
+    def test_numero_fora_do_padrao_para(self):
+        lista = lista_teste()
+        lista[0]['numero'] = '123'
+        self.assertTrue(paradas(ab.conferir_mao_de_obra(base_mo(lista=lista))))
+
+    def test_queda_de_vozes_avisa(self):
+        r = ab.conferir_mao_de_obra(base_mo(), {'vozes': 100, 'regras': 27})
+        self.assertTrue(any(x.startswith('AVISO') and 'vozes' in x for x in r), r)
+
+    def test_contagens(self):
+        self.assertEqual(ab.contagens_mao_de_obra(base_mo()), {'vozes': 3, 'regras': 27})
+
+    def test_ler_regras_sem_parte_para(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            f = pathlib.Path(pasta) / 'r.json'
+            f.write_text(json.dumps({'papeis': {}}), encoding='utf-8')
+            with self.assertRaises(ab.ErroBase):
+                ab.ler_regras(f)
+            with self.assertRaises(ab.ErroBase):
+                ab.ler_regras(pathlib.Path(pasta) / 'nao-existe.json')
+
+    def test_ler_regras_ok(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            f = pathlib.Path(pasta) / 'r.json'
+            f.write_text(json.dumps(regras_teste()), encoding='utf-8')
+            self.assertEqual(ab.ler_regras(f), regras_teste())
+
+    def test_seco_grava_json_sem_internet(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            xlsx = montar_precificacao(pasta, [linha(9000000001, 'XX110_A_Servico um'), linha(9000000002, 'XX212_A_Servico dois'),
+                                               linha(9000000003, 'XX110_B_Servico tres', zona='Rural'),
+                                               linha(9000000004, 'XX212_B_Servico quatro', zona='Rural')])
+            regras = pathlib.Path(pasta) / 'regras.json'
+            regras.write_text(json.dumps(regras_teste()), encoding='utf-8')
+            with mock.patch.object(ab, 'ARQUIVO_ENV', pathlib.Path(pasta) / 'nao-existe.env'), \
+                    mock.patch.object(ab, 'PASTA_BASES', pathlib.Path(pasta) / 'bases'), \
+                    mock.patch.object(ab, '_chamar', side_effect=AssertionError('usou a rede')), \
+                    mock.patch('urllib.request.urlopen', side_effect=AssertionError('usou a rede')), \
+                    contextlib.redirect_stdout(io.StringIO()) as saida:
+                self.assertEqual(ab.main(['mao-de-obra', xlsx, '--regras', str(regras), '--seco']), 0)
+            gravado = json.loads((pathlib.Path(pasta) / 'bases' / 'mao-de-obra.json').read_text(encoding='utf-8'))
+        self.assertEqual(len(gravado['lista']), 4)
+        self.assertNotIn('zona', gravado['lista'][0])
+        self.assertEqual(gravado['papeis']['tensionar'], 'XX212')
+        self.assertIn('Modo seco', saida.getvalue())
+
+    def test_seco_com_problema_nao_grava(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            xlsx = montar_precificacao(pasta, [linha(9000000001, 'XX110_A_Servico um')])
+            regras = pathlib.Path(pasta) / 'regras.json'
+            regras.write_text(json.dumps(regras_teste()), encoding='utf-8')  # XX212 não existe na planilha
+            with mock.patch.object(ab, 'PASTA_BASES', pathlib.Path(pasta) / 'bases'), \
+                    contextlib.redirect_stdout(io.StringIO()) as saida:
+                self.assertEqual(ab.main(['mao-de-obra', xlsx, '--regras', str(regras), '--seco']), 1)
+            self.assertFalse((pathlib.Path(pasta) / 'bases' / 'mao-de-obra.json').exists())
+        self.assertIn('XX212', saida.getvalue())
+
+
 if __name__ == '__main__':
     unittest.main()
