@@ -100,7 +100,7 @@ As vozes reais de cada regra estão na memória do projeto `fechamento-ceara-mao
 - Sai do **poste**, pela estrutura nova que **ancora** o cabo:
   - MT: estrutura do tipo 3 (3, 3.1, 3.2, 3.3) = 1; do tipo 4 (4, 4.1) = 2; tipo 1 e 2 (passante) nunca.
   - BT: as duas estruturas de ancoragem no poste (S2N + S2C, com ou sem alças) = 2; só a de passagem com o laço = 0.
-  - BT, **1 por ancoragem** (Italo, 06/11): uma estrutura de ancoragem de BT sozinha (S2, S3, S4, ou SPALÇA no fim da rede pré-reunida) = 1. **Escolha minha:** a alça que acompanha S2N/S2C no mesmo poste não soma a mais (é a mesma ancoragem).
+  - BT, **1 por ancoragem** (Italo, 06/11): cada estrutura nova de ancoragem de BT conta 1 (2xS2B = 2; S2, S3 e S4 valem igual; SPALÇA sozinha no fim da rede pré-reunida = 1). O par S2N + S2C = 2. A alça que acompanha as estruturas S2 no mesmo poste não soma a mais (Italo, 06/11). O poste cobra o maior valor entre as regras, sem somar regras diferentes.
 - **Só cobra se o cabo que aquela estrutura ancora é existente** (vão sem (1): sem prefixo ou (2)). Na derivação (3.1), o que vale é o cabo **derivado**.
 - Poste com linha viva: **não cobra** (já vai na voz da cruzeta de linha viva).
 - **Decisão do Italo (06/11): automático onde há certeza, pergunta onde não há.**

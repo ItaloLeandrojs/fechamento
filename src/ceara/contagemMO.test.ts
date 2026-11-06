@@ -184,7 +184,8 @@ const regrasTeste: Regras = {
     { rede: 'mt', exige: ['^(M|MB|N|NB|B|BB|U|UB)3'], qtd: 1 },
     { rede: 'mt', exige: ['^(M|MB|N|NB|B|BB|U|UB)4'], qtd: 2 },
     { rede: 'bt', exige: ['^S2N$', '^S2C$'], qtd: 2 },
-    { rede: 'bt', exige: ['^S2[A-Z]?$'], qtd: 1 },
+    { rede: 'bt', exige: ['^S[234][A-Z]?$'], qtd: 1 },
+    { rede: 'bt', exige: ['^SPALÇA'], qtd: 1 },
   ],
 }
 const contarMO = (textos: (string | TextoDxf)[], cotas: ReturnType<typeof cota>[] = [], resp: RespostasDesenho = vazia(), rg: Regras = regrasTeste) =>
@@ -317,6 +318,12 @@ describe('tensionar', () => {
     const btNovo = cota('(1)AM035T<>', 30)
     expect(tensionar(contarMO(['300/9\\P(1)S2N (1)S2C (1)SPALÇA50\\P3'], [btExistente]))).toBe(2)
     expect(tensionar(contarMO(['300/9\\P(1)S2B\\P3'], [btExistente]))).toBe(1)
+    // cada estrutura de ancoragem nova cobra 1 (Italo, 06/11)
+    expect(tensionar(contarMO(['300/9\\P(1)2xS2B\\P3'], [btExistente]))).toBe(2)
+    expect(tensionar(contarMO(['300/9\\P(1)S2N (1)S2C\\P3'], [btExistente]))).toBe(2)
+    expect(tensionar(contarMO(['300/9\\P(1)S2N (1)S2C (1)S2B\\P3'], [btExistente]))).toBe(3)
+    expect(tensionar(contarMO(['300/9\\P(1)S2B (1)S3B\\P3'], [btExistente]))).toBe(2)
+    expect(tensionar(contarMO(['300/9\\P(1)SPALÇA50\\P3'], [btExistente]))).toBe(1)
     expect(tensionar(contarMO(['300/9\\P(1)S1B\\P3'], [btExistente]))).toBe(0)
     // a rede da BT não olha os vãos de MT
     const soMT = contarMO(['300/9\\P(1)S2B\\P3'], [mtExistente])

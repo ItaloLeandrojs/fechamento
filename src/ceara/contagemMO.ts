@@ -282,12 +282,27 @@ export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, '
         vistos.set(a.codigo, n)
         return { ...a, n }
       })
-    // BT: por poste, a maior qtd das regras em que todas as expressões acham uma estrutura (1) do poste
-    const estruturasBT = itens.filter((i) => i.situacao === 1 && i.tipo === 'estrutura' && !estruturaMT(i)).map((i) => codigoLimpo(i.codigo))
+    // BT: uma cobrança por estrutura (1) que ancora (multiplicador conta). Regra de uma expressão:
+    // qtd x unidades que ela acha; regra de várias: qtd se todas acham alguma estrutura (1). Vale o maior do poste.
+    const unidadesBT = itens
+      .filter((i) => i.situacao === 1 && i.tipo === 'estrutura' && !estruturaMT(i))
+      .flatMap((i) => Array.from({ length: i.quantidade }, () => codigoLimpo(i.codigo)))
     let ancoraBT: { qtd: number; codigos: string[] } | null = null
     for (const t of tensionarBT) {
-      const achados = t.exige.map((x) => estruturasBT.find((c) => x.test(c)))
-      if (achados.every((c) => c !== undefined) && t.qtd > (ancoraBT?.qtd ?? 0)) ancoraBT = { qtd: t.qtd, codigos: [...new Set(achados as string[])] }
+      let valor = 0
+      let codigos: string[] = []
+      if (t.exige.length === 1) {
+        const achadas = unidadesBT.filter((c) => t.exige[0].test(c))
+        valor = t.qtd * achadas.length
+        codigos = [...new Set(achadas)]
+      } else {
+        const achados = t.exige.map((x) => unidadesBT.find((c) => x.test(c)))
+        if (achados.every((c) => c !== undefined)) {
+          valor = t.qtd
+          codigos = [...new Set(achados as string[])]
+        }
+      }
+      if (valor > (ancoraBT?.qtd ?? 0)) ancoraBT = { qtd: valor, codigos }
     }
 
     if (lv) {

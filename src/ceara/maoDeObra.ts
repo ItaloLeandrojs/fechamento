@@ -18,7 +18,7 @@ export type Papel = (typeof PAPEIS)[number]
 /** Uma linha da lista de precificação, sem o R$. `voz` sem sufixo (ex. XX110); `variante`: "GRP A -" ou "(TELECONT)". */
 export interface VozDaLista { voz: string; letra: Letra; numero: string; descricao: string; unidade: string; variante: boolean }
 export interface RegraCabo { grupo: 'mt' | 'bt-nu' | 'bt-multi'; situacao: 'novo' | 'retirado'; voz: string; por: 'metro' | 'condutor'; bitolas?: string[] }
-/** MT: `exige` tem uma expressão e vale por estrutura. BT: todas as expressões acham uma estrutura (1) do poste; vale a de maior `qtd` do poste. */
+/** MT: `exige` tem uma expressão e vale por estrutura. BT: cada estrutura (1) de ancoragem cobra uma vez. Regra de uma expressão vale `qtd` vezes as unidades (1) que ela acha (2xS2B = 2); regra de várias vale `qtd` se todas as expressões acham uma estrutura (1) do poste (par S2N + S2C = 2). O poste cobra o maior valor entre as regras, então a alça junto das S2 não soma. */
 export interface RegraTensionar { rede: 'mt' | 'bt'; exige: string[]; qtd: number }
 export interface BaseMaoDeObra { lista: VozDaLista[]; papeis: Record<Papel, string>; regrasCabo: RegraCabo[]; tensionar: RegraTensionar[] }
 
