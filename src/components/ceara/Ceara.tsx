@@ -9,7 +9,7 @@ import { lerDxf } from '../../ceara/dxf'
 import { contarObra, type BaseEnel, type Linha, type ResultadoCeara } from '../../ceara/contagem'
 import { BLOCOS, comparar, lerOrcamento, type Orcamento } from '../../ceara/orcamento'
 import { AREAS, gerarExcelCeara, nomeDoExcel, otDoNome, type Area } from '../../ceara/excel'
-import { ajustesValidos, aplicarSugestao, chaveKit, estruturasAjustadas, mesmaObra, somarNaAdicao, sugestoesAoBaixar, type Ajuste, type Ajustes } from '../../ceara/estratificacao'
+import { ajustesDoDesenho, ajustesValidos, aplicarSugestao, chaveKit, estruturasAjustadas, mesmaObra, somarNaAdicao, sugestoesAoBaixar, type Ajuste, type Ajustes } from '../../ceara/estratificacao'
 import { gravarSugestoes, lerSugestoes, type SugestaoGuardada } from '../../lib/banco'
 import { areaDaCidade, type BaseMaoDeObra, type RespostasMO } from '../../ceara/maoDeObra'
 import { TabelaBloco, type Estratificar, type LinhaTela } from './TabelaBloco'
@@ -77,6 +77,8 @@ export function Ceara({ base, maoDeObra, onVoltar }: { base: BaseEnel; maoDeObra
   const [aberta, setAberta] = useState<string | null>(null)
   // estruturas mexidas nesta obra: decide o que apagar da sugestão ao baixar
   const [tocadas, setTocadas] = useState<Set<string>>(() => new Set())
+  // estruturas com ajuste que o próprio desenho deu (ajustesDoDesenho): só viram sugestão se a pessoa mexer
+  const [automaticas, setAutomaticas] = useState<Set<string>>(() => new Set())
   const [sugestoes, setSugestoes] = useState<Record<string, SugestaoGuardada>>({})
   const [recusadas, setRecusadas] = useState<Set<string>>(() => new Set())
   const [avisoSugestao, setAvisoSugestao] = useState('')
@@ -124,23 +126,31 @@ export function Ceara({ base, maoDeObra, onVoltar }: { base: BaseEnel; maoDeObra
       // dá tempo de a tela mostrar "lendo" antes do trabalho pesado
       await new Promise((ok) => setTimeout(ok, 30))
       const r = contarObra(lerDxf(new Uint8Array(await f.arrayBuffer())), base)
+      const doDesenho = ajustesDoDesenho(r, base)
+      r.avisos.push(...doDesenho.avisos)
       setResultado(r)
       setAvisoSugestao('')
       // mesma obra: fica o ajuste das estruturas que continuam; outra obra: começa do zero
       const mesma = mesmaObra(nomeDxf, f.name)
       if (mesma) {
-        setAjustes((a) => ajustesValidos(a, r.adicaoEstrutura))
+        // o ajuste à mão vale mais; o automático de antes que ninguém mexeu é refeito pelo desenho novo
+        setAjustes((a) => {
+          const validos = ajustesValidos(a, r.adicaoEstrutura)
+          for (const c of automaticas) if (!tocadas.has(c)) delete validos[c]
+          return { ...doDesenho.ajustes, ...validos }
+        })
         // estrutura que sumiu do desenho sai das tocadas: o próximo download não apaga a sugestão dela
         const chaves = new Set(r.adicaoEstrutura.map((l) => chaveKit(l.codigo)))
         setTocadas((t) => new Set([...t].filter((c) => chaves.has(c))))
         setAberta((ch) => (ch && r.adicaoEstrutura.some((l) => chaveKit(l.codigo) === ch) ? ch : null))
       } else {
-        setAjustes({})
+        setAjustes(doDesenho.ajustes)
         setTocadas(new Set())
         setRecusadas(new Set())
         setAberta(null)
         setObra((n) => n + 1)
       }
+      setAutomaticas(new Set(Object.keys(doDesenho.ajustes)))
       setNomeDxf(f.name)
       // mesma obra sem OT no nome (o mesmo arquivo corrigido): fica a OT digitada
       setOt((atual) => otDoNome(f.name) || (mesma ? atual : ''))
@@ -174,7 +184,9 @@ export function Ceara({ base, maoDeObra, onVoltar }: { base: BaseEnel; maoDeObra
     a.click()
     setTimeout(() => URL.revokeObjectURL(a.href), 2000)
     // o ajuste baixado vira a sugestão da próxima obra (só neste navegador)
-    const { gravar, apagar } = sugestoesAoBaixar(ajustes, tocadas, data)
+    // o ajuste automático do desenho (ex. cruzeta de fibra no poste) é desta obra: só vira sugestão se a pessoa mexeu
+    const paraSugerir = Object.fromEntries(Object.entries(ajustes).filter(([c]) => !automaticas.has(c) || tocadas.has(c)))
+    const { gravar, apagar } = sugestoesAoBaixar(paraSugerir, tocadas, data)
     // sem IndexedDB nada foi gravado: a memória também não muda (a sugestão não pode aparecer)
     if ((gravar.length || apagar.length) && (await gravarSugestoes(gravar, apagar))) {
       setSugestoes((s) => {

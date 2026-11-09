@@ -1,7 +1,7 @@
 // Estratificação do material dentro da estrutura: o kit da Enel diz o que cada estrutura leva;
 // a obra real pode usar menos, mais ou outro material. Aqui ficam só as regras (sem tela):
 // o ajuste guarda apenas o que DIFERE do kit, e daí saem retirada (devolução) e adição.
-import type { BaseEnel, Linha, ResultadoCeara } from './contagem'
+import { MATERIAL_SOLTO, type BaseEnel, type Linha, type ResultadoCeara } from './contagem'
 import { otDoNome } from './excel'
 import type { SugestaoGuardada } from '../lib/banco'
 
@@ -136,6 +136,44 @@ export function aplicarSugestao(sugerido: Ajuste, base: BaseEnel, chave: string)
     else ignorados.push(n.codigo)
   }
   return { ajuste: limpar({ qtd, novos }, kit), ignorados }
+}
+
+/**
+ * Ajuste que o próprio desenho já diz: material solto (1) que substitui um do kit (ex. a cruzeta de fibra
+ * CRUZ.POLI.MB no lugar da de concreto 231260) zera esse material nas estruturas novas do mesmo poste.
+ * O ajuste vale para a estrutura na obra inteira: se ela também está num poste sem a troca, não mexe e avisa.
+ */
+export function ajustesDoDesenho(r: ResultadoCeara, base: BaseEnel): { ajustes: Ajustes; avisos: string[] } {
+  // poste → material solto que troca o do kit (nome no desenho → código do kit)
+  const trocas = new Map<string, Map<string, string>>()
+  for (const e of r.etiquetas) {
+    const origem = e.poste ? 'P' + e.poste : 'sem nº'
+    for (const i of e.itens) {
+      const substitui = i.situacao === 1 && i.tipo === 'outro-material' ? MATERIAL_SOLTO[i.codigo]?.substitui : undefined
+      if (!substitui) continue
+      const doPoste = trocas.get(origem) ?? new Map<string, string>()
+      doPoste.set(substitui, i.codigo)
+      trocas.set(origem, doPoste)
+    }
+  }
+  const ajustes: Ajustes = {}
+  const avisos: string[] = []
+  for (const l of r.adicaoEstrutura) {
+    const chave = chaveKit(l.codigo)
+    const kit = kitDe(base, chave) ?? []
+    const codigos = new Set(l.origem.flatMap((o) => [...(trocas.get(o)?.keys() ?? [])]))
+    for (const codigo of codigos) {
+      if (!kit.some((k) => k.codigo === codigo && k.qtd > 0)) continue
+      const com = l.origem.filter((o) => trocas.get(o)?.has(codigo))
+      const sem = l.origem.filter((o) => !trocas.get(o)?.has(codigo))
+      if (sem.length) {
+        avisos.push(`A ${l.codigo} está em poste com ${trocas.get(com[0])!.get(codigo)} (${com.join(', ')}) e em poste sem (${sem.join(', ')}): na estratificação, tire à mão o ${codigo} do kit.`)
+        continue
+      }
+      ajustes[chave] = { qtd: { ...(ajustes[chave]?.qtd ?? {}), [codigo]: 0 }, novos: [] }
+    }
+  }
+  return { ajustes, avisos }
 }
 
 /** Mesma obra pela OT do nome do arquivo; sem OT no nome novo, só se o nome for igual. */

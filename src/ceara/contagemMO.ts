@@ -1,7 +1,7 @@
 // Mão de obra do Ceará contada pelo DXF já lido (ResultadoCeara): por papel (ex. "poste MT novo",
 // "retirada de cruzeta passante"), poste por poste. A voz real de cada papel vem da tabela de regras
 // (fora do repositório); aqui só os papéis. Regras: docs/2026-11-06-ceara-mao-de-obra-dxf-design.md.
-import { lerCabo, type Etiqueta, type ItemEtiqueta, type ResultadoCeara, type Vao } from './contagem'
+import { lerCabo, MATERIAL_SOLTO, type Etiqueta, type ItemEtiqueta, type ResultadoCeara } from './contagem'
 import { arred } from './estratificacao'
 import type { Aba, BaseMaoDeObra, Papel } from './maoDeObra'
 
@@ -17,11 +17,14 @@ export interface Contagem {
   falta?: string
 }
 export type Pergunta =
-  | { tipo: 'tensionar'; chave: string; poste: string; texto: string }
   | { tipo: 'fases'; chave: string; cabo: string; metros: number }
+  | { tipo: 'poste'; chave: string; poste: string; texto: string }
 export interface RespostasDesenho {
+  /** respostas do tensionar de antes de 09/11: o site não pergunta mais, ficam só nas respostas guardadas */
   tensionar: Record<string, boolean>
   fases: Record<string, number>
+  /** poste sem nada na etiqueta que diga a rede: a MT passa nele? (chave `poste|P6|1`); falta em respostas antigas */
+  posteMT?: Record<string, boolean>
   /** ligado ou desligado à mão, pela origem do poste ('P12') */
   linhaViva: Record<string, boolean>
 }
@@ -29,9 +32,11 @@ export interface DesenhoMO {
   contagens: Contagem[]
   perguntas: Pergunta[] // só as que faltam responder
   chavesPerguntas: string[] // todas que valem neste desenho, respondidas ou não
-  naoCobrado: string[] // ex. 'P1: a MB3.1 ancora cabo novo, tensionar não cobra'
+  naoCobrado: string[] // ex. 'P1: linha viva, o tensionar vai na voz da cruzeta'
   semRegra: { poste: string; texto: string }[]
   linhaViva: { poste: string; doDesenho: boolean; vale: boolean }[]
+  /** postes com estrutura nova que ancora cabo: o site não cobra o tensionar, só pede para conferir */
+  tensionarConfira: { poste: string; estruturas: string[] }[]
 }
 
 /** Item da etiqueta com o (2) já desdobrado: só novo (1), retirado (3) ou existente (null). */
@@ -81,19 +86,6 @@ export function facesBT(armacoes: { codigo: string; quantidade: number }[]): num
   return faces
 }
 
-/** Rede do cabo (MT ou BT) pelos vãos: tem vão existente (sem prefixo ou (2))? tem vão novo ou retirado? */
-function redes(vaos: Vao[]): Record<'mt' | 'bt', { existente: boolean; novo: boolean }> {
-  const out = { mt: { existente: false, novo: false }, bt: { existente: false, novo: false } }
-  for (const v of vaos) {
-    const g = lerCabo(v.cabo).grupo
-    const rede = g === 'mt' ? out.mt : g === 'bt-nu' || g === 'bt-multi' ? out.bt : null
-    if (!rede) continue
-    if (v.situacao === 1 || v.situacao === 3) rede.novo = true
-    else rede.existente = true
-  }
-  return out
-}
-
 export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, 'regrasCabo' | 'tensionar'>, resp: RespostasDesenho): DesenhoMO {
   const contagens: Contagem[] = []
   const perguntas: Pergunta[] = []
@@ -101,6 +93,7 @@ export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, '
   const naoCobrado: string[] = []
   const semRegra: DesenhoMO['semRegra'] = []
   const linhaViva: DesenhoMO['linhaViva'] = []
+  const tensionarConfira: DesenhoMO['tensionarConfira'] = []
 
   /** Contagens iguais (mesma aba, papel ou voz e origem) somam; as que faltam responder ficam cada uma na sua linha. */
   const juntar = (c: Contagem) => {
@@ -168,11 +161,10 @@ export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, '
     } else juntar({ ...base, quantidade: metros })
   }
 
-  // ---------------- tensionar: as expressões vêm da tabela de regras ----------------
+  // ---------------- tensionar (só para conferir): as expressões vêm da tabela de regras ----------------
   const comExpressoes = (rede: 'mt' | 'bt') => regras.tensionar.filter((t) => t.rede === rede).map((t) => ({ qtd: t.qtd, exige: t.exige.map((x) => new RegExp(x)) }))
   const tensionarMT = comExpressoes('mt')
   const tensionarBT = comExpressoes('bt')
-  const rede = redes(r.vaos)
 
   for (const e of r.etiquetas) {
     const origem = e.poste ? 'P' + e.poste : 'sem nº'
@@ -193,26 +185,61 @@ export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, '
     const lv = typeof respLv === 'boolean' ? respLv : e.linhaViva === true
     if (e.linhaViva || typeof respLv === 'boolean') linhaViva.push({ poste: origem, doDesenho: e.linhaViva === true, vale: lv })
 
-    // poste de MT ou de BT pelas estruturas dele: o novo leva as (1) e as que passam (sem prefixo);
-    // o retirado, as (3) e as sem prefixo (na troca, a (1) do poste novo não faz o velho ser de MT)
+    // poste de MT ou de BT pela rede que passa nele (Italo, 09/11): MT se a etiqueta tem estrutura de MT,
+    // trafo ou material solto que só existe na MT (isolador, alça CAA, cruzeta), mesmo com BT junto;
+    // BT se só tem estrutura de BT; sem nada que diga, pergunta. O novo leva as (1) e as que passam
+    // (sem prefixo); o retirado, as (3) e as sem prefixo (na troca, a (1) do poste novo não faz o velho ser de MT)
     const doPoste = (s: 1 | 3) => (i: { situacao: 1 | 3 | null }) => i.situacao === s || i.situacao === null
     const temMT = (s: 1 | 3) =>
       mts.some((m) => doPoste(s)(m.item)) ||
-      itens.some((i) => doPoste(s)(i) && (i.tipo === 'trafo' || (i.tipo === 'estrutura' && /^TR/.test(codigoLimpo(i.codigo)))))
+      itens.some(
+        (i) =>
+          doPoste(s)(i) &&
+          (i.tipo === 'trafo' ||
+            (i.tipo === 'estrutura' && /^TR/.test(codigoLimpo(i.codigo))) ||
+            (i.tipo === 'outro-material' && MATERIAL_SOLTO[i.codigo]?.mt === true)),
+      )
+    const temBT = (s: 1 | 3) => itens.some((i) => doPoste(s)(i) && i.tipo === 'estrutura' && /^(S[1-5]|SPALÇA|SPLAÇO|SPCXD)/.test(codigoLimpo(i.codigo)))
+    /** true = MT, false = BT, null = falta a resposta (só pergunta quando há poste nessa situação). */
+    const ehMT = (s: 1 | 3, temPoste: boolean): boolean | null => {
+      if (temMT(s)) return true
+      if (temBT(s) || !temPoste) return false
+      const chave = `poste|${origem}|${s}`
+      const dada = resp.posteMT?.[chave]
+      const texto = s === 1 ? `A rede de MT passa no poste novo do ${origem}?` : `A rede de MT passava no poste retirado do ${origem}?`
+      perguntar({ tipo: 'poste', chave, poste: origem, texto }, typeof dada === 'boolean')
+      return typeof dada === 'boolean' ? dada : null
+    }
+    const falta = 'responda se a MT passa no poste'
 
     // poste
     const postes1 = de((i) => i.tipo === 'poste', 1)
     const postes3 = de((i) => i.tipo === 'poste', 3)
-    somar('adicao', temMT(1) ? 'poste-mt' : 'poste-bt', total(postes1), origem)
+    const mt1 = ehMT(1, postes1.length > 0)
+    const mt3 = ehMT(3, postes3.length > 0)
+    if (mt1 === null) contagens.push({ aba: 'adicao', papel: 'poste-mt', quantidade: total(postes1), origem, falta })
+    else {
+      // poste novo de MT com linha viva (Italo, 09/11): estrutura tipo 3 ou 4 no poste = encabeçamento, só 1 e 2 = passante
+      const instalacaoPoste: Papel =
+        lv && mt1
+          ? mts.some((m) => doPoste(1)(m.item) && m.encabecamento)
+            ? 'poste-lv-encabecamento'
+            : 'poste-lv-passante'
+          : mt1
+            ? 'poste-mt'
+            : 'poste-bt'
+      somar('adicao', instalacaoPoste, total(postes1), origem)
+    }
     const retiradaPoste: Papel =
-      lv && temMT(3)
+      lv && mt3
         ? mts.some((m) => doPoste(3)(m.item) && m.encabecamento)
           ? 'retirada-poste-lv-encabecamento'
           : 'retirada-poste-lv-passante'
-        : temMT(3)
+        : mt3
           ? 'retirada-poste-mt'
           : 'retirada-poste-bt'
-    somar('devolucao', retiradaPoste, total(postes3), origem)
+    if (mt3 === null) contagens.push({ aba: 'devolucao', papel: 'retirada-poste-mt', quantidade: total(postes3), origem, falta })
+    else somar('devolucao', retiradaPoste, total(postes3), origem)
 
     // cruzeta de MT: cada unidade conta 1 (dupla, U e D também)
     for (const m of mts) tratados.add(m.item)
@@ -253,82 +280,40 @@ export function contarDesenhoMO(r: ResultadoCeara, regras: Pick<BaseMaoDeObra, '
     somar('devolucao', 'retirada-trafo', total(trafos3), origem)
     somar('devolucao', 'retirada-estrutura-trafo', total(trafos3), origem)
     somar('adicao', 'caixa', total(de((i) => i.tipo === 'estrutura' && /^SPCXD/.test(codigoLimpo(i.codigo)), 1)), origem)
-    somar('adicao', 'conector-4-saidas', total(de((i) => i.tipo === 'conector' && /50-150/.test(i.codigo), 1)), origem)
+    somar('adicao', 'conector-4-saidas', total(de((i) => i.tipo === 'conector' && /50-150|4VIAS/.test(i.codigo), 1)), origem)
     somar('adicao', 'cava-rocha', total(de((i) => i.tipo === 'ignorado' && i.codigo === 'CAVA KLC', 1)), origem)
 
     // o resto com prefixo vai para a nota "sem regra de mão de obra, confira"
     const doTrafo = trafos1.length > 0
     for (const i of itens) {
-      if (i.situacao === null || tratados.has(i) || i.tipo === 'nao-reconhecido') continue
+      // material solto da estrutura estratificada no desenho: a mão de obra é a do poste e das estruturas
+      if (i.situacao === null || tratados.has(i) || i.tipo === 'nao-reconhecido' || i.tipo === 'outro-material') continue
       const c = codigoLimpo(i.codigo)
       if (i.tipo === 'estrutura' && /^(TR|SPTR|SPALÇA|SPLAÇO)/.test(c)) continue
       // chave, elo e aterramento do trafo novo já estão na voz da estrutura do trafo
       if (doTrafo && (c === 'CF' || i.tipo === 'elo' || c === 'ATER-SP')) continue
-      semRegra.push({ poste: origem, texto: `(${i.situacao})${i.texto.replace('CAVA_KLC', 'CAVA KLC')}` })
+      semRegra.push({ poste: origem, texto: `(${i.situacao})${i.texto.replace(/CAVA_(KLC|EM_ROCHA)/, (m) => m.replace(/_/g, ' '))}` })
     }
 
-    // tensionar, pelas estruturas (1) (o (2) já desdobrado) que ancoram o cabo
-    // MT: por estrutura reconhecida, cada unidade com a maior qtd das expressões que acham o código
-    const vistos = new Map<string, number>()
-    const ancorasMT = mts
-      .filter((m) => m.item.situacao === 1)
-      .flatMap((m) => {
-        const codigo = codigoLimpo(m.item.codigo)
-        const qtd = Math.max(0, ...tensionarMT.filter((t) => t.exige.every((x) => x.test(codigo))).map((t) => t.qtd))
-        return qtd ? Array.from({ length: m.item.quantidade }, () => ({ codigo, qtd })) : []
-      })
-      .map((a) => {
-        const n = (vistos.get(a.codigo) ?? 0) + 1
-        vistos.set(a.codigo, n)
-        return { ...a, n }
-      })
-    // BT: uma cobrança por estrutura (1) que ancora (multiplicador conta). Regra de uma expressão:
-    // qtd x unidades que ela acha; regra de várias: qtd se todas acham alguma estrutura (1). Vale o maior do poste.
-    const unidadesBT = itens
-      .filter((i) => i.situacao === 1 && i.tipo === 'estrutura' && !estruturaMT(i))
-      .flatMap((i) => Array.from({ length: i.quantidade }, () => codigoLimpo(i.codigo)))
-    let ancoraBT: { qtd: number; codigos: string[] } | null = null
-    for (const t of tensionarBT) {
-      let valor = 0
-      let codigos: string[] = []
-      if (t.exige.length === 1) {
-        const achadas = unidadesBT.filter((c) => t.exige[0].test(c))
-        valor = t.qtd * achadas.length
-        codigos = [...new Set(achadas)]
-      } else {
-        const achados = t.exige.map((x) => unidadesBT.find((c) => x.test(c)))
-        if (achados.every((c) => c !== undefined)) {
-          valor = t.qtd
-          codigos = [...new Set(achados as string[])]
-        }
-      }
-      if (valor > (ancoraBT?.qtd ?? 0)) ancoraBT = { qtd: valor, codigos }
-    }
-
-    if (lv) {
-      // a voz da cruzeta de linha viva já leva o tensionar
-      if (ancorasMT.length || ancoraBT) naoCobra(`${origem}: linha viva, o tensionar vai na voz da cruzeta`)
-      continue
-    }
-    /** Certeza pela rede daquele cabo; dos dois tipos de vão, vale a resposta (ou pergunta). */
-    const decidir = (daRede: { existente: boolean; novo: boolean }, chave: string, texto: string, qtd: number, codigos: string) => {
-      const nota = (respondido: boolean) => `${origem}: a ${codigos} ancora cabo novo${respondido ? ' (respondido)' : ''}, tensionar não cobra`
-      if (!daRede.existente) return naoCobra(nota(false))
-      if (!daRede.novo) return somar('adicao', 'tensionar', qtd, origem)
-      const dada = resp.tensionar[chave]
-      perguntar({ tipo: 'tensionar', chave, poste: origem, texto }, typeof dada === 'boolean')
-      if (dada === true) somar('adicao', 'tensionar', qtd, origem)
-      else if (dada === false) naoCobra(nota(true))
-      else contagens.push({ aba: 'adicao', papel: 'tensionar', quantidade: qtd, origem, falta: 'responda o tensionar' })
-    }
-    for (const a of ancorasMT) {
-      // mais de uma unidade igual no poste: o texto diz qual (a chave já tem o número)
-      const total = vistos.get(a.codigo) ?? 1
-      const qual = total > 1 ? `${a.n}ª de ${total} ` : ''
-      decidir(rede.mt, `${origem}|mt|${a.codigo}|${a.n}`, `O cabo que a ${qual}${a.codigo} do ${origem} ancora é existente?`, a.qtd, a.codigo)
-    }
-    if (ancoraBT) decidir(rede.bt, `${origem}|bt`, `O cabo de BT que o ${origem} ancora é existente?`, ancoraBT.qtd, ancoraBT.codigos.join(' + '))
+    // tensionar: o site não cobra mais (Italo, 09/11). Só aponta os postes com estrutura (1) (o (2) já
+    // desdobrado) que ancora cabo, pelas expressões da tabela de regras, para a pessoa conferir e pôr a voz à mão
+    const unidadesBT = itens.filter((i) => i.situacao === 1 && i.tipo === 'estrutura' && !estruturaMT(i)).map((i) => codigoLimpo(i.codigo))
+    const ancoras = [
+      ...mts.filter((m) => m.item.situacao === 1).map((m) => codigoLimpo(m.item.codigo)).filter((c) => tensionarMT.some((t) => t.exige.every((x) => x.test(c)))),
+      // BT: regra de uma expressão acha cada estrutura; regra de várias (par S2N + S2C) só vale com todas no poste
+      ...tensionarBT.flatMap((t) => {
+        const achados = t.exige.map((x) => unidadesBT.filter((c) => x.test(c)))
+        return achados.every((l) => l.length) ? achados.flat() : []
+      }),
+    ]
+    if (!ancoras.length) continue
+    // linha viva: a voz da cruzeta de linha viva já leva o tensionar
+    if (lv) naoCobra(`${origem}: linha viva, o tensionar vai na voz da cruzeta`)
+    else tensionarConfira.push({ poste: origem, estruturas: [...new Set(ancoras)] })
   }
 
-  return { contagens, perguntas, chavesPerguntas, naoCobrado, semRegra, linhaViva }
+  // na ordem dos postes (P1, P5, P11...), "sem nº" no fim
+  const numero = (p: string) => (/^P\d+$/.test(p) ? Number(p.slice(1)) : Infinity)
+  tensionarConfira.sort((a, b) => numero(a.poste) - numero(b.poste))
+  return { contagens, perguntas, chavesPerguntas, naoCobrado, semRegra, linhaViva, tensionarConfira }
 }

@@ -183,7 +183,7 @@ class SubidaComRedeFalsa(unittest.TestCase):
 # ---------- mão de obra ----------
 
 CAB_PRECIFICACAO = ['Código Serviço', 'Descrição Serviço', 'TOTAL(R$)', 'Unidade', 'Grupo', 'Departamento', 'Zona']
-PAPEIS_TESTE = ['poste-mt', 'poste-bt', 'retirada-poste-mt', 'retirada-poste-bt',
+PAPEIS_TESTE = ['poste-mt', 'poste-bt', 'retirada-poste-mt', 'retirada-poste-bt', 'poste-lv-passante', 'poste-lv-encabecamento',
                 'retirada-poste-lv-passante', 'retirada-poste-lv-encabecamento', 'cava-rocha',
                 'cruzeta-nu', 'cruzeta-isolado', 'retirada-cruzeta-passante', 'retirada-cruzeta-encabecamento',
                 'lv-instalacao-passante', 'lv-retirada-passante', 'lv-instalacao-encabecamento', 'lv-retirada-encabecamento',
@@ -367,7 +367,7 @@ class MaoDeObra(unittest.TestCase):
         self.assertTrue(any(x.startswith('AVISO') and 'vozes' in x for x in r), r)
 
     def test_contagens(self):
-        self.assertEqual(ab.contagens_mao_de_obra(base_mo()), {'vozes': 3, 'regras': 27})
+        self.assertEqual(ab.contagens_mao_de_obra(base_mo()), {'vozes': 3, 'regras': 29})
 
     def test_ler_regras_sem_parte_para(self):
         with tempfile.TemporaryDirectory() as pasta:

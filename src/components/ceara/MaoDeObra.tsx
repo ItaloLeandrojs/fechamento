@@ -7,7 +7,7 @@ import { arred } from '../../ceara/estratificacao'
 import type { Area } from '../../ceara/excel'
 import type { DesenhoMO } from '../../ceara/contagemMO'
 import { buscarVozes, CIDADES_A, letraDaCidade, OUTRA_CIDADE, type Aba, type BaseMaoDeObra, type Letra, type LinhaMO, type RespostasMO } from '../../ceara/maoDeObra'
-import type { PerguntaTensionar, useMaoDeObra } from './useMaoDeObra'
+import type { PerguntaPoste, useMaoDeObra } from './useMaoDeObra'
 
 type Estado = ReturnType<typeof useMaoDeObra>
 type Mudar = Estado['mudar']
@@ -17,7 +17,7 @@ const ABAS: { aba: Aba; titulo: string; vazio: string; nome: string }[] = [
   { aba: 'devolucao', titulo: 'Retirada', vazio: 'Nada na retirada.', nome: 'na Retirada' },
 ]
 
-// botão de escolha (cidade, desligamento, tensionar): marcado em claro, como o da Área
+// botão de escolha (cidade, desligamento, poste MT): marcado em claro, como o da Área
 const escolha = (marcado: boolean) =>
   `press h-12 md:h-11 px-3 sm:px-4 rounded-ctl border text-sm font-semibold whitespace-nowrap ${
     marcado ? 'bg-text text-accent-ink border-text' : 'bg-surface text-muted border-line-strong hover:text-text hover:border-text'
@@ -30,7 +30,7 @@ const vozNaTela = (voz: string, letra: Letra | null) => (letra ? `${voz}_${letra
 // o que falta numa linha (textos de `falta`, separados por "; "): as perguntas sem resposta viram
 // "falta responder: ..."; o resto ("voz fora da lista") vira "confira: ..."
 const PERGUNTA_DA_FALTA: Record<string, string> = {
-  'responda o tensionar': 'tensionar',
+  'responda se a MT passa no poste': 'a MT passa no poste?',
   'falta o número de fases': 'fases do cabo',
   'responda se teve desligamento': 'teve desligamento?',
   'escolha a cidade da obra': 'cidade da obra',
@@ -57,7 +57,7 @@ export function MaoDeObra({ base, area, estado }: { base: BaseMaoDeObra | null; 
         <p className="mt-1 text-sm text-muted">A lista de mão de obra ainda não chegou ao site. A contagem de estrutura e material continua normal.</p>
       </Painel>
     )
-  const { resp, mudar, desenho, linhas, guardando, tensionar, postesSemLinhaViva } = estado
+  const { resp, mudar, desenho, linhas, guardando, postes, postesSemLinhaViva } = estado
   if (!desenho || !linhas) return null
   const letra = letraDaCidade(area, resp.cidade)
 
@@ -90,7 +90,7 @@ export function MaoDeObra({ base, area, estado }: { base: BaseMaoDeObra | null; 
           resp={resp}
           mudar={mudar}
           letra={letra}
-          tensionar={a.aba === 'adicao' ? tensionar : []}
+          postes={postes.filter((p) => p.chave.endsWith(a.aba === 'adicao' ? '|1' : '|3'))}
         />
       ))}
 
@@ -256,26 +256,32 @@ function LinhaViva({ desenho, postesSem, mudar }: { desenho: DesenhoMO; postesSe
   )
 }
 
-/** Perguntas do tensionar, respondidas ou não, sempre no mesmo lugar (a resposta pode ser trocada). */
-function PerguntasTensionar({ perguntas, resp, mudar }: { perguntas: PerguntaTensionar[]; resp: RespostasMO; mudar: Mudar }) {
-  const faltam = perguntas.filter((p) => typeof resp.tensionar[p.chave] !== 'boolean').length
+/** Perguntas de sim ou não (poste MT), respondidas ou não, sempre no mesmo lugar (a resposta pode ser trocada). */
+function PerguntasSimNao({ titulo, ajuda, perguntas, valor, responder }: {
+  titulo: string
+  ajuda: string
+  perguntas: { chave: string; texto: string }[]
+  valor: (chave: string) => boolean | undefined
+  responder: (chave: string, v: boolean) => void
+}) {
+  const faltam = perguntas.filter((p) => typeof valor(p.chave) !== 'boolean').length
   return (
     <div className="grid gap-2 px-4 md:px-5 pb-3">
       <p className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium">Tensionar: o cabo ancorado é existente?</span>
+        <span className="font-medium">{titulo}</span>
         {faltam > 0 ? <Selo tom="perigo">falta responder {faltam}</Selo> : <Selo tom="ok">tudo respondido</Selo>}
       </p>
-      <p className="text-xs text-muted">O site não tem certeza nestes postes. Só o cabo existente cobra o tensionar.</p>
+      <p className="text-xs text-muted">{ajuda}</p>
       <div className="rounded-ctl border border-line-strong bg-bg divide-y divide-line">
         {perguntas.map((p) => {
-          const dada = resp.tensionar[p.chave]
+          const dada = valor(p.chave)
           return (
             <div key={p.chave} role="group" aria-label={p.texto} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-1.5">
               <span className="text-sm min-w-0 flex-1 basis-56">{p.texto}</span>
               {typeof dada !== 'boolean' && <Selo tom="perigo">falta responder</Selo>}
               <span className="flex gap-1.5">
                 {[true, false].map((v) => (
-                  <button key={String(v)} type="button" aria-pressed={dada === v} className={escolha(dada === v)} onClick={() => mudar((r) => ({ ...r, tensionar: { ...r.tensionar, [p.chave]: v } }))}>
+                  <button key={String(v)} type="button" aria-pressed={dada === v} className={escolha(dada === v)} onClick={() => responder(p.chave, v)}>
                     {v ? 'Sim' : 'Não'}
                   </button>
                 ))}
@@ -310,7 +316,7 @@ function vozesAutomaticas(aba: Aba, base: BaseMaoDeObra, desenho: DesenhoMO, res
   return vozes
 }
 
-function TabelaMO({ aba, titulo, vazio, nome, linhas, base, desenho, resp, mudar, letra, tensionar }: {
+function TabelaMO({ aba, titulo, vazio, nome, linhas, base, desenho, resp, mudar, letra, postes }: {
   aba: Aba
   titulo: string
   vazio: string
@@ -321,7 +327,7 @@ function TabelaMO({ aba, titulo, vazio, nome, linhas, base, desenho, resp, mudar
   resp: RespostasMO
   mudar: Mudar
   letra: Letra | null
-  tensionar: PerguntaTensionar[]
+  postes: PerguntaPoste[]
 }) {
   const id = useId()
   const idVoz = `${id}-voz`
@@ -362,7 +368,24 @@ function TabelaMO({ aba, titulo, vazio, nome, linhas, base, desenho, resp, mudar
         {titulo} <span className="num text-muted font-medium">({linhas.length})</span>
       </h3>
       {/* em cima da tabela: responder não muda o que fica acima das perguntas, os botões não saem do lugar */}
-      {tensionar.length > 0 && <PerguntasTensionar perguntas={tensionar} resp={resp} mudar={mudar} />}
+      {postes.length > 0 && (
+        <PerguntasSimNao
+          titulo="Poste: a rede de MT passa nele?"
+          ajuda="A etiqueta destes postes não tem nada que diga a rede (nem estrutura de MT ou de BT, nem material de MT). Com MT, mesmo junto da BT, o poste é de MT."
+          perguntas={postes}
+          valor={(chave) => resp.posteMT?.[chave]}
+          responder={(chave, v) => mudar((r) => ({ ...r, posteMT: { ...(r.posteMT ?? {}), [chave]: v } }))}
+        />
+      )}
+      {aba === 'adicao' && desenho.tensionarConfira.length > 0 && (
+        <p className="flex gap-2 px-4 md:px-5 pb-3 text-sm">
+          <Info size={18} weight="bold" className="shrink-0 mt-0.5 text-muted" />
+          <span>
+            <span className="font-medium">Confira se teve tensionar:</span>{' '}
+            {desenho.tensionarConfira.map((t) => `${t.poste} (${t.estruturas.join(', ')})`).join('; ')}. Estes postes têm estrutura nova que ancora cabo. O site não cobra o tensionar: se teve, ponha a voz pelo "+ Voz".
+          </span>
+        </p>
+      )}
       {!linhas.length ? (
         <p className="px-4 md:px-5 pb-3 text-sm text-muted">{vazio}</p>
       ) : (

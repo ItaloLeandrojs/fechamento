@@ -147,7 +147,7 @@ def contagens_edp(kits):
 # ---------- mão de obra (lista de vozes + regras) ----------
 
 PAPEIS = [
-    'poste-mt', 'poste-bt', 'retirada-poste-mt', 'retirada-poste-bt',
+    'poste-mt', 'poste-bt', 'retirada-poste-mt', 'retirada-poste-bt', 'poste-lv-passante', 'poste-lv-encabecamento',
     'retirada-poste-lv-passante', 'retirada-poste-lv-encabecamento', 'cava-rocha',
     'cruzeta-nu', 'cruzeta-isolado', 'retirada-cruzeta-passante', 'retirada-cruzeta-encabecamento',
     'lv-instalacao-passante', 'lv-retirada-passante', 'lv-instalacao-encabecamento', 'lv-retirada-encabecamento',

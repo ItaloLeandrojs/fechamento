@@ -6,7 +6,7 @@ import type { Area } from './excel'
 export type Letra = 'A' | 'B'
 export type Aba = 'adicao' | 'devolucao'
 export const PAPEIS = [
-  'poste-mt', 'poste-bt', 'retirada-poste-mt', 'retirada-poste-bt',
+  'poste-mt', 'poste-bt', 'retirada-poste-mt', 'retirada-poste-bt', 'poste-lv-passante', 'poste-lv-encabecamento',
   'retirada-poste-lv-passante', 'retirada-poste-lv-encabecamento', 'cava-rocha',
   'cruzeta-nu', 'cruzeta-isolado', 'retirada-cruzeta-passante', 'retirada-cruzeta-encabecamento',
   'lv-instalacao-passante', 'lv-retirada-passante', 'lv-instalacao-encabecamento', 'lv-retirada-encabecamento',
@@ -54,7 +54,7 @@ export interface RespostasMO extends RespostasDesenho {
 }
 
 export function respostasVazias(ot: string): RespostasMO {
-  return { ot, tensionar: {}, fases: {}, linhaViva: {}, cidade: null, desligamento: null, equipamentos: 1, mudancas: {}, somadas: [] }
+  return { ot, tensionar: {}, fases: {}, linhaViva: {}, posteMT: {}, cidade: null, desligamento: null, equipamentos: 1, mudancas: {}, somadas: [] }
 }
 
 export interface LinhaMO {
@@ -165,7 +165,7 @@ export function buscarVozes(base: BaseMaoDeObra, termo: string, letra: Letra | n
   return out
 }
 
-/** Tira as respostas que não cabem mais no desenho: tensionar e fases fora de `chavesPerguntas`,
+/** Tira as respostas que não cabem mais no desenho: tensionar, fases e poste MT fora de `chavesPerguntas`,
  *  linha viva de poste que sumiu, mudança de linha automática que sumiu. As somadas ficam. */
 export function limparRespostas(resp: RespostasMO, d: DesenhoMO, linhas: LinhaMO[]): RespostasMO {
   const validas = new Set(d.chavesPerguntas)
@@ -176,6 +176,7 @@ export function limparRespostas(resp: RespostasMO, d: DesenhoMO, linhas: LinhaMO
     ...resp,
     tensionar: filtrar(resp.tensionar, (k) => validas.has(k)),
     fases: filtrar(resp.fases, (k) => validas.has(k)),
+    posteMT: filtrar(resp.posteMT ?? {}, (k) => validas.has(k)),
     linhaViva: filtrar(resp.linhaViva, (k) => postes.has(k)),
     mudancas: filtrar(resp.mudancas, (k) => automaticas.has(k)),
   }

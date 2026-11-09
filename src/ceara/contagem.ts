@@ -101,8 +101,11 @@ function pedacosDaLinha(linha: string): { sit: Situacao | null; texto: string }[
   for (const seg of inicio.resto.split('|')) {
     const p = prefixo(seg.trim())
     if (p.sit) sitLinha = p.sit
-    // "CAVA KLC" é um item só
-    const junto = p.resto.replace(/CAVA\s+KLC/gi, 'CAVA_KLC')
+    // "CAVA KLC", "CAVA EM ROCHA" e "CONEC.CUN.BIM III" são um item só
+    const junto = p.resto
+      .replace(/CAVA\s+KLC/gi, 'CAVA_KLC')
+      .replace(/CAVA\s+EM\s+ROCHA/gi, 'CAVA_EM_ROCHA')
+      .replace(/(CONEC\.CUN\.BIM)\s+([IVX]+)\b/gi, '$1.$2')
     for (const t of junto.split(/\s+/).filter(Boolean)) {
       const q = prefixo(t)
       out.push({ sit: q.sit ?? sitLinha, texto: q.resto })
@@ -168,6 +171,28 @@ export function agruparTextos(textos: TextoDxf[]): { linhas: string[]; camada: s
 
 // ---------------- classificação de cada pedaço ----------------
 
+/**
+ * Material escrito solto na etiqueta (a estrutura foi "estratificada" no desenho, ex. MT sem cruzeta):
+ * nome do desenho → código da Enel. DE-PARA conferido pelo Italo em 09/11/2026.
+ * `mt`: o material só existe em rede de MT, então o poste é de MT.
+ * `substitui`: material do kit que ele troca nas estruturas novas do mesmo poste (ajuste automático da estratificação).
+ */
+export const MATERIAL_SOLTO: Record<string, { codigo: string; mt?: true; substitui?: string }> = {
+  'PARAF.CB-QUAD.16X250': { codigo: '780654' },
+  'PORC.QUAD': { codigo: '780707' },
+  'ARRUELA.RED': { codigo: '780720' },
+  OLHAL: { codigo: '251797' },
+  GANCHO: { codigo: '251814' },
+  MANILHA: { codigo: '251817' },
+  'ALÇA.CAA4': { codigo: '251764', mt: true },
+  'ISOL.ANC.POL': { codigo: '300853', mt: true },
+  'ISOL.PIN.POL': { codigo: '300662', mt: true },
+  // cruzeta de fibra MB no lugar da de concreto MB (231260) do kit (Italo, 09/11)
+  'CRUZ.POLI.MB': { codigo: '231342', mt: true, substitui: '231260' },
+}
+/** Conector cunha escrito no desenho (CONEC.CUN.BIM III) → código; só os conferidos pelo Italo (09/11). */
+const CONECTOR_CUNHA_ROMANO: Record<string, string> = { III: '274905', VII: '274921' }
+
 interface Classe {
   tipo: TipoItem
   base: string
@@ -192,6 +217,7 @@ function classificar(t0: string): Classe {
   if (/^T[TM]\d+KVA$/.test(t)) return { tipo: 'trafo', base: t }
   if (/^(CF|CS|PR|TP)$/.test(t)) return { tipo: 'chave', base: t }
   if (/^ELO\d+[KH]$/.test(t)) return { tipo: 'elo', base: t }
+  if (MATERIAL_SOLTO[t]) return { tipo: 'outro-material', base: t }
   if (/^CONEC/.test(t)) return { tipo: 'conector', base: t }
   if (/^ATER-?S?P?$/.test(t)) return { tipo: 'estrutura', base: 'ATER-SP' }
   if (/^SPCXD[TM]-?P12P[NAB]$/.test(t)) return { tipo: 'estrutura', base: t.replace(/^SPCXD([TM])-?/, 'SPCXD$1-') }
@@ -200,7 +226,8 @@ function classificar(t0: string): Classe {
   // alça e laço do cabo pré-reunido são estruturas (SPALÇA50, SPLAÇO50), confirmado pelo Italo em 04/11
   if (/^SP(ALÇA|LAÇO)\d+(CU)?$/.test(t)) return { tipo: 'estrutura', base: t }
   // a cava só marca que teve cava no poste: entra na mão de obra, não no material
-  if (/^CAVA_KLC$/.test(t)) return { tipo: 'ignorado', base: 'CAVA KLC' }
+  // "CAVA EM ROCHA" é o mesmo que "CAVA KLC" (Italo, 09/11)
+  if (/^CAVA_(KLC|EM_ROCHA)$/.test(t)) return { tipo: 'ignorado', base: 'CAVA KLC' }
   // transformação na MT: TR15 → TR15CAA4 (com o cabo da obra)
   const tr = /^TR(U?\d+)(CAA[\d/]+)?$/.exec(t)
   if (tr) return { tipo: 'estrutura', base: 'TR' + tr[1] + (tr[2] ?? ''), precisaCabo: tr[2] ? undefined : 'tr' }
@@ -330,7 +357,8 @@ export function converterCabos(cabos: CaboSomado[], fasesMT: number, catalogo: C
     const lista = novo ? adicaoMaterial : devolucaoMaterial
     const semRegra = () => somar(lista, semCodigo(`CABO ${nome}`, `${metros} m ${novo ? 'novos' : 'retirados'}: cabo sem regra de conversão`), metros, 'vãos')
     if (cabo.grupo === 'mt') {
-      const fases = fasesDoCaderno ?? (novo ? fasesMT : (cabo.fases ?? fasesMT))
+      // as fases do vão mandam: (1)P3 = 3 fases, (1)P2 = 2 (Italo, 09/11); sem o número, as das estruturas
+      const fases = fasesDoCaderno ?? cabo.fases ?? fasesMT
       const t = (novo ? MT_NOVO : MT_SUCATA)[cabo.bitola]
       if (!t) semRegra()
       else if (novo) somar(lista, { ...material(t[0]), conta: `kg: ${metros} m x ${fases} fases x 1,05 x ${br(t[1])}` }, duasCasas(metros * fases * SOBRA * t[1]), 'vãos de MT')
@@ -522,7 +550,7 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
       if (i.tipo === 'nao-reconhecido') {
         naoReconhecidos.push({ poste: origem, texto: `(${i.situacao})${i.texto}` })
       } else if (i.tipo === 'ignorado') {
-        ignorados.push({ poste: origem, texto: `(${i.situacao})${i.texto.replace('_', ' ')}` })
+        ignorados.push({ poste: origem, texto: `(${i.situacao})${i.texto.replace(/_/g, ' ')}` })
       } else if (i.tipo === 'estrutura') {
         const base = completar(i.codigo)
         const descricao = catalogo?.estruturas[base] ?? ''
@@ -534,8 +562,12 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
         const cod = (add ? TRAFO : TRAFO_RETIRADO)[i.codigo]
         somar(lista, cod ? material(cod) : semCodigo(i.codigo, add ? 'transformador: código a definir' : 'transformador retirado: código a definir'), i.quantidade, origem)
       } else if (i.tipo === 'conector') {
-        const cod = /50-150/.test(i.codigo) ? '990257' : /PERF/.test(i.codigo) ? '275695' : null
+        // CONEC.4VIAS é o mesmo conector de 4 saídas do CONEC50-150 (Italo, 09/11)
+        const romano = /^CONEC\.CUN\.BIM\.([IVX]+)$/.exec(i.codigo)?.[1]
+        const cod = /50-150|4VIAS/.test(i.codigo) ? '990257' : romano ? (CONECTOR_CUNHA_ROMANO[romano] ?? null) : /PERF/.test(i.codigo) ? '275695' : null
         somar(lista, cod ? material(cod) : semCodigo(i.codigo, 'conector: código a definir'), i.quantidade, origem)
+      } else if (i.tipo === 'outro-material') {
+        somar(lista, material(MATERIAL_SOLTO[i.codigo].codigo), i.quantidade, origem)
       } else if (i.tipo === 'elo' && add) {
         const m = /^ELO(\d+)([KH])$/.exec(i.codigo)!
         const cod = Object.keys(catalogo?.materiais ?? {}).find((k) => new RegExp(`^ELO,FUS,BOT,MT, *${m[1]}A,${m[2]},`).test(catalogo!.materiais[k][0]))
@@ -559,7 +591,9 @@ export function contarObra(dxf: Dxf, catalogo?: Catalogo): ResultadoCeara {
       for (const i of e.itens.filter((x) => x.tipo === 'trafo' && x.situacao === 1)) {
         const origem = (e.poste ? 'P' + e.poste : 'sem nº') + ' (trafo)'
         somar(adicaoMaterial, material(SUPORTE_CF), 3 * i.quantidade, origem)
-        somar(adicaoMaterial, material(CONECTOR_CUNHA), 3 * i.quantidade, origem)
+        // o conector cunha VII escrito na etiqueta do trafo é o mesmo das chaves (Italo, 09/11): não soma de novo
+        const cunhaEscrita = e.itens.some((x) => x.situacao === 1 && x.tipo === 'conector' && x.codigo === 'CONEC.CUN.BIM.VII')
+        if (!cunhaEscrita) somar(adicaoMaterial, material(CONECTOR_CUNHA), 3 * i.quantidade, origem)
       }
     }
   }

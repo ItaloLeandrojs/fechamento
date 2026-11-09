@@ -13,10 +13,10 @@ const OT_VALIDA = /^\d{7}$|^\d{11}$/
 /** Cada mudança espera este tempo antes de gravar (várias seguidas viram uma gravação só). */
 const ATRASO = 400
 
-export type PerguntaTensionar = Extract<Pergunta, { tipo: 'tensionar' }>
+export type PerguntaPoste = Extract<Pergunta, { tipo: 'poste' }>
 
 const mesmas = (a: RespostasMO, b: RespostasMO) =>
-  JSON.stringify([a.tensionar, a.fases, a.linhaViva, a.mudancas]) === JSON.stringify([b.tensionar, b.fases, b.linhaViva, b.mudancas])
+  JSON.stringify([a.tensionar, a.fases, a.linhaViva, a.posteMT ?? {}, a.mudancas]) === JSON.stringify([b.tensionar, b.fases, b.linhaViva, b.posteMT ?? {}, b.mudancas])
 
 /** Alguma coisa foi respondida ou mudada. */
 const temConteudo = (r: RespostasMO) =>
@@ -24,7 +24,7 @@ const temConteudo = (r: RespostasMO) =>
   r.desligamento !== null ||
   r.equipamentos !== 1 ||
   r.somadas.length > 0 ||
-  [r.tensionar, r.fases, r.linhaViva, r.mudancas].some((o) => Object.keys(o).length > 0)
+  [r.tensionar, r.fases, r.linhaViva, r.posteMT ?? {}, r.mudancas].some((o) => Object.keys(o).length > 0)
 
 const numeroDoPoste = (origem: string) => (/^P\d+$/.test(origem) ? Number(origem.slice(1)) : Infinity)
 
@@ -185,11 +185,11 @@ export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeOb
 
   const desenho = useMemo<DesenhoMO | null>(() => (resultado && base ? contarDesenhoMO(resultado, base, resp) : null), [resultado, base, resp])
   const linhas = useMemo<LinhaMO[] | null>(() => (desenho && base ? montarLinhas(desenho, base, resp, area) : null), [desenho, base, resp, area])
-  // todas as perguntas de tensionar, respondidas ou não (as respondidas ficam na tela para trocar)
-  const tensionar = useMemo<PerguntaTensionar[]>(() => {
+  // todas as perguntas de poste MT ou BT, respondidas ou não
+  const postes = useMemo<PerguntaPoste[]>(() => {
     if (!resultado || !base) return []
-    return contarDesenhoMO(resultado, base, { tensionar: {}, fases: resp.fases, linhaViva: resp.linhaViva }).perguntas.filter((p): p is PerguntaTensionar => p.tipo === 'tensionar')
-  }, [resultado, base, resp.fases, resp.linhaViva])
+    return contarDesenhoMO(resultado, base, { ...resp, posteMT: {} }).perguntas.filter((p): p is PerguntaPoste => p.tipo === 'poste')
+  }, [resultado, base, resp])
   // postes com estrutura de MT e sem linha viva: dá para pôr a linha viva à mão (o texto pode faltar no desenho)
   const postesSemLinhaViva = useMemo<string[]>(() => {
     if (!resultado || !desenho) return []
@@ -203,5 +203,5 @@ export function useMaoDeObra(resultado: ResultadoCeara | null, base: BaseMaoDeOb
   }, [resultado, desenho])
   const guardando = !!chaveOt && !semBanco
 
-  return { resp, mudar, desenho, linhas, guardando, tensionar, postesSemLinhaViva }
+  return { resp, mudar, desenho, linhas, guardando, postes, postesSemLinhaViva }
 }

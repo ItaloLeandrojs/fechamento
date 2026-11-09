@@ -165,9 +165,14 @@ describe('cabos', () => {
     expect(semBT.adicaoMaterial.map((l) => l.codigo)).toEqual(['231228'])
   })
 
-  it('MT novo em kg = metros x fases x 1,05 x coeficiente (fases pelas estruturas)', () => {
+  it('MT novo em kg = metros x fases x 1,05 x coeficiente (fases do vão; sem elas, pelas estruturas)', () => {
+    // regra do Italo (09/11): (1)P3 = 3 fases, mesmo com estrutura bifásica. O orçamento real desta obra
+    // tinha usado 2 (389,31), pelas estruturas MB1
     const r = contarObra(dxfDe(['(1)600/12 MB1\\P1', '(1)600/12 MB1\\P2'], [cota('(1)P3AN004<>', 2181)]))
-    expect(qtd(r.adicaoMaterial)['310604']).toBe(389.31) // 2181 x 2 x 1,05 x 0,085, como no orçamento real
+    expect(qtd(r.adicaoMaterial)['310604']).toBe(583.96) // 2181 x 3 x 1,05 x 0,085
+    const semFases: Linha[] = []
+    converterCabos([{ situacao: 1, nome: 'PAN004', metros: 2181 }], 2, undefined, semFases, [])
+    expect(semFases[0].quantidade).toBe(389.31) // sem número no vão: as fases das estruturas (2)
     const t = contarObra(dxfDe(['(1)600/12 M1\\P1'], [cota('(1)P3AN010<>', 100)]))
     expect(qtd(t.adicaoMaterial)['310605']).toBe(68.04) // 100 x 3 x 1,05 x 0,216
   })
@@ -471,5 +476,41 @@ describe('cabos reaproveitados', () => {
     expect(codigoDeSucata(novos[0])).toBe(velhos[0])
     expect(codigoDeSucata(novos[1])).toBe(velhos[1])
     expect(codigoDeSucata('900001')).toBeNull()
+  })
+})
+
+describe('obra com material solto na etiqueta (asbuilt de 09/11)', () => {
+  const qtdDe = (l: Linha[]) => Object.fromEntries(l.map((x) => [x.codigo, x.quantidade]))
+
+  it('cabo de MT novo pelas fases do vão: (1)P2 = 2 fases, mesmo com estrutura trifásica na obra', () => {
+    const r = contarObra(dxfDe(['150/10,5 N1 S4N', '(1)600/12 M1\\P(1)MB3.1\\P2', '\\A1;(1)P2AN004100']))
+    expect(r.adicaoMaterial.find((l) => l.codigo === '310604')!.conta).toBe('kg: 100 m x 2 fases x 1,05 x 0,085')
+  })
+
+  it('CONEC.4VIAS é o 990257 (o mesmo do CONEC50-150)', () => {
+    const r = contarObra(dxfDe(['(1)600/12\\P(1)4xCONEC.4VIAS\\P9']))
+    expect(qtdDe(r.adicaoMaterial)).toMatchObject({ '990257': 4 })
+  })
+
+  it('conector cunha escrito com espaço antes do número romano', () => {
+    const r = contarObra(dxfDe(['(1)600/12\\P(1)4xCONEC.CUN.BIM III\\P(1)3xCONEC.CUN.BIM VII\\P2']))
+    expect(qtdDe(r.adicaoMaterial)).toMatchObject({ '274905': 4, '274921': 3 })
+    expect(r.naoReconhecidos).toEqual([])
+  })
+
+  it('CAVA EM ROCHA vale como CAVA KLC (não é material)', () => {
+    const r = contarObra(dxfDe(['(1)600/12\\P(1)CAVA EM ROCHA\\P3']))
+    expect(r.naoReconhecidos).toEqual([])
+    expect(r.ignorados).toEqual([{ poste: 'P3', texto: '(1)CAVA EM ROCHA' }])
+  })
+
+  it('material solto entra pelo DE-PARA conferido pelo Italo', () => {
+    const r = contarObra(dxfDe([
+      '(1)600/12\\P(1)2xPARAF.CB-QUAD.16x250\\P(1)2xPORC.QUAD\\P(1)4xARRUELA.RED\\P(1)4xOLHAL\\P(1)4xGANCHO\\P(1)4xMANILHA\\P(1)4xALÇA.CAA4\\P(1)4xISOL.ANC.POL\\P(1)2xISOL.PIN.POL\\P(1)3xCRUZ.POLI.MB\\P3',
+    ]))
+    expect(qtdDe(r.adicaoMaterial)).toEqual({
+      '231233': 1, '780654': 2, '780707': 2, '780720': 4, '251797': 4, '251814': 4, '251817': 4, '251764': 4, '300853': 4, '300662': 2, '231342': 3,
+    })
+    expect(r.naoReconhecidos).toEqual([])
   })
 })

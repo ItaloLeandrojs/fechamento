@@ -636,17 +636,20 @@ async function maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara }) {
   const outra = cidade.getByRole('button', { name: 'Outra cidade (B)' })
   const sim = desligamento.getByRole('button', { name: 'Sim', exact: true })
   const equipamentos = bloco.getByRole('group', { name: 'Equipamentos operados' })
+  // o tensionar não pergunta mais (Italo, 09/11): só o aviso para conferir. Pergunta só o poste sem rede na etiqueta
   const perguntasTensionar = bloco.getByRole('group', { name: / é existente\?$/ })
-  const naoMarcado = perguntasTensionar.getByRole('button', { name: 'Não', exact: true, pressed: true })
-  let totalTensionar = 0
+  const perguntasPoste = bloco.getByRole('group', { name: /^A rede de MT passa/ })
+  const simMarcado = perguntasPoste.getByRole('button', { name: 'Sim', exact: true, pressed: true })
+  let totalPoste = 0
   const conferirObra = async (quando) => {
     if ((await outra.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] ${quando}: "Outra cidade (B)" não está marcada`)
     if (!(await bloco.getByText('sufixo B', { exact: true }).count())) falhas.push(`[${tag}] ${quando}: a letra "sufixo B" não aparece ao lado da cidade`)
     if ((await sim.getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] ${quando}: "Teve desligamento?" não ficou em Sim`)
     if (!(await equipamentos.count()) || (await equipamentos.getByRole('status').innerText()).trim() !== '1') falhas.push(`[${tag}] ${quando}: "Equipamentos operados" devia mostrar 1`)
-    // as respondidas ficam na tela (para trocar), com o "Não" marcado
-    if ((await perguntasTensionar.count()) !== totalTensionar) falhas.push(`[${tag}] ${quando}: devia ter ${totalTensionar} pergunta(s) de tensionar na tela, tem ${await perguntasTensionar.count()}`)
-    if ((await naoMarcado.count()) !== totalTensionar) falhas.push(`[${tag}] ${quando}: só ${await naoMarcado.count()} de ${totalTensionar} pergunta(s) de tensionar com "Não" marcado`)
+    if (await perguntasTensionar.count()) falhas.push(`[${tag}] ${quando}: ainda aparece pergunta de tensionar`)
+    // as respondidas ficam na tela (para trocar), com o "Sim" marcado
+    if ((await perguntasPoste.count()) !== totalPoste) falhas.push(`[${tag}] ${quando}: devia ter ${totalPoste} pergunta(s) de poste na tela, tem ${await perguntasPoste.count()}`)
+    if ((await simMarcado.count()) !== totalPoste) falhas.push(`[${tag}] ${quando}: só ${await simMarcado.count()} de ${totalPoste} pergunta(s) de poste com "Sim" marcado`)
     if (await bloco.getByText(/^falta responder/).count()) falhas.push(`[${tag}] ${quando}: ainda há linha com "falta responder" (${(await bloco.getByText(/^falta responder/).first().innerText()).trim()})`)
   }
 
@@ -672,21 +675,22 @@ async function maoDeObraCeara(page, { tag, largura, tema, dxf, telaCeara }) {
     }
   }
 
-  // tensionar: todas com "Não"; a resposta pode ser trocada (Sim e de novo Não) e a pergunta fica no lugar
-  totalTensionar = await perguntasTensionar.count()
-  for (let i = 0; i < totalTensionar; i++) await perguntasTensionar.nth(i).getByRole('button', { name: 'Não', exact: true }).click()
-  const respondidas = await naoMarcado.count()
-  if (totalTensionar) {
-    const primeira = perguntasTensionar.first()
-    await primeira.getByRole('button', { name: 'Sim', exact: true }).click()
-    if ((await primeira.getByRole('button', { name: 'Sim', exact: true }).getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] trocar a resposta do tensionar para Sim não marcou o Sim`)
-    if ((await perguntasTensionar.count()) !== totalTensionar) falhas.push(`[${tag}] responder o tensionar tirou pergunta da tela`)
+  // poste sem rede na etiqueta: todas com "Sim"; a resposta pode ser trocada (Não e de novo Sim) e a pergunta fica no lugar
+  totalPoste = await perguntasPoste.count()
+  for (let i = 0; i < totalPoste; i++) await perguntasPoste.nth(i).getByRole('button', { name: 'Sim', exact: true }).click()
+  const respondidas = await simMarcado.count()
+  if (totalPoste) {
+    const primeira = perguntasPoste.first()
     await primeira.getByRole('button', { name: 'Não', exact: true }).click()
+    if ((await primeira.getByRole('button', { name: 'Não', exact: true }).getAttribute('aria-pressed')) !== 'true') falhas.push(`[${tag}] trocar a resposta do poste para Não não marcou o Não`)
+    if ((await perguntasPoste.count()) !== totalPoste) falhas.push(`[${tag}] responder o poste tirou pergunta da tela`)
+    await primeira.getByRole('button', { name: 'Sim', exact: true }).click()
   }
+  const avisoTensionar = (await bloco.getByText('Confira se teve tensionar:').count()) > 0
   // fases do MT (quando o nome do vão não diz): 3
   const fases = bloco.getByRole('textbox', { name: /^Fases do cabo/ })
   for (let i = 0; i < (await fases.count()); i++) await fases.nth(i).fill('3')
-  console.log(`[${tag}] mão de obra: ${respondidas} de ${totalTensionar} pergunta(s) de tensionar com "Não", ${await fases.count()} de fases`)
+  console.log(`[${tag}] mão de obra: ${respondidas} de ${totalPoste} pergunta(s) de poste com "Sim", ${await fases.count()} de fases, aviso do tensionar ${avisoTensionar ? 'na tela' : 'não apareceu'}`)
   await conferirObra('depois de responder')
 
   // muda a primeira quantidade da Instalação e recarrega logo em seguida (a gravação ainda estaria no atraso)
